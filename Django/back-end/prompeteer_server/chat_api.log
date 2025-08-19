@@ -1,0 +1,14 @@
+2025-08-01 19:16:43,385 |       INFO    |       chat_api.views  |       POST AssociateDeviceView 
+called
+2025-08-01 19:30:49,950 |       INFO    |       chat_api.views  |       POST AssociateDeviceView 
+called
+2025-08-01 19:31:23,012 |       INFO    |       chat_api.views  |       POST AssociateDeviceView 
+called
+2025-08-01 19:31:56,174 |       INFO    |       chat_api.views  |       POST AssociateDeviceView 
+called
+2025-08-01 19:31:58,182 |       INFO    |       chat_api.views  |       POST AssociateDeviceView 
+called
+2025-08-01 19:32:01,870 |       INFO    |       chat_api.views  |       POST AssociateDeviceView 
+called
+2025-08-01 20:01:33,559 |       INFO    |       chat_api.views  |       POST SyncConversationsView 
+called with anon_id=ANON_ID_HERE, user_id=None

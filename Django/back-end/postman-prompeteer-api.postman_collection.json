@@ -1,0 +1,144 @@
+{
+  "info": {
+    "_postman_id": "prompeteer-api-collection-2025",
+    "name": "Prompeteer API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for Prompeteer backend API."
+  },
+  "item": [
+    {
+      "name": "Visitor Login (Guest Session)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"device_id\": \"abc123xyz\"\n}"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/v1/auth_api/visitor-login/",
+          "protocol": "http",
+          "host": ["127.0.0.1"],
+          "port": "8000",
+          "path": ["api", "v1", "auth_api", "visitor-login", ""]
+        }
+      }
+    },
+    {
+      "name": "User Registration",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"john_doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"hashedpassword123\"\n}"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/v1/auth_api/reg/",
+          "protocol": "http",
+          "host": ["127.0.0.1"],
+          "port": "8000",
+          "path": ["api", "v1", "auth_api", "reg", ""]
+        }
+      }
+    },
+    {
+      "name": "User Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"hashedpassword123\"\n}"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/v1/auth_api/login/",
+          "protocol": "http",
+          "host": ["127.0.0.1"],
+          "port": "8000",
+          "path": ["api", "v1", "auth_api", "login", ""]
+        }
+      }
+    },
+    {
+      "name": "Email PIN Verification",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@example.com\",\n  \"pin\": \"12345\"\n}"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/v1/auth_api/verify-email-pin/",
+          "protocol": "http",
+          "host": ["127.0.0.1"],
+          "port": "8000",
+          "path": ["api", "v1", "auth_api", "verify-email-pin", ""]
+        }
+      }
+    },
+    {
+      "name": "Set Password After Email Verification",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"hashedpassword123\"\n}"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/v1/auth_api/set-password/",
+          "protocol": "http",
+          "host": ["127.0.0.1"],
+          "port": "8000",
+          "path": ["api", "v1", "auth_api", "set-password", ""]
+        }
+      }
+    },
+    {
+      "name": "Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/v1/auth_api/logout/",
+          "protocol": "http",
+          "host": ["127.0.0.1"],
+          "port": "8000",
+          "path": ["api", "v1", "auth_api", "logout", ""]
+        }
+      }
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://127.0.0.1:8000/api/v1/auth_api/health-check/",
+          "protocol": "http",
+          "host": ["127.0.0.1"],
+          "port": "8000",
+          "path": ["api", "v1", "auth_api", "health-check", ""]
+        }
+      }
+    }
+  ]
+}

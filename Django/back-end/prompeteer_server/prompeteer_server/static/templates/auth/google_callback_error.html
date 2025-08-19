@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Google Sign‑In Error</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin:0; padding:2.5rem 1.25rem; background:#1a1a1a; color:#f8fafc; display:flex; justify-content:center; }
+    .card { max-width:460px; width:100%; background:#2d2d2d; padding:2rem 2.25rem; border-radius:16px; box-shadow:0 8px 24px -4px rgba(0,0,0,.5), 0 4px 12px -2px rgba(0,0,0,.35); }
+    h1 { font-size:1.55rem; margin:0 0 .75rem; letter-spacing:.5px; }
+    p { line-height:1.5; margin:.25rem 0 1.25rem; }
+    .badge { display:inline-block; background:#ef4444; color:#fff; padding:.4rem .75rem; border-radius:999px; font-size:.7rem; letter-spacing:.5px; font-weight:600; }
+    .actions a { color:#38bdf8; text-decoration:none; font-size:.85rem; }
+    .actions a:hover { text-decoration:underline; }
+    footer { font-size:.65rem; opacity:.55; margin-top:1.75rem; }
+  </style>
+  <script>
+    window.addEventListener('load', () => {
+      try {
+        const error = document.getElementById('err-text').textContent;
+        if (window.opener) {
+          window.opener.postMessage({ type: 'google_oauth_error', error }, '*');
+        }
+      } catch (e) { console.error(e); }
+    });
+  </script>
+</head>
+<body>
+  <div class="card">
+    <h1>❌ Google Sign‑In Failed</h1>
+    <div class="badge">ERROR</div>
+    <p>{{ error|default:'An error occurred during Google authentication.' }}</p>
+    {% if error_code == 'state_used' %}
+      <p style="font-size:.8rem; opacity:.8;">This sign‑in link was already consumed. Please start a new Google sign‑in from the application.</p>
+    {% elif error_code == 'state_expired' %}
+      <p style="font-size:.8rem; opacity:.8;">This sign‑in request expired. It is only valid for a short time; initiate a fresh sign‑in.</p>
+    {% endif %}
+    <div class="actions">
+      <a href="#" onclick="window.close(); return false;">Close this window</a>
+    </div>
+    <pre id="err-text" style="display:none;">{{ error }}</pre>
+    <footer>OAuth flow aborted</footer>
+  </div>
+</body>
+</html>

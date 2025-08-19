@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "markdownify": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\Sanad\\Documents\\Cline\\MCP\\markdownify-mcp\\dist\\index.js"
+      ],
+      "env": {
+        "UV_PATH": "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
+      }
+    }
+  }
+}

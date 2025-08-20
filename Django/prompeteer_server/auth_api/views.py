@@ -200,47 +200,22 @@ logger = logging.getLogger('auth_api')
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 """
-
 class RegisterView(APIView):
-    """
-    API endpoint to handle user registration.
-    Creates a new user, generates a verification PIN, and sends it to the user's email.
-
-    Example API Request (POST /api/v1/auth_api/reg/):
-        {
-            "username": "john_doe",
-            "email": "john@example.com",
-            "password": "hashedpassword123"
-        }
-
-    Example API Response (201):
-        {
-            "message": "User created. Verification PIN sent to email.",
-            "user_id": "42",
-            "access_token": "jwt-access-token",
-            "refresh_token": "jwt-refresh-token",
-            "email": "john@example.com",
-            "onboarding": true
-        }
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):
-        """
-        Handle POST request for user registration.
-        Validates input, creates user, generates PIN, sends email, and returns onboarding tokens.
-        """
         logger.info(f"[RegisterView] Incoming registration request: data={request.data}")
         serializer = RegisterSerializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-            user: Custom_User = cast(Custom_User, serializer.save())  # type: ignore[assignment]
-            # Hash password with backend salt same as login flow expects
+            user: Custom_User = cast(Custom_User, serializer.save())
+            # Only hash and set password if provided
             raw_pw: str = str(request.data.get('user_password') or '')
-            BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
-            salted = (raw_pw + BACKEND_SALT).encode('utf-8')
-            backend_hash = hashlib.sha256(salted).hexdigest()
-            user.user_password = backend_hash
+            if raw_pw:
+                BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
+                salted = (raw_pw + BACKEND_SALT).encode('utf-8')
+                backend_hash = hashlib.sha256(salted).hexdigest()
+                user.user_password = backend_hash
             # Generate 5-digit PIN for email verification
             pin = f"{random.randint(10000, 99999)}"
             user.profile_email_pin = pin
@@ -1088,7 +1063,7 @@ class LoginWithOTPView(APIView):
     def post(self, request):
         logger.info(f"[LoginWithOTPView] Incoming OTP login request: data={request.data}")
         serializer = LoginSerializer(data=request.data, context={'request': request})
-        try:
+        """ try:
             serializer.is_valid(raise_exception=True)
             user = serializer.validated_data['user']
             # Here you would generate and send the OTP
@@ -1097,4 +1072,4 @@ class LoginWithOTPView(APIView):
             return Response(resp_data, status=status.HTTP_200_OK)
         except Exception as e:
             logger.exception(f"[LoginWithOTPView] Login with OTP failed: {str(e)}, req={request.data}")
-            return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST) """

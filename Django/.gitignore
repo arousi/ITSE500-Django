@@ -1,0 +1,121 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Django stuff:
+*.log
+*.pot
+*.pyc
+*.pyo
+*.db
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+static/
+local_settings.py
+.env
+.env.*
+*.env
+*.secret
+*.bak
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+
+# Test and coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# pipenv
+Pipfile.lock
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# pytest
+.cache/
+
+# celery
+celerybeat-schedule
+celerybeat.pid
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Sphinx documentation
+docs/_build/
+
+# Backup files
+*~
+*.swp
+*.swo
+*.orig
+
+# Windows
+*.exe
+*.dll
+*.obj
+*.o
+*.a
+*.lib
+
+# Mac
+*.dmg
+
+# Logs
+*.log
+
+# Custom Django folders
+prompeteer_server/user_mang.log
+prompeteer_server/auth_api.log
+
+# Ignore secrets and credentials
+secrets.json
+
+# Ignore migrations (optional, if you want to keep them out of version control)
+**/migrations/
+!**/migrations/__init__.py

@@ -3,9 +3,10 @@ from django.conf import settings
 import hashlib
 from user_mang.models.custom_user import Custom_User
 
+
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(write_only=True)
-    user_password = serializers.CharField(write_only=True, allow_blank=False, min_length=6)
+    user_password = serializers.CharField(write_only=True, required=False, allow_blank=True, min_length=6)
 
     class Meta:
         model = Custom_User
@@ -20,22 +21,19 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'email': 'Enter a valid email address.'})
         if Custom_User.objects.filter(email=attrs['email']).exists():
             raise serializers.ValidationError({'email': 'A user with this email already exists.'})
-        pwd = attrs.get('user_password')
-        if not pwd:
-            raise serializers.ValidationError({'user_password': 'This field is required.'})
-        if len(pwd) < 6:
+        pwd = attrs.get('user_password', '')
+        if pwd and len(pwd) < 6:
             raise serializers.ValidationError({'user_password': 'Password must be at least 6 characters.'})
         return attrs
 
     def create(self, validated_data):
-        # Hash password with backend salt similar to login expectation
         BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
-        salted = (validated_data['user_password'] + BACKEND_SALT).encode('utf-8')
-        backend_hash = hashlib.sha256(salted).hexdigest()
+        pwd = validated_data.get('user_password', '')
+        backend_hash = hashlib.sha256((pwd + BACKEND_SALT).encode('utf-8')).hexdigest() if pwd else ''
         user = Custom_User(
             username=validated_data['username'],
             email=validated_data['email'],
-            user_password=backend_hash,
+            user_password=backend_hash if pwd else None,
         )
         user.full_clean()
         user.save()

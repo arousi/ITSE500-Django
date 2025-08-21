@@ -79,9 +79,9 @@ DEBUG = False
 ALLOWED_HOSTS = [
     'itse500-ok.ly',
     'www.itse500-ok.ly',
-    'www.itse500-ok.ly',
     '157.230.29.188',
     'localhost',
+    'grad-project-server-tq36w.ondigitalocean.app'
 ]
 
 

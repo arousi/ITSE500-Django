@@ -160,9 +160,11 @@ python-json-logger==3.2.1
 python-multipart==0.0.20
 pytube==11.0.2
 pytz==2024.2
-pywin32==308
-pywin32-ctypes==0.2.3
-pywinpty==2.0.15
+#windows
+#pywin32==308
+#pywin32-ctypes==0.2.3
+#pywinpty==2.0.15
+
 PyYAML==6.0.2
 pyzmq==26.2.1
 rank-bm25==0.2.2

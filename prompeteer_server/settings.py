@@ -131,7 +131,84 @@ INSTALLED_APPS = [
         },
     },
 } """
+#* Logging in Deployment
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'with_newline': {
+            '()': 'logging.Formatter',
+            'format': '%(asctime)s\t|\t%(levelname)s\t|\t%(name)s\t|\t%(message)s',
+        },
+        'a4_wrap': {
+            '()': 'prompeteer_server.utils.logging.A4WrapFormatter',
+            'format': '%(asctime)s\t|\t%(levelname)s\t|\t%(name)s\t|\t%(message)s',
+        },
+    },
+    'handlers': {
+        'console': {  # <-- Add this handler
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'with_newline',  # or 'a4_wrap' if you want your custom formatting
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'user_mang.log'),
+            'formatter': 'a4_wrap',
+        },
+        'chat_api_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'chat_api.log'),
+            'formatter': 'a4_wrap',
+        },
+        'conversation_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'conversation.log'),
+            'formatter': 'a4_wrap',
+        },
+        'auth_api_file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'auth_api.log'),
+            'formatter': 'a4_wrap',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],  # <-- Add 'console'
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'auth_api': {
+            'handlers': ['console', 'auth_api_file'],  # <-- Add 'console'
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'user_mang': {
+            'handlers': ['console', 'file'],  # <-- Add 'console'
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'chat_api': {
+            'handlers': ['console', 'chat_api_file'],  # <-- Add 'console'
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'conversation': {
+            'handlers': ['console', 'conversation_file'],  # <-- Add 'console'
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+
+#* Logging in Debug mode
+""" 
 # Dynamically create log file path within the app's directory
 LOGGING = {
     'version': 1,
@@ -199,7 +276,7 @@ LOGGING = {
             'propagate': False,
         },
     },
-}
+} """
 
 """
 "default": {

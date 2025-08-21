@@ -1,0 +1,52 @@
+name: itse500-django
+services:
+  - name: web
+    github:
+      repo: arousi/ITSE500-Django
+      branch: main
+    run_command: gunicorn prompeteer_server.wsgi:application
+    build_command: pip install -r requirements.txt
+    environment_slug: python
+    instance_size_slug: basic-xxs
+    http_port: 8080
+    routes:
+      - path: /
+    envs:
+      - key: DJANGO_SETTINGS_MODULE
+        value: prompeteer_server.settings
+      - key: SECRET_KEY
+        value: 'django-insecure-(rswh098lcr!9ny7u$6i-nn1rd_73w_b@+3l(m4!uuw*8p30=f'
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: DEBUG
+        value: "False"
+        scope: RUN_AND_BUILD_TIME
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        value: 16029884030-t1bmq5n4l2hn7tetj33mu01qq6rf6bo1.apps.googleusercontent.com
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        value: 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
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        value: https://itse500-ok.ly/api/v1/auth_api/google/callback/
+        scope: RUN_AND_BUILD_TIME
+      - key: GOOGLE_OAUTH_REDIRECT_URI_SSR
+        value: https://itse500-ok.ly/api/v1/auth_api/google/callback/ssr/
+        scope: RUN_AND_BUILD_TIME
+      - key: BACKEND_PASSWORD_SALT
+        value: Jv8Qw1pQh2Xk9sLz7Vt3Bf6Gm4Rj8Nw5Tz2Kc1Lh0Xy7Qp3V
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: ALLOWED_HOSTS
+        value: '["itse500-ok.ly", "www.itse500-ok.ly", "157.230.29.188", "188.166.193.176"]'
+        scope: RUN_AND_BUILD_TIME
+    static_sites:
+      - name: static
+        git:
+          repo: arousi/ITSE500-Django
+          branch: main
+        source_dir: staticfiles
+        routes:
+          - path: /static

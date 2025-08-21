@@ -225,3 +225,4 @@ yt-dlp-better-download==1.0.0
 yt-download==0.1.1
 zipp==3.21.0
 zstandard==0.23.0
+django-cors-headers==4.3.1

@@ -79,6 +79,7 @@ DEBUG = False
 ALLOWED_HOSTS = [
     'itse500-ok.ly',
     'www.itse500-ok.ly',
+    'www.itse500-ok.ly',
     'localhost',
 ]
 

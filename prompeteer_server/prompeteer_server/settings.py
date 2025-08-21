@@ -71,7 +71,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
 
-SECRET_KEY = 
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
@@ -122,14 +122,14 @@ INSTALLED_APPS = [
     
 ]
 
-CHANNEL_LAYERS = {
+""" CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
             "hosts": [("127.0.0.1", 6379) ],  # Redis server address
         },
     },
-}
+} """
 
 # Dynamically create log file path within the app's directory
 LOGGING = {

@@ -32,8 +32,7 @@ var/
 *.sqlite3
 db.sqlite3
 media/
-staticfiles/
-static/
+
 local_settings.py
 .env
 .env.*

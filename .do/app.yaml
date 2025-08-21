@@ -42,11 +42,4 @@ services:
       - key: ALLOWED_HOSTS
         value: '["itse500-ok.ly", "www.itse500-ok.ly", "157.230.29.188", "188.166.193.176"]'
         scope: RUN_AND_BUILD_TIME
-    static_sites:
-      - name: static
-        git:
-          repo: arousi/ITSE500-Django
-          branch: main
-        source_dir: staticfiles
-        routes:
-          - path: /static
+    

@@ -80,6 +80,7 @@ ALLOWED_HOSTS = [
     'itse500-ok.ly',
     'www.itse500-ok.ly',
     'www.itse500-ok.ly',
+    '157.230.29.188',
     'localhost',
 ]
 

@@ -74,8 +74,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
-
+DEBUG = False
 
 ALLOWED_HOSTS = [
     'itse500-ok.ly',

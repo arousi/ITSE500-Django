@@ -77,6 +77,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
 DEBUG = False
 
 ALLOWED_HOSTS = [
+    '127.0.0.1',
     'itse500-ok.ly',
     'www.itse500-ok.ly',
     '157.230.29.188',
@@ -107,6 +108,8 @@ AUTH_USER_MODEL = 'user_mang.Custom_User'
 
 
 INSTALLED_APPS = [
+    'whitenoise.runserver_nostatic',
+    'prompeteer_server',
     'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -286,6 +289,7 @@ LOGGING = {
 ASGI_APPLICATION = "prompeteer_server.asgi.application"
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

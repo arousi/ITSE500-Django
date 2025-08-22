@@ -1388,7 +1388,7 @@ class EnableTOTPView(APIView):
             'provisioning_uri': uri,
             'qr_code_url': f"https://api.qrserver.com/v1/create-qr-code/?data={urllib.parse.quote(uri)}"
         })
-        
+
 class VerifyTOTPView(APIView):
     """
     Verifies a TOTP code from the user's Authenticator app.

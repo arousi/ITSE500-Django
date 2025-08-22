@@ -7,6 +7,7 @@ import base64
 import string
 import requests
 import json
+import pyotp
 from typing import Any, Dict, Optional, cast
 import urllib.parse
 from django.shortcuts import redirect, render
@@ -821,8 +822,27 @@ class OAuthCallbackBase(APIView):
             mobile_url = f"{oauth_state.mobile_redirect}?state={urllib.parse.quote(state_value)}&bridge=1"
             return redirect(mobile_url)
         # SSR: render HTML if requested
+        # ...existing code...
         if request.path.endswith('/callback/ssr/') or request.GET.get('render') == '1':
-            html = f"""<html><body><script>window.opener && window.opener.postMessage({json.dumps(payload)}, '*');</script><pre>{json.dumps(payload, indent=2)}</pre></body></html>"""
+            html = """
+            <html>
+            <head>
+                <title>Authentication Complete</title>
+                <style>
+                body { font-family: sans-serif; text-align: center; margin-top: 10%; }
+                .msg { font-size: 1.5em; color: #2e7d32; }
+                </style>
+            </head>
+            <body>
+                <div class="msg">✅ All is fine! You may close this tab.</div>
+                <script>
+                if (window.opener) {
+                    window.opener.postMessage({success: true, type: "oauth"}, "*");
+                }
+                </script>
+            </body>
+            </html>
+            """
             from django.http import HttpResponse
             return HttpResponse(html)
         return Response(payload)
@@ -892,6 +912,357 @@ class OAuthResultView(APIView):
         oauth_state.result_retrieved = True
         oauth_state.save(update_fields=['result_retrieved'])
         return Response(data)
+
+class GitHubAuthorizeView(OAuthAuthorizeBase):
+    """
+    Starts the GitHub OAuth2 authorization flow.
+
+    Handles both SSR (server-side rendered) and bridge (SPA/mobile) flows.
+    """
+    provider = 'github'
+
+    def get(self, request):
+        import secrets, urllib.parse
+        state = secrets.token_urlsafe(24)
+        scope = request.query_params.get('scope', 'read:user user:email')
+        redirect_uri = getattr(settings, 'GITHUB_REDIRECT_URI', '')
+        if not redirect_uri:
+            return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
+        params = {
+            'client_id': getattr(settings, 'GITHUB_CLIENT_ID', ''),
+            'redirect_uri': redirect_uri,
+            'scope': scope,
+            'state': state,
+            'allow_signup': 'true',
+        }
+        authorize_url = f"https://github.com/login/oauth/authorize?{urllib.parse.urlencode(params)}"
+        # Save state for CSRF protection if desired
+        expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
+        oauth_state = OAuthState.objects.create(
+            provider='github',
+            state=state,
+            code_challenge=None,
+            code_verifier=None,
+            redirect_uri=redirect_uri,
+            mobile_redirect=None,
+            scope=scope,
+            expires_at=expires_at,
+            user=request.user if request.user.is_authenticated else None,
+        )
+        if request.query_params.get('mode') == 'redirect':
+            return redirect(authorize_url)
+        return Response({
+            'authorize_url': authorize_url,
+            'state': state,
+            'state_id': str(oauth_state.id),
+            'expires_at': expires_at.isoformat(),
+            'bridge': False
+        })
+
+class GitHubCallbackView(OAuthCallbackBase):
+    """
+    Handles the callback from GitHub OAuth2.
+    """
+    provider = 'github'
+
+    def get(self, request):
+        import requests
+        code = request.GET.get('code')
+        state = request.GET.get('state')
+        try:
+            oauth_state = OAuthState.objects.get(state=state, provider='github')
+        except OAuthState.DoesNotExist:
+            return Response({'detail': 'Invalid state'}, status=status.HTTP_400_BAD_REQUEST)
+        if oauth_state.used and not oauth_state.is_expired():
+            return Response({'detail': 'State already used', 'error_code': 'state_used'}, status=status.HTTP_409_CONFLICT)
+        if oauth_state.is_expired():
+            return Response({'detail': 'State expired', 'error_code': 'state_expired'}, status=status.HTTP_400_BAD_REQUEST)
+        if not code:
+            return Response({'detail': 'Missing authorization code'}, status=status.HTTP_400_BAD_REQUEST)
+        # Exchange code for token
+        token_resp = requests.post(
+            'https://github.com/login/oauth/access_token',
+            data={
+                'client_id': getattr(settings, 'GITHUB_CLIENT_ID', ''),
+                'client_secret': getattr(settings, 'GITHUB_CLIENT_SECRET', ''),
+                'code': code,
+                'redirect_uri': oauth_state.redirect_uri,
+                'state': state,
+            },
+            headers={'Accept': 'application/json'}
+        )
+        token_data = token_resp.json()
+        access_token = token_data.get('access_token')
+        if not access_token:
+            return Response({'detail': 'Token exchange failed', 'provider_payload': token_data}, status=status.HTTP_400_BAD_REQUEST)
+        # Get user info
+        user_resp = requests.get(
+            'https://api.github.com/user',
+            headers={'Authorization': f'token {access_token}'}
+        )
+        user_data = user_resp.json()
+        email = user_data.get('email')
+        if not email:
+            # Try to fetch primary email if not public
+            emails_resp = requests.get(
+                'https://api.github.com/user/emails',
+                headers={'Authorization': f'token {access_token}'}
+            )
+            emails = emails_resp.json()
+            if isinstance(emails, list):
+                primary = next((e for e in emails if e.get('primary')), None)
+                email = primary.get('email') if primary else None
+        user = oauth_state.user
+        if not user:
+            if email and Custom_User.objects.filter(email=email).exists():
+                user = Custom_User.objects.get(email=email)
+            else:
+                base_username = (user_data.get('login') or f"gh_{uuid.uuid4().hex[:6]}")
+                candidate = base_username
+                idx = 1
+                while Custom_User.objects.filter(username=candidate).exists():
+                    candidate = f"{base_username}{idx}"
+                    idx += 1
+                user = Custom_User.objects.create(
+                    username=candidate,
+                    email=email or f"pending_{uuid.uuid4().hex}@github.local",
+                    email_verified=bool(email),
+                    is_github_user=True
+                )
+        else:
+            update_fields = []
+            if email and not user.email:
+                user.email = email
+                update_fields.append('email')
+            if not getattr(user, 'is_github_user', False):
+                user.is_github_user = True
+                update_fields.append('is_github_user')
+            if email and not user.email_verified:
+                user.email_verified = True
+                update_fields.append('email_verified')
+            if update_fields:
+                user.save(update_fields=update_fields)
+        ProviderOAuthToken.objects.update_or_create(
+            user=user,
+            provider='github',
+            defaults={
+                'access_token': access_token,
+                'refresh_token': None,
+                'expires_at': None,
+                'scope': oauth_state.scope,
+                'token_type': token_data.get('token_type') or 'Bearer',
+            }
+        )
+        oauth_state.mark_used()
+        refresh = RefreshToken.for_user(user)
+        payload = {
+            'message': 'GitHub OAuth success',
+            'user_id': str(user.pk),
+            'username': user.username,
+            'access_token': str(refresh.access_token),
+            'refresh_token': str(refresh),
+            'provider_scope': oauth_state.scope,
+            'provider_access_token': access_token,
+            'provider_expires_at': None,
+            'email': email,
+            'email_verified': user.email_verified,
+            'is_github_user': getattr(user, 'is_github_user', False),
+        }
+        # SSR: render HTML if requested
+        if request.path.endswith('/callback/ssr/') or request.GET.get('render') == '1':
+            html = """
+            <html>
+            <head>
+                <title>Authentication Complete</title>
+                <style>
+                body { font-family: sans-serif; text-align: center; margin-top: 10%; }
+                .msg { font-size: 1.5em; color: #2e7d32; }
+                </style>
+            </head>
+            <body>
+                <div class="msg">✅ All is fine! You may close this tab.</div>
+                <script>
+                if (window.opener) {
+                    window.opener.postMessage({success: true, type: "oauth"}, "*");
+                }
+                </script>
+            </body>
+            </html>
+            """
+            from django.http import HttpResponse
+            return HttpResponse(html)
+        return Response(payload)
+
+class MicrosoftAuthorizeView(OAuthAuthorizeBase):
+    """
+    Starts the Microsoft OAuth2 (Azure AD) authorization flow.
+
+    Handles both SSR (server-side rendered) and bridge (SPA/mobile) flows.
+    """
+    provider = 'microsoft'
+
+    def get(self, request):
+        import secrets, urllib.parse
+        state = secrets.token_urlsafe(24)
+        scope = request.query_params.get('scope', 'openid email profile User.Read')
+        redirect_uri = getattr(settings, 'MS_REDIRECT_URI', '')
+        if not redirect_uri:
+            return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
+        params = {
+            'client_id': getattr(settings, 'MS_CLIENT_ID', ''),
+            'response_type': 'code',
+            'redirect_uri': redirect_uri,
+            'response_mode': 'query',
+            'scope': scope,
+            'state': state,
+        }
+        authorize_url = f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize?{urllib.parse.urlencode(params)}"
+        expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
+        oauth_state = OAuthState.objects.create(
+            provider='microsoft',
+            state=state,
+            code_challenge=None,
+            code_verifier=None,
+            redirect_uri=redirect_uri,
+            mobile_redirect=None,
+            scope=scope,
+            expires_at=expires_at,
+            user=request.user if request.user.is_authenticated else None,
+        )
+        if request.query_params.get('mode') == 'redirect':
+            return redirect(authorize_url)
+        return Response({
+            'authorize_url': authorize_url,
+            'state': state,
+            'state_id': str(oauth_state.id),
+            'expires_at': expires_at.isoformat(),
+            'bridge': False
+        })
+
+class MicrosoftCallbackView(OAuthCallbackBase):
+    """
+    Handles the callback from Microsoft OAuth2 (Azure AD).
+    """
+    provider = 'microsoft'
+
+    def get(self, request):
+        import requests
+        code = request.GET.get('code')
+        state = request.GET.get('state')
+        try:
+            oauth_state = OAuthState.objects.get(state=state, provider='microsoft')
+        except OAuthState.DoesNotExist:
+            return Response({'detail': 'Invalid state'}, status=status.HTTP_400_BAD_REQUEST)
+        if oauth_state.used and not oauth_state.is_expired():
+            return Response({'detail': 'State already used', 'error_code': 'state_used'}, status=status.HTTP_409_CONFLICT)
+        if oauth_state.is_expired():
+            return Response({'detail': 'State expired', 'error_code': 'state_expired'}, status=status.HTTP_400_BAD_REQUEST)
+        if not code:
+            return Response({'detail': 'Missing authorization code'}, status=status.HTTP_400_BAD_REQUEST)
+        # Exchange code for token
+        token_resp = requests.post(
+            'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+            data={
+                'client_id': getattr(settings, 'MS_CLIENT_ID', ''),
+                'client_secret': getattr(settings, 'MS_CLIENT_SECRET', ''),
+                'code': code,
+                'redirect_uri': oauth_state.redirect_uri,
+                'grant_type': 'authorization_code',
+                'scope': oauth_state.scope,
+            },
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        token_data = token_resp.json()
+        access_token = token_data.get('access_token')
+        if not access_token:
+            return Response({'detail': 'Token exchange failed', 'provider_payload': token_data}, status=status.HTTP_400_BAD_REQUEST)
+        # Get user info
+        user_resp = requests.get(
+            'https://graph.microsoft.com/v1.0/me',
+            headers={'Authorization': f'Bearer {access_token}'}
+        )
+        user_data = user_resp.json()
+        email = user_data.get('mail') or user_data.get('userPrincipalName')
+        user = oauth_state.user
+        if not user:
+            if email and Custom_User.objects.filter(email=email).exists():
+                user = Custom_User.objects.get(email=email)
+            else:
+                base_username = (email.split('@')[0] if email else f"ms_{uuid.uuid4().hex[:6]}")
+                candidate = base_username
+                idx = 1
+                while Custom_User.objects.filter(username=candidate).exists():
+                    candidate = f"{base_username}{idx}"
+                    idx += 1
+                user = Custom_User.objects.create(
+                    username=candidate,
+                    email=email or f"pending_{uuid.uuid4().hex}@ms.local",
+                    email_verified=bool(email),
+                    is_ms_user=True
+                )
+        else:
+            update_fields = []
+            if email and not user.email:
+                user.email = email
+                update_fields.append('email')
+            if not getattr(user, 'is_ms_user', False):
+                user.is_ms_user = True
+                update_fields.append('is_ms_user')
+            if email and not user.email_verified:
+                user.email_verified = True
+                update_fields.append('email_verified')
+            if update_fields:
+                user.save(update_fields=update_fields)
+        ProviderOAuthToken.objects.update_or_create(
+            user=user,
+            provider='microsoft',
+            defaults={
+                'access_token': access_token,
+                'refresh_token': token_data.get('refresh_token'),
+                'expires_at': None,
+                'scope': oauth_state.scope,
+                'token_type': token_data.get('token_type') or 'Bearer',
+            }
+        )
+        oauth_state.mark_used()
+        refresh = RefreshToken.for_user(user)
+        payload = {
+            'message': 'Microsoft OAuth success',
+            'user_id': str(user.pk),
+            'username': user.username,
+            'access_token': str(refresh.access_token),
+            'refresh_token': str(refresh),
+            'provider_scope': oauth_state.scope,
+            'provider_access_token': access_token,
+            'provider_expires_at': None,
+            'email': email,
+            'email_verified': user.email_verified,
+            'is_ms_user': getattr(user, 'is_ms_user', False),
+        }
+        # SSR: render HTML if requested
+        if request.path.endswith('/callback/ssr/') or request.GET.get('render') == '1':
+            html = """
+            <html>
+            <head>
+                <title>Authentication Complete</title>
+                <style>
+                body { font-family: sans-serif; text-align: center; margin-top: 10%; }
+                .msg { font-size: 1.5em; color: #2e7d32; }
+                </style>
+            </head>
+            <body>
+                <div class="msg">✅ All is fine! You may close this tab.</div>
+                <script>
+                if (window.opener) {
+                    window.opener.postMessage({success: true, type: "oauth"}, "*");
+                }
+                </script>
+            </body>
+            </html>
+            """
+            from django.http import HttpResponse
+            return HttpResponse(html)
+        return Response(payload)
 
 class SendLoginOTPView(APIView):
     """Sends a 6-digit OTP for passwordless login with simple rate limiting."""
@@ -993,3 +1364,47 @@ class LoginWithOTPView(APIView):
         except Exception as e:
             logger.exception(f"[LoginWithOTPView] Login with OTP failed: {str(e)}, req={request.data}")
             return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class EnableTOTPView(APIView):
+    """
+    Generates a TOTP secret and provisioning URI for the user to scan with Microsoft Authenticator.
+    """
+    permission_classes = [AllowAny]  # Or IsAuthenticated if you want
+
+    def post(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'detail': 'Authentication required.'}, status=401)
+        # Generate a new secret
+        secret = pyotp.random_base32()
+        user.totp_secret = secret
+        user.save(update_fields=['totp_secret'])
+        # Generate provisioning URI for QR code
+        issuer = "YourAppName"
+        email = user.email or user.username
+        uri = pyotp.totp.TOTP(secret).provisioning_uri(name=email, issuer_name=issuer)
+        return Response({
+            'secret': secret,
+            'provisioning_uri': uri,
+            'qr_code_url': f"https://api.qrserver.com/v1/create-qr-code/?data={urllib.parse.quote(uri)}"
+        })
+
+class VerifyTOTPView(APIView):
+    """
+    Verifies a TOTP code from the user's Authenticator app.
+    """
+    permission_classes = [AllowAny]  # Or IsAuthenticated
+
+    def post(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'detail': 'Authentication required.'}, status=401)
+        code = request.data.get('code')
+        if not user.totp_secret:
+            return Response({'detail': 'TOTP not enabled.'}, status=400)
+        totp = pyotp.TOTP(user.totp_secret)
+        if totp.verify(code):
+            return Response({'message': 'TOTP verified.'})
+        else:
+            return Response({'detail': 'Invalid code.'}, status=400)

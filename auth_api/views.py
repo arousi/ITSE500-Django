@@ -820,8 +820,27 @@ class OAuthCallbackBase(APIView):
             mobile_url = f"{oauth_state.mobile_redirect}?state={urllib.parse.quote(state_value)}&bridge=1"
             return redirect(mobile_url)
         # SSR: render HTML if requested
+        # ...existing code...
         if request.path.endswith('/callback/ssr/') or request.GET.get('render') == '1':
-            html = f"""<html><body><script>window.opener && window.opener.postMessage({json.dumps(payload)}, '*');</script><pre>{json.dumps(payload, indent=2)}</pre></body></html>"""
+            html = """
+            <html>
+            <head>
+                <title>Authentication Complete</title>
+                <style>
+                body { font-family: sans-serif; text-align: center; margin-top: 10%; }
+                .msg { font-size: 1.5em; color: #2e7d32; }
+                </style>
+            </head>
+            <body>
+                <div class="msg">✅ All is fine! You may close this tab.</div>
+                <script>
+                if (window.opener) {
+                    window.opener.postMessage({success: true, type: "oauth"}, "*");
+                }
+                </script>
+            </body>
+            </html>
+            """
             from django.http import HttpResponse
             return HttpResponse(html)
         return Response(payload)

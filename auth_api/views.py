@@ -612,6 +612,7 @@ class GoogleAuthorizeView(OAuthAuthorizeBase):
     """
     provider = 'google'
 
+
 class OpenRouterAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the OpenRouter OAuth2 authorization flow.

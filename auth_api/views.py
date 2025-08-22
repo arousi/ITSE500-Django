@@ -7,6 +7,7 @@ import base64
 import string
 import requests
 import json
+import pyotp
 from typing import Any, Dict, Optional, cast
 import urllib.parse
 from django.shortcuts import redirect, render
@@ -1362,3 +1363,47 @@ class LoginWithOTPView(APIView):
         except Exception as e:
             logger.exception(f"[LoginWithOTPView] Login with OTP failed: {str(e)}, req={request.data}")
             return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+class EnableTOTPView(APIView):
+    """
+    Generates a TOTP secret and provisioning URI for the user to scan with Microsoft Authenticator.
+    """
+    permission_classes = [AllowAny]  # Or IsAuthenticated if you want
+
+    def post(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'detail': 'Authentication required.'}, status=401)
+        # Generate a new secret
+        secret = pyotp.random_base32()
+        user.totp_secret = secret
+        user.save(update_fields=['totp_secret'])
+        # Generate provisioning URI for QR code
+        issuer = "YourAppName"
+        email = user.email or user.username
+        uri = pyotp.totp.TOTP(secret).provisioning_uri(name=email, issuer_name=issuer)
+        return Response({
+            'secret': secret,
+            'provisioning_uri': uri,
+            'qr_code_url': f"https://api.qrserver.com/v1/create-qr-code/?data={urllib.parse.quote(uri)}"
+        })
+        
+class VerifyTOTPView(APIView):
+    """
+    Verifies a TOTP code from the user's Authenticator app.
+    """
+    permission_classes = [AllowAny]  # Or IsAuthenticated
+
+    def post(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({'detail': 'Authentication required.'}, status=401)
+        code = request.data.get('code')
+        if not user.totp_secret:
+            return Response({'detail': 'TOTP not enabled.'}, status=400)
+        totp = pyotp.TOTP(user.totp_secret)
+        if totp.verify(code):
+            return Response({'message': 'TOTP verified.'})
+        else:
+            return Response({'detail': 'Invalid code.'}, status=400)

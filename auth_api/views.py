@@ -45,53 +45,25 @@ def generate_code_challenge(code_verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).decode('utf-8').rstrip('=')
 
 def build_openrouter_authorize_url(state: str, code_challenge: str, scope: str, redirect_uri: str) -> str:
-    """Build the OpenRouter authorize URL following current PKCE docs.
-
-    Docs: https://openrouter.ai/docs/use-cases/oauth-pkce
-
-    OpenRouter's published PKCE flow (Aug 2025) does NOT require a client_id. The
-    minimal required params are:
-        - callback_url
-        - (optionally) code_challenge & code_challenge_method=S256 for PKCE
-
-    We still append a 'state' parameter we manage server-side for CSRF protection; the
-    provider should ignore unknown params if not used. "scope" is retained only for
-    potential future compatibility but is not currently documented as required.
-    """
     base_auth = getattr(settings, 'OPENROUTER_AUTH_URL', 'https://openrouter.ai/auth')
-    # Use documented param 'callback_url' (our variable redirect_uri) and PKCE fields.
-    # Preserve state for our validation even if OpenRouter ignores it.
     params = {
         'callback_url': redirect_uri,
         'code_challenge': code_challenge,
         'code_challenge_method': 'S256',
         'state': state,
     }
-    # Only include scope if explicitly requested (legacy / experimental)
     if scope:
         params['scope'] = scope
-    # Build query string
     from urllib.parse import urlencode
     return f"{base_auth}?{urlencode(params)}"
 
 def exchange_openrouter_token(code: str, code_verifier: str, redirect_uri: str):
-    """Exchange authorization code for a user-controlled OpenRouter API key.
-
-    Per docs (Aug 2025): POST https://openrouter.ai/api/v1/auth/keys with JSON:
-        { code, code_verifier, code_challenge_method: 'S256' }
-
-    Returns JSON:
-        { key: '<API_KEY>' }
-
-    We return (status_code, payload) for parity with google helper.
-    """
     token_url = getattr(settings, 'OPENROUTER_TOKEN_URL', 'https://openrouter.ai/api/v1/auth/keys')
     json_body = {
         'code': code,
         'code_verifier': code_verifier,
-        'code_challenge_method': 'S256',  # must match what we used building authorize URL
+        'code_challenge_method': 'S256',
     }
-    # redirect/callback not currently required in exchange per docs; include if a future version needs it
     if redirect_uri:
         json_body['callback_url'] = redirect_uri
     resp = requests.post(token_url, json=json_body, timeout=15)
@@ -105,8 +77,8 @@ def build_google_authorize_url(state: str, code_challenge: str, scope: str, redi
     base_auth = getattr(settings, 'GOOGLE_OAUTH_AUTH_URL', 'https://accounts.google.com/o/oauth2/v2/auth')
     client_id = getattr(settings, 'GOOGLE_OAUTH_CLIENT_ID', '')
     return (
-        f"{base_auth}?response_type=code&client_id={client_id}" \
-        f"&redirect_uri={redirect_uri}&scope={scope}&state={state}&access_type=offline&prompt=consent" \
+        f"{base_auth}?response_type=code&client_id={client_id}"
+        f"&redirect_uri={redirect_uri}&scope={scope}&state={state}&access_type=offline&prompt=consent"
         f"&code_challenge={code_challenge}&code_challenge_method=S256"
     )
 
@@ -201,56 +173,156 @@ logger = logging.getLogger('auth_api')
 
 """
 class RegisterView(APIView):
+    """
+    API endpoint to handle user registration.
+    Accepts temp_id and device_id for visitor migration/upgrade.
+    If the user already exists (by email, uuid, username, or temp_id), returns their JWT tokens and all their conversations/messages.
+    Otherwise, creates a new user, sends a verification PIN, and returns onboarding tokens and data.
+    """
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """
+        Handle POST request for user registration.
+        If user exists (by email, uuid, username, or temp_id), returns JWT tokens and all their data.
+        If new, creates user, sends PIN, and returns onboarding tokens and data.
+        Always persists device_id in related_devices.
+        """
         logger.info(f"[RegisterView] Incoming registration request: data={request.data}")
-        serializer = RegisterSerializer(data=request.data)
-        try:
-            serializer.is_valid(raise_exception=True)
-            user: Custom_User = cast(Custom_User, serializer.save())
-            # Only hash and set password if provided
-            raw_pw: str = str(request.data.get('user_password') or '')
-            if raw_pw:
+        temp_id = (request.data.get("temp_id") or "").strip()
+        device_id = (request.data.get("device_id") or "").strip()
+        email = request.data.get('email')
+        user_id = request.data.get('user_id') or request.data.get('uuid')
+        username = request.data.get('username')
+        user = None
+
+        # Try to find existing user by email, uuid, username, or temp_id
+        if email:
+            user = Custom_User.objects.filter(email=email).first()
+        if not user and user_id:
+            user = Custom_User.objects.filter(user_id=user_id).first()
+        if not user and username:
+            user = Custom_User.objects.filter(username=username).first()
+        if not user and temp_id:
+            user = Custom_User.objects.filter(temp_id=temp_id).first()
+
+        created = False
+        if not user:
+            # Try to create new user
+            serializer = RegisterSerializer(data=request.data)
+            try:
+                serializer.is_valid(raise_exception=True)
+                user: Custom_User = cast(Custom_User, serializer.save())  # type: ignore[assignment]
+                # Hash password with backend salt same as login flow expects
+                raw_pw: str = str(request.data.get('user_password') or '')
                 BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
                 salted = (raw_pw + BACKEND_SALT).encode('utf-8')
                 backend_hash = hashlib.sha256(salted).hexdigest()
                 user.user_password = backend_hash
-            # Generate 5-digit PIN for email verification
-            pin = f"{random.randint(10000, 99999)}"
-            user.profile_email_pin = pin
-            user.profile_email_pin_created = timezone.now()
-            user.email_verified = False
-            user.save()
-            # Send PIN email (best effort)
-            try:
-                send_mail(
-                    subject="Your Email Verification PIN",
-                    message=f"Your verification PIN is: {pin}",
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
-                    recipient_list=[user.email],
-                    fail_silently=True,
-                )
-            except Exception:
-                logger.warning("[RegisterView] PIN email send failed (non-fatal)")
-            refresh = RefreshToken.for_user(user)
-            resp_data = {
-                "message": "User created. Verification PIN sent to email.",
-                "user_id": str(user.user_id),
-                "access_token": str(refresh.access_token),
-                "refresh_token": str(refresh),
-                "email": user.email,
-                "onboarding": True
-            }
-            logger.info(f"[RegisterView] Registration success: status=201, user_id={user.user_id}")
-            return Response(resp_data, status=status.HTTP_201_CREATED)
-        except serializers.ValidationError as e:
-            logger.warning(f"[RegisterView] Registration failed: status=400, errors={e.detail}, req={request.data}")
-            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.exception(f"[RegisterView] Unexpected registration error: {str(e)}, req={request.data}")
-            return Response({"detail": "Registration failed due to a server error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                # Generate 5-digit PIN for email verification
+                pin = f"{random.randint(10000, 99999)}"
+                user.profile_email_pin = pin
+                user.profile_email_pin_created = timezone.now()
+                user.email_verified = False
+                # Set temp_id and visitor flag if provided
+                if temp_id:
+                    user.temp_id = temp_id
+                    user.is_visitor = True
+                user.save()
+                # Send PIN email (best effort)
+                try:
+                    send_mail(
+                        subject="Your Email Verification PIN",
+                        message=f"Your verification PIN is: {pin}",
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
+                        recipient_list=[user.email],
+                        fail_silently=True,
+                    )
+                except Exception:
+                    logger.warning("[RegisterView] PIN email send failed (non-fatal)")
+                created = True
+            except serializers.ValidationError as e:
+                logger.warning(f"[RegisterView] Registration failed: status=400, errors={e.detail}, req={request.data}")
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                logger.exception(f"[RegisterView] Unexpected registration error: {str(e)}, req={request.data}")
+                return Response({"detail": "Registration failed due to a server error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        # Always persist device_id in related_devices
+        if device_id:
+            try:
+                devices = user.related_devices if isinstance(user.related_devices, list) else []
+            except Exception:
+                import json
+                try:
+                    devices = json.loads(user.related_devices or "[]")
+                except Exception:
+                    devices = []
+            if device_id not in devices:
+                devices.append(device_id)
+                try:
+                    user.related_devices = devices
+                except Exception:
+                    import json
+                    user.related_devices = json.dumps(devices)
+                user.device_id = device_id  # keep legacy field updated
+                user.last_login = timezone.now()
+                user.save()
+
+        # At this point, user is set (either new or existing)
+        refresh = RefreshToken.for_user(user)
+
+        # Fetch all conversations/messages for this user (like SyncConversationsView.get)
+        from chat_api.models import Conversation
+        conversations = Conversation.objects.filter(user_id=user)
+        result = []
+        for conv in conversations:
+            conv_data = {
+                "conversation_id": str(conv.conversation_id),
+                "user_id": str(user.user_id),
+                "title": conv.title,
+                "created_at": conv.created_at,
+                "updated_at": conv.updated_at,
+                "local_only": conv.local_only,
+            }
+            conv_messages = []
+            for msg in conv.messages.all():
+                msg_data = {
+                    "message_id": str(msg.message_id),
+                    "conversation_id": str(conv.conversation_id),
+                    "user_id": str(user.user_id),
+                    "request_id": str(msg.request_id.id) if msg.request_id else None,
+                    "response_id": str(msg.response_id.id) if msg.response_id else None,
+                    "output_id": str(msg.output_id.id) if msg.output_id else None,
+                    "timestamp": msg.timestamp,
+                    "vote": bool(msg.vote),
+                    "has_image": bool(msg.has_image),
+                    "img_Url": msg.img_Url.url if msg.img_Url else None,
+                    "metadata": msg.metadata,
+                    "has_embedding": bool(msg.has_embedding),
+                    "has_document": bool(msg.has_document),
+                    "doc_url": msg.doc_url.url if msg.doc_url else None,
+                }
+                # Optionally serialize nested request/response/output if needed
+                conv_messages.append(msg_data)
+            conv_data["messages"] = conv_messages
+            result.append(conv_data)
+
+        resp_data = {
+            "message": "User created. Verification PIN sent to email." if created else "User already exists. Returning data.",
+            "user_id": str(user.user_id),
+            "access_token": str(refresh.access_token),
+            "refresh_token": str(refresh),
+            "email": user.email,
+            "onboarding": created,
+            "conversations": result,
+            "temp_id": user.temp_id,
+            "device_id": device_id,
+            "related_devices": devices if device_id else [],
+        }
+        logger.info(f"[RegisterView] Registration/data sync success: status=201, user_id={user.user_id}")
+        return Response(resp_data, status=status.HTTP_201_CREATED)
+    
 class EmailPinVerifyView(APIView):
     """Verify the 5-digit PIN sent to the user's email."""
     permission_classes = [AllowAny]
@@ -266,9 +338,8 @@ class EmailPinVerifyView(APIView):
         validated_data = cast(Dict[str, Any], ser.validated_data)
         email = validated_data.get('email')
         pin = validated_data.get('pin')
-        #* Missing?
         if not email or not pin:
-            return Response({"detail": "Missing Data."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             user = Custom_User.objects.get(email=email)
         except Custom_User.DoesNotExist:
@@ -276,31 +347,12 @@ class EmailPinVerifyView(APIView):
         if getattr(user, 'profile_email_pin', None) != pin:
             return Response({"detail": "Invalid PIN."}, status=status.HTTP_400_BAD_REQUEST)
         created = getattr(user, 'profile_email_pin_created', None)
-        
-        #* PIN Expired? Generate new
         if not created or (timezone.now() - created).total_seconds() > 600:
-            # Generate and send a new PIN
-            new_pin = f"{random.randint(10000, 99999)}"
-            user.profile_email_pin = new_pin
-            user.profile_email_pin_created = timezone.now()
-            user.save(update_fields=["profile_email_pin", "profile_email_pin_created"])
-            try:
-                send_mail(
-                    subject="Your New Email Verification PIN",
-                    message=f"Your new verification PIN is: {new_pin}",
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
-                    #TODO put real credentials later on
-                    recipient_list=[user.email],
-                    fail_silently=True,
-                )
-            except Exception:
-                logger.warning("[EmailPinVerifyView] New PIN email send failed (non-fatal)")
-            return Response({"detail": "PIN expired. A new PIN has been sent to your email."}, status=status.HTTP_400_BAD_REQUEST)
-        #* All correct then verify account
+            return Response({"detail": "PIN expired."}, status=status.HTTP_400_BAD_REQUEST)
         user.email_verified = True
         user.profile_email_pin = None
         user.save(update_fields=["email_verified", "profile_email_pin"])
-        return Response({"message": "Email verified. You may now set your password."}, status=status.HTTP_202_ACCEPTED)
+        return Response({"message": "Email verified. You may now set your password."})
 
 class SetPasswordAfterEmailVerifyView(APIView):
     """Set password after successful email PIN verification."""
@@ -309,27 +361,27 @@ class SetPasswordAfterEmailVerifyView(APIView):
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
         password = serializers.CharField(min_length=6)
-
+  
     def post(self, request):  # type: ignore[override]
-        logger.info(f"[SetPasswordAfterEmailVerifyView] Incoming set-password request: data={request.data}")
-        ser = self.InputSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        validated_data = cast(Dict[str, Any], ser.validated_data)
-        email = validated_data.get('email')
-        frontend_hashed_password = validated_data.get('password', '')
-        if not email or not frontend_hashed_password:
-            return Response({"detail": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            user = Custom_User.objects.get(email=email)
-        except Custom_User.DoesNotExist:
-            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        if not getattr(user, 'email_verified', False):
-            return Response({"detail": "Email not verified."}, status=status.HTTP_400_BAD_REQUEST)
-        BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
-        backend_hash = hashlib.sha256((frontend_hashed_password + BACKEND_SALT).encode('utf-8')).hexdigest()
-        user.user_password = backend_hash
-        user.save(update_fields=["user_password"])
-        return Response({"message": "Password set successfully. You may now log in."})
+            logger.info(f"[SetPasswordAfterEmailVerifyView] Incoming set-password request: data={request.data}")
+            ser = self.InputSerializer(data=request.data)
+            ser.is_valid(raise_exception=True)
+            validated_data = cast(Dict[str, Any], ser.validated_data)
+            email = validated_data.get('email')
+            frontend_hashed_password = validated_data.get('password', '')
+            if not email or not frontend_hashed_password:
+                return Response({"detail": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                user = Custom_User.objects.get(email=email)
+            except Custom_User.DoesNotExist:
+                return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+            if not getattr(user, 'email_verified', False):
+                return Response({"detail": "Email not verified."}, status=status.HTTP_400_BAD_REQUEST)
+            BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
+            backend_hash = hashlib.sha256((frontend_hashed_password + BACKEND_SALT).encode('utf-8')).hexdigest()
+            user.user_password = backend_hash
+            user.save(update_fields=["user_password"])
+            return Response({"message": "Password set successfully. You may now log in."})
 
 class LoginView(APIView):
     """
@@ -426,437 +478,201 @@ class HealthCheckView(APIView):
         return Response(resp_data, status=status.HTTP_200_OK)
 
 
-class GoogleOAuthView(APIView):
+class OAuthAuthorizeBase(APIView):
     """
-    Handles Google OAuth2.0 authentication.
+    Base class for starting an OAuth2 authorization flow (Google or OpenRouter).
 
-    Example API Request (POST /api/v1/auth_api/google-oauth/):
+    Handles both SSR (server-side rendered) and bridge (SPA/mobile) flows.
+    - For SSR: redirects the user to the provider's authorization URL.
+    - For SPA/mobile: returns the authorization URL and state in JSON.
+
+    Query Parameters:
+        - scope (str, optional): OAuth scopes (default: 'openid').
+        - redirect_uri (str, optional): Custom redirect URI for mobile/SPA.
+        - callback_host (str, optional): Used for emulator/mobile callback host swapping.
+        - mode (str, optional): If 'redirect', triggers SSR redirect.
+
+    Example SSR Request:
+        GET /api/v1/auth_api/google/authorize/?mode=redirect
+
+    Example SPA/Mobile Request:
+        GET /api/v1/auth_api/google/authorize/
+
+    Example SPA/Mobile Response (200):
         {
-            "token": "google-oauth-token"
-        }
-
-    Example API Response (200):
-        {
-            "message": "Google OAuth success"
-        }
-
-    Example API Response (401):
-        {
-            "error": "Invalid token"
-        }
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        logger.info(f"[GoogleOAuthView] Incoming Google OAuth request: data={request.data}")
-        token = request.data.get('token')
-        if token == 'valid_google_token':
-            resp_data = {'message': 'Google OAuth success'}
-            logger.info(f"[GoogleOAuthView] Google OAuth success: status=200, token={token}, resp={resp_data}")
-            return Response(resp_data, status=status.HTTP_200_OK)
-        logger.warning(f"[GoogleOAuthView] Invalid Google token: {token}")
-        resp_data = {'error': 'Invalid token'}
-        logger.info(f"[GoogleOAuthView] Google OAuth failed: status=401, token={token}, resp={resp_data}")
-        return Response(resp_data, status=status.HTTP_401_UNAUTHORIZED)
-
-
-class OpenRouterOAuthView(APIView):
-    """
-    Handles OpenRouter OAuth2.0 authentication.
-
-    Example API Request (POST /api/v1/auth_api/openrouter-oauth/):
-        {
-            "token": "openrouter-oauth-token"
-        }
-
-    Example API Response (200):
-        {
-            "message": "OpenRouter OAuth success"
-        }
-
-    Example API Response (401):
-        {
-            "error": "Invalid token"
+            "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth?...",
+            "state": "random_state_string",
+            "state_id": "uuid",
+            "expires_at": "2025-08-22T12:34:56.789Z",
+            "bridge": true
         }
     """
     permission_classes = [AllowAny]
-
-    def post(self, request):
-        logger.info(f"[OpenRouterOAuthView] Incoming OpenRouter OAuth request: data={request.data}")
-        token = request.data.get('token')
-        if token == 'valid_openrouter_token':
-            resp_data = {'message': 'OpenRouter OAuth success'}
-            logger.info(f"[OpenRouterOAuthView] OpenRouter OAuth success: status=200, token={token}, resp={resp_data}")
-            return Response(resp_data, status=status.HTTP_200_OK)
-        logger.warning(f"[OpenRouterOAuthView] Invalid OpenRouter token: {token}")
-        resp_data = {'error': 'Invalid token'}
-        logger.info(f"[OpenRouterOAuthView] OpenRouter OAuth failed: status=401, token={token}, resp={resp_data}")
-        return Response(resp_data, status=status.HTTP_401_UNAUTHORIZED)
-
-
-class OpenRouterAuthorizeView(APIView):
-    """Initiates PKCE OAuth flow for OpenRouter (SSR friendly).
-
-    GET returns JSON with {authorize_url, state_id} for mobile / SPA.
-    """
-    permission_classes = [AllowAny]
+    provider = None  # 'google' or 'openrouter'
 
     def get(self, request):
         base_ser = OAuthAuthorizeRequestSerializer(data=request.query_params)
         base_ser.is_valid(raise_exception=True)
         base_data = cast(Dict[str, Any], base_ser.validated_data)
         scope = base_data.get('scope') or 'openid'
-        # Ensure OpenRouter optional offline scope if supported by provider spec
-        if 'offline_access' not in scope.split():
-            scope = scope + ' offline_access'
         orig_redirect = base_data.get('redirect_uri')
-        redirect_uri = orig_redirect or getattr(settings, 'OPENROUTER_REDIRECT_URI', '')
-        mobile_redirect: Optional[str] = None
-        # Bridge: if client supplied a custom scheme, keep it separate and use server registered redirect for provider
-        if redirect_uri and (redirect_uri.startswith('prompeteer://') or redirect_uri.startswith('app://')):
-            mobile_redirect = redirect_uri.rstrip('/')
-            redirect_uri = getattr(settings, 'OPENROUTER_REDIRECT_URI', '')
-        if not redirect_uri:
-            try:
-                redirect_uri = request.build_absolute_uri(reverse('openrouter-callback'))
-            except Exception:
-                return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
-        code_verifier = generate_code_verifier()
-        code_challenge = generate_code_challenge(code_verifier)
-        state = secrets.token_urlsafe(24)
-        expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
-        oauth_state = OAuthState.objects.create(
-            provider='openrouter',
-            state=state,
-            code_challenge=code_challenge,
-            code_verifier=code_verifier,
-            redirect_uri=redirect_uri,
-            mobile_redirect=mobile_redirect,
-            scope=scope,
-            expires_at=expires_at,
-            user=request.user if request.user.is_authenticated else None,
-        )
-        authorize_url = build_openrouter_authorize_url(state, code_challenge, scope, redirect_uri)
-        logger.info(f"[OpenRouterAuthorizeView] Generated state={state} id={oauth_state.id} redirect={redirect_uri} mobile_redirect={mobile_redirect}")
-        return Response({'authorize_url': authorize_url,'state': state,'state_id': str(oauth_state.id),'expires_at': expires_at.isoformat(),'bridge': bool(mobile_redirect)})
-
-
-class OpenRouterCallbackView(APIView):
-    """Handles OAuth callback: validates state, exchanges code, stores tokens, returns JWT if new user."""
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        ser = OAuthCallbackSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        cb_data = cast(Dict[str, Any], ser.validated_data)
-        state_value = cb_data.get('state') or ''
-        code = cb_data.get('code') or ''
-        error = cb_data.get('error') or ''
-        try:
-            oauth_state = OAuthState.objects.get(state=state_value, provider='openrouter')
-        except OAuthState.DoesNotExist:
-            logger.warning(f"[OpenRouterCallbackView] Invalid state={state_value}")
-            return Response({'detail': 'Invalid state'}, status=status.HTTP_400_BAD_REQUEST)
-        if error:
-            logger.warning(f"[OpenRouterCallbackView] Provider error state={state_value} error={error}")
-            return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
-        if oauth_state.used or oauth_state.is_expired():
-            logger.warning(f"[OpenRouterCallbackView] Expired/used state={state_value}")
-            return Response({'detail': 'State expired or already used'}, status=status.HTTP_400_BAD_REQUEST)
-        if not code:
-            return Response({'detail': 'Missing authorization code'}, status=status.HTTP_400_BAD_REQUEST)
-        code_str = str(code or '')
-        status_code, token_payload = exchange_openrouter_token(code_str, str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
-        if status_code != 200:
-            logger.warning(f"[OpenRouterCallbackView] Token exchange failed state={state_value} status={status_code} payload={token_payload}")
-            return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
-
-        access_token = token_payload.get('key') or token_payload.get('access_token')
-        refresh_token = None  # Not provided by current spec
-        scope = oauth_state.scope
-        token_type = 'api_key'
-        if not access_token:
-            logger.error(f"[OpenRouterCallbackView] Missing 'key' in provider payload state={state_value} payload={token_payload}")
-            return Response({'detail': 'Provider did not return API key', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
-        user = oauth_state.user
-        if not user:
-            user = Custom_User.objects.create(
-                username=f"or_{uuid.uuid4().hex[:10]}",
-                email=f"pending_{uuid.uuid4().hex}@openrouter.local",
-                is_openrouter_user=True
-            )
-        elif not getattr(user, 'is_openrouter_user', False):
-            user.is_openrouter_user = True
-            user.save(update_fields=['is_openrouter_user'])
-        expires_at = None
-        token_obj, created = ProviderOAuthToken.objects.update_or_create(
-            user=user,
-            provider='openrouter',
-            defaults={
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'expires_at': expires_at,
-                'scope': scope,
-                'token_type': token_type,
-            }
-        )
-        logger.info(f"[OpenRouterCallbackView] Persisted provider token user={user.pk} created={created} token_id={token_obj.id}")
-        oauth_state.mark_used()
-        refresh = RefreshToken.for_user(user)
-        logger.info(f"[OpenRouterCallbackView] OAuth success user={user.pk} state={state_value}")
-        expose_provider_token = getattr(settings, 'OPENROUTER_EXPOSE_PROVIDER_TOKEN', True)
-        provider_payload: Dict[str, Any] = {
-            'provider_access_token': access_token if expose_provider_token else None,
-            'provider_refresh_token': None,
-            'provider_token_type': token_type,
-            'provider_scope': scope,
-            'provider_expires_at': None,
-        }
-        resp = {
-            'message': 'OpenRouter OAuth success',
-            'user_id': str(user.pk),
-            'access_token': str(refresh.access_token),
-            'refresh_token': str(refresh),
-            'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
-            'is_google_user': getattr(user, 'is_google_user', False),
-            **provider_payload,
-        }
-        return Response(resp)
-
-
-class OpenRouterAuthorizeSSRView(APIView):
-    """SSR flow: redirect user to provider directly (browser based)."""
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        # Default scope for OpenRouter; ensure offline_access present for potential future refresh semantics
-        scope = request.GET.get('scope', 'openid offline_access') or 'openid offline_access'
-        if 'offline_access' not in scope.split():
-            scope = scope + ' offline_access'
-        # Prefer SSR-specific redirect first, fallback to generic
-        redirect_uri = getattr(settings, 'OPENROUTER_REDIRECT_URI_SSR', '') or getattr(settings, 'OPENROUTER_REDIRECT_URI', '')
-        if not redirect_uri:
-            # Fallback: build absolute URL to SSR callback
-            try:
-                redirect_uri = request.build_absolute_uri(reverse('openrouter-callback-ssr'))
-            except Exception:
-                return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
-        code_verifier = generate_code_verifier()
-        code_challenge = generate_code_challenge(code_verifier)
-        state = secrets.token_urlsafe(24)
-        expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
-        OAuthState.objects.create(
-            provider='openrouter',
-            state=state,
-            code_challenge=code_challenge,
-            code_verifier=code_verifier,
-            redirect_uri=redirect_uri,
-            scope=scope,
-            expires_at=expires_at,
-            user=request.user if request.user.is_authenticated else None,
-        )
-        authorize_url = build_openrouter_authorize_url(state, code_challenge, scope, redirect_uri)
-        return redirect(authorize_url)
-
-
-class OpenRouterCallbackSSRView(APIView):
-    """SSR callback: exchanges code and renders template that posts message to opener."""
-    permission_classes = [AllowAny]
-
-    template_name_success = 'auth/openrouter_callback_success.html'
-    template_name_error = 'auth/openrouter_callback_error.html'
-
-    def get(self, request):
-        # Accept query params
-        ser = OAuthCallbackSerializer(data=request.GET)
-        ser.is_valid(raise_exception=True)
-        cb_data = cast(Dict[str, Any], ser.validated_data)
-        state_value = cb_data.get('state') or ''
-        code = cb_data.get('code') or ''
-        error = cb_data.get('error') or ''
-        context = {}
-        try:
-            oauth_state = OAuthState.objects.get(state=state_value, provider='openrouter')
-        except OAuthState.DoesNotExist:
-            context['error'] = 'Invalid state'
-            return render(request, self.template_name_error, context, status=400)
-        if error:
-            context['error'] = error
-            return render(request, self.template_name_error, context, status=400)
-        if oauth_state.used or oauth_state.is_expired():
-            context['error'] = 'State expired or already used'
-            return render(request, self.template_name_error, context, status=400)
-        if not code:
-            context['error'] = 'Missing authorization code'
-            return render(request, self.template_name_error, context, status=400)
-        status_code, token_payload = exchange_openrouter_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
-        if status_code != 200:
-            context['error'] = 'Token exchange failed'
-            context['provider_payload'] = token_payload
-            return render(request, self.template_name_error, context, status=400)
-
-        access_token = token_payload.get('key') or token_payload.get('access_token')
-        refresh_token = None
-        scope = oauth_state.scope
-        token_type = 'api_key'
-        if not access_token:
-            context['error'] = 'Provider did not return API key'
-            context['provider_payload'] = token_payload
-            logger.error(f"[OpenRouterCallbackSSRView] Missing 'key' in provider payload state={state_value} payload={token_payload}")
-            return render(request, self.template_name_error, context, status=400)
-        user = oauth_state.user
-        if not user:
-            user = Custom_User.objects.create(
-                username=f"or_{uuid.uuid4().hex[:10]}",
-                email=f"pending_{uuid.uuid4().hex}@openrouter.local",
-                is_openrouter_user=True
-            )
-        elif not getattr(user, 'is_openrouter_user', False):
-            user.is_openrouter_user = True
-            user.save(update_fields=['is_openrouter_user'])
-        expires_at = None
-        token_obj, created = ProviderOAuthToken.objects.update_or_create(
-            user=user,
-            provider='openrouter',
-            defaults={
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'expires_at': expires_at,
-                'scope': scope,
-                'token_type': token_type,
-            }
-        )
-        logger.info(f"[OpenRouterCallbackSSRView] Persisted provider token user={user.pk} created={created} token_id={token_obj.id}")
-        oauth_state.mark_used()
-        refresh = RefreshToken.for_user(user)
-        payload = {
-            'message': 'OpenRouter OAuth success',
-            'user_id': str(user.pk),
-            'access_token': str(refresh.access_token),
-            'refresh_token': str(refresh),
-            'provider_access_token': access_token if getattr(settings, 'OPENROUTER_EXPOSE_PROVIDER_TOKEN', True) else None,
-            'provider_refresh_token': None,
-            'provider_token_type': token_type,
-            'provider_scope': scope,
-            'provider_expires_at': None,
-            'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
-            'is_google_user': getattr(user, 'is_google_user', False),
-        }
-        if oauth_state.mobile_redirect:
-            # Store payload for retrieval then redirect with state reference only
-            oauth_state.result_payload = json.dumps(payload)
-            oauth_state.save(update_fields=["result_payload"])
-            mobile_url = f"{oauth_state.mobile_redirect}?state={urllib.parse.quote(state_value)}&bridge=1"
-            return redirect(mobile_url)
-        return render(request, self.template_name_success, {'data_json': json.dumps(payload)})
-
-
-# ----------------------- GOOGLE OAUTH (JSON + SSR) ---------------------------
-
-class GoogleAuthorizeView(APIView):
-    """JSON-based initiate for Google OAuth (PKCE)."""
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        base_ser = OAuthAuthorizeRequestSerializer(data=request.query_params)
-        base_ser.is_valid(raise_exception=True)
-        base_data = cast(Dict[str, Any], base_ser.validated_data)
-        # Enforce required Google scopes; strip unsupported offline_access (Google uses access_type=offline flag instead)
-        requested_scope = base_data.get('scope') or ''
-        # Remove any accidental offline_access to avoid invalid_scope errors
-        scope_parts = [s for s in requested_scope.split() if s and s != 'offline_access']
-        # Ensure baseline scopes present
-        for required in ('openid', 'email', 'profile'):
-            if required not in scope_parts:
-                scope_parts.append(required)
-        scope = ' '.join(scope_parts)
-        orig_redirect = base_data.get('redirect_uri')
-        redirect_uri = orig_redirect or getattr(settings, 'GOOGLE_OAUTH_REDIRECT_URI', '')
-        # Optional host override: client may pass callback_host=10.0.2.2 to force emulator-friendly host
         callback_host = request.query_params.get('callback_host')
-        if callback_host:
-            allowed_hosts = {'10.0.2.2', '127.0.0.1'} | set(getattr(settings, 'OAUTH_CALLBACK_HOST_ALLOWLIST', []))
-            if any(callback_host.startswith(prefix) for prefix in ('192.168.', '10.0.2.')):
-                allowed_hosts.add(callback_host.split(':')[0])
-            if callback_host.split(':')[0] in allowed_hosts:
-                # Determine port (default 8000) if part of host param
-                host_part = callback_host
-                if ':' not in host_part:
-                    host_part = f"{host_part}:8000"
-                scheme = 'http'
-                redirect_uri = f"{scheme}://{host_part}/api/v1/auth_api/google/callback/"
-            else:
-                logger.warning(f"[GoogleAuthorizeView] Ignoring disallowed callback_host={callback_host}")
         mobile_redirect: Optional[str] = None
-        if redirect_uri and (redirect_uri.startswith('prompeteer://') or redirect_uri.startswith('app://')):
-            mobile_redirect = redirect_uri.rstrip('/')
-            redirect_uri = getattr(settings, 'GOOGLE_OAUTH_REDIRECT_URI', '')
-        if redirect_uri and not redirect_uri.endswith('/'):
-            redirect_uri += '/'
-        if not redirect_uri:
-            return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
-        # If this is a mobile bridge (custom scheme provided) and redirect host is loopback, swap to emulator host
-        if mobile_redirect and callback_host is None:
-            try:
-                parsed = urllib.parse.urlparse(redirect_uri)
-                if parsed.hostname in ('127.0.0.1', 'localhost'):
-                    new_netloc = f"10.0.2.2:{parsed.port or 8000}"
-                    redirect_uri = urllib.parse.urlunparse((parsed.scheme, new_netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-                    if not redirect_uri.endswith('/'):
-                        redirect_uri += '/'
-                    logger.info(f"[GoogleAuthorizeView] Auto-swapped redirect host to emulator 10.0.2.2 for mobile bridge (was {parsed.hostname})")
-            except Exception:
-                logger.warning("[GoogleAuthorizeView] Failed to auto-swap emulator host")
-        code_verifier = generate_code_verifier()
-        code_challenge = generate_code_challenge(code_verifier)
-        state = secrets.token_urlsafe(24)
-        expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
-        oauth_state = OAuthState.objects.create(
-            provider='google',
-            state=state,
-            code_challenge=code_challenge,
-            code_verifier=code_verifier,
-            redirect_uri=redirect_uri,
-            mobile_redirect=mobile_redirect,
-            scope=scope,
-            expires_at=expires_at,
-            user=request.user if request.user.is_authenticated else None,
-        )
-        authorize_url = build_google_authorize_url(state, code_challenge, scope, redirect_uri)
-        logger.info(f"[GoogleAuthorizeView] Generated state={state} id={oauth_state.id} redirect_uri={redirect_uri} mobile_redirect={mobile_redirect} authorize_url={authorize_url}")
-    # Unified behavior: if mode=redirect or path contains authorize/ssr treat as SSR and redirect immediately.
+
+        # Provider-specific logic
+        if self.provider == 'google':
+            # Remove any accidental offline_access to avoid invalid_scope errors
+            scope_parts = [s for s in scope.split() if s and s != 'offline_access']
+            for required in ('openid', 'email', 'profile'):
+                if required not in scope_parts:
+                    scope_parts.append(required)
+            scope = ' '.join(scope_parts)
+            redirect_uri = orig_redirect or getattr(settings, 'GOOGLE_OAUTH_REDIRECT_URI', '')
+            # Emulator host swap for mobile
+            if callback_host:
+                allowed_hosts = {'10.0.2.2', '127.0.0.1'} | set(getattr(settings, 'OAUTH_CALLBACK_HOST_ALLOWLIST', []))
+                if any(callback_host.startswith(prefix) for prefix in ('192.168.', '10.0.2.')):
+                    allowed_hosts.add(callback_host.split(':')[0])
+                if callback_host.split(':')[0] in allowed_hosts:
+                    host_part = callback_host
+                    if ':' not in host_part:
+                        host_part = f"{host_part}:8000"
+                    scheme = 'http'
+                    redirect_uri = f"{scheme}://{host_part}/api/v1/auth_api/google/callback/"
+            if redirect_uri and (redirect_uri.startswith('prompeteer://') or redirect_uri.startswith('app://')):
+                mobile_redirect = redirect_uri.rstrip('/')
+                redirect_uri = getattr(settings, 'GOOGLE_OAUTH_REDIRECT_URI', '')
+            if redirect_uri and not redirect_uri.endswith('/'):
+                redirect_uri += '/'
+            if not redirect_uri:
+                return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
+            code_verifier = generate_code_verifier()
+            code_challenge = generate_code_challenge(code_verifier)
+            state = secrets.token_urlsafe(24)
+            expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
+            oauth_state = OAuthState.objects.create(
+                provider='google',
+                state=state,
+                code_challenge=code_challenge,
+                code_verifier=code_verifier,
+                redirect_uri=redirect_uri,
+                mobile_redirect=mobile_redirect,
+                scope=scope,
+                expires_at=expires_at,
+                user=request.user if request.user.is_authenticated else None,
+            )
+            authorize_url = build_google_authorize_url(state, code_challenge, scope, redirect_uri)
+        elif self.provider == 'openrouter':
+            if 'offline_access' not in scope.split():
+                scope = scope + ' offline_access'
+            redirect_uri = orig_redirect or getattr(settings, 'OPENROUTER_REDIRECT_URI', '')
+            if redirect_uri and (redirect_uri.startswith('prompeteer://') or redirect_uri.startswith('app://')):
+                mobile_redirect = redirect_uri.rstrip('/')
+                redirect_uri = getattr(settings, 'OPENROUTER_REDIRECT_URI', '')
+            if not redirect_uri:
+                try:
+                    redirect_uri = request.build_absolute_uri(reverse('openrouter-callback'))
+                except Exception:
+                    return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
+            code_verifier = generate_code_verifier()
+            code_challenge = generate_code_challenge(code_verifier)
+            state = secrets.token_urlsafe(24)
+            expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
+            oauth_state = OAuthState.objects.create(
+                provider='openrouter',
+                state=state,
+                code_challenge=code_challenge,
+                code_verifier=code_verifier,
+                redirect_uri=redirect_uri,
+                mobile_redirect=mobile_redirect,
+                scope=scope,
+                expires_at=expires_at,
+                user=request.user if request.user.is_authenticated else None,
+            )
+            authorize_url = build_openrouter_authorize_url(state, code_challenge, scope, redirect_uri)
+        else:
+            return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # SSR: redirect if requested
         if request.query_params.get('mode') == 'redirect' or 'authorize/ssr' in request.path:
             return redirect(authorize_url)
-        return Response({'authorize_url': authorize_url,'state': state,'state_id': str(oauth_state.id),'expires_at': expires_at.isoformat(),'bridge': bool(mobile_redirect)})
+        return Response({
+            'authorize_url': authorize_url,
+            'state': state,
+            'state_id': str(oauth_state.id),
+            'expires_at': expires_at.isoformat(),
+            'bridge': bool(mobile_redirect)
+        })
 
+class GoogleAuthorizeView(OAuthAuthorizeBase):
+    """
+    Starts the Google OAuth2 authorization flow.
 
-class GoogleCallbackView(APIView):
+    Inherits all behavior from OAuthAuthorizeBase.
+    """
+    provider = 'google'
+
+class OpenRouterAuthorizeView(OAuthAuthorizeBase):
+    """
+    Starts the OpenRouter OAuth2 authorization flow.
+
+    Inherits all behavior from OAuthAuthorizeBase.
+    """
+    provider = 'openrouter'
+
+class OAuthCallbackBase(APIView):
+    """
+    Base class for handling OAuth2 callback from Google or OpenRouter.
+
+    Handles both SSR (server-side rendered) and bridge (SPA/mobile) flows.
+    - For SSR: can render an HTML page that posts the result to the opener window.
+    - For SPA/mobile: stores the result payload for one-time retrieval.
+
+    Query Parameters:
+        - state (str): The state value returned by the provider.
+        - code (str): The authorization code returned by the provider.
+        - error (str, optional): Error message if the provider returned an error.
+
+    Example SSR Callback:
+        GET /api/v1/auth_api/google/callback/?state=...&code=...
+
+    Example SPA/Mobile Callback:
+        GET /api/v1/auth_api/google/callback/?state=...&code=...
+
+    Example JSON Response (200):
+        {
+            "message": "Google OAuth success",
+            "user_id": "42",
+            "username": "john",
+            "access_token": "jwt-access-token",
+            "refresh_token": "jwt-refresh-token",
+            "provider_scope": "...",
+            "provider_expires_at": "...",
+            "id_token": "...",
+            "email": "john@example.com",
+            "email_verified": true,
+            "is_google_user": true,
+            "is_openrouter_user": false
+        }
+    """
     permission_classes = [AllowAny]
+    provider = None  # 'google' or 'openrouter'
 
     def get(self, request):
-        """Allow GET redirects here (fallback) so if Google console is configured with /google/callback/ instead of /google/callback/ssr/ we still succeed.
-
-        Behavior:
-          - Performs same token exchange logic as POST & SSR variant.
-          - If this was a mobile bridge initiation (mobile_redirect stored) we store result_payload and deep-link to mobile (like SSR view).
-          - Otherwise returns JSON payload (instead of HTML template) to keep semantics consistent with API style endpoint.
-        """
         ser = OAuthCallbackSerializer(data=request.GET)
         ser.is_valid(raise_exception=True)
         cb_data = cast(Dict[str, Any], ser.validated_data)
         state_value = cb_data.get('state') or ''
         code = cb_data.get('code') or ''
         error = cb_data.get('error') or ''
-        logger.info(f"[GoogleCallbackView][GET] state={state_value} error={error} code_present={bool(code)}")
+        logger.info(f"[{self.provider.capitalize()}CallbackView][GET] state={state_value} error={error} code_present={bool(code)}")
         try:
-            oauth_state = OAuthState.objects.get(state=state_value, provider='google')
+            oauth_state = OAuthState.objects.get(state=state_value, provider=self.provider)
         except OAuthState.DoesNotExist:
             return Response({'detail': 'Invalid state'}, status=status.HTTP_400_BAD_REQUEST)
         if error:
             return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
-        # Idempotent handling: if state already used but we still have payload, return it again (helpful when user changes host manually)
         if oauth_state.used and not oauth_state.is_expired():
-            # Attempt to recover persisting tokens for the user
             if oauth_state.result_payload:
                 try:
                     data = json.loads(oauth_state.result_payload)
@@ -869,112 +685,196 @@ class GoogleCallbackView(APIView):
             return Response({'detail': 'State expired', 'error_code': 'state_expired'}, status=status.HTTP_400_BAD_REQUEST)
         if not code:
             return Response({'detail': 'Missing authorization code'}, status=status.HTTP_400_BAD_REQUEST)
-        status_code, token_payload = exchange_google_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
-        if status_code != 200:
-            return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
-        access_token = token_payload.get('access_token')
-        refresh_token = token_payload.get('refresh_token')
-        expires_in = token_payload.get('expires_in')
-        id_token = token_payload.get('id_token')
-        userinfo = fetch_google_userinfo(access_token) if access_token else None
-        email = (userinfo or {}).get('email') if userinfo else None
-        email_verified_claim = (userinfo or {}).get('email_verified') if userinfo else None
-        user = oauth_state.user
-        if not user:
-            if email and Custom_User.objects.filter(email=email).exists():
-                user = Custom_User.objects.get(email=email)
+
+        # Provider-specific token exchange and user logic
+        if self.provider == 'google':
+            status_code, token_payload = exchange_google_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
+            if status_code != 200:
+                return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
+            access_token = token_payload.get('access_token')
+            refresh_token = token_payload.get('refresh_token')
+            expires_in = token_payload.get('expires_in')
+            id_token = token_payload.get('id_token')
+            userinfo = fetch_google_userinfo(access_token) if access_token else None
+            email = (userinfo or {}).get('email') if userinfo else None
+            email_verified_claim = (userinfo or {}).get('email_verified') if userinfo else None
+            user = oauth_state.user
+            if not user:
+                if email and Custom_User.objects.filter(email=email).exists():
+                    user = Custom_User.objects.get(email=email)
+                else:
+                    base_username = (email.split('@')[0] if email else f"g_{uuid.uuid4().hex[:6]}")
+                    candidate = base_username
+                    idx = 1
+                    while Custom_User.objects.filter(username=candidate).exists():
+                        candidate = f"{base_username}{idx}"
+                        idx += 1
+                    user = Custom_User.objects.create(
+                        username=candidate,
+                        email=email or f"pending_{uuid.uuid4().hex}@google.local",
+                        email_verified=bool(email_verified_claim) if email_verified_claim is not None else bool(email),
+                        is_google_user=True
+                    )
             else:
-                base_username = (email.split('@')[0] if email else f"g_{uuid.uuid4().hex[:6]}")
-                candidate = base_username
-                idx = 1
-                while Custom_User.objects.filter(username=candidate).exists():
-                    candidate = f"{base_username}{idx}"
-                    idx += 1
-                user = Custom_User.objects.create(
-                    username=candidate,
-                    email=email or f"pending_{uuid.uuid4().hex}@google.local",
-                    email_verified=bool(email_verified_claim) if email_verified_claim is not None else bool(email),
-                    is_google_user=True
-                )
-        else:
-            update_fields: list[str] = []
-            if email and not user.email:
-                user.email = email
-                update_fields.append('email')
-            if not getattr(user, 'is_google_user', False):
-                user.is_google_user = True
-                update_fields.append('is_google_user')
-            if email and not user.email_verified and (email_verified_claim or email_verified_claim is None):
-                if email_verified_claim is None or bool(email_verified_claim):
-                    user.email_verified = True
-                    update_fields.append('email_verified')
-            if update_fields:
-                user.save(update_fields=update_fields)
-        expires_sec: int = 0
-        if expires_in not in (None, ''):
-            try:
-                expires_sec = int(expires_in)
-            except Exception:
-                expires_sec = 0
-        expires_at = timezone.now() + timezone.timedelta(seconds=expires_sec) if expires_sec else None
-        # Persist / update provider token
-        ProviderOAuthToken.objects.update_or_create(
-            user=user,
-            provider='google',
-            defaults={
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'expires_at': expires_at,
-                'scope': oauth_state.scope,
-                'token_type': token_payload.get('token_type') or 'Bearer',
+                update_fields: list[str] = []
+                if email and not user.email:
+                    user.email = email
+                    update_fields.append('email')
+                if not getattr(user, 'is_google_user', False):
+                    user.is_google_user = True
+                    update_fields.append('is_google_user')
+                if email and not user.email_verified and (email_verified_claim or email_verified_claim is None):
+                    if email_verified_claim is None or bool(email_verified_claim):
+                        user.email_verified = True
+                        update_fields.append('email_verified')
+                if update_fields:
+                    user.save(update_fields=update_fields)
+            expires_sec: int = 0
+            if expires_in not in (None, ''):
+                try:
+                    expires_sec = int(expires_in)
+                except Exception:
+                    expires_sec = 0
+            expires_at = timezone.now() + timezone.timedelta(seconds=expires_sec) if expires_sec else None
+            ProviderOAuthToken.objects.update_or_create(
+                user=user,
+                provider='google',
+                defaults={
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'expires_at': expires_at,
+                    'scope': oauth_state.scope,
+                    'token_type': token_payload.get('token_type') or 'Bearer',
+                }
+            )
+            oauth_state.mark_used()
+            refresh = RefreshToken.for_user(user)
+            payload = {
+                'message': 'Google OAuth success',
+                'user_id': str(user.pk),
+                'username': user.username,
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+                'provider_scope': oauth_state.scope,
+                'provider_expires_at': expires_at.isoformat() if expires_at else None,
+                'id_token': id_token,
+                'email': email,
+                'email_verified': user.email_verified,
+                'is_google_user': getattr(user, 'is_google_user', False),
+                'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
             }
-        )
-        oauth_state.mark_used()
-        refresh = RefreshToken.for_user(user)
-        payload = {
-            'message': 'Google OAuth success',
-            'user_id': str(user.pk),
-            'username': user.username,
-            'access_token': str(refresh.access_token),
-            'refresh_token': str(refresh),
-            'provider_scope': oauth_state.scope,
-            'provider_expires_at': expires_at.isoformat() if expires_at else None,
-            'id_token': id_token,
-            'email': email,
-            'email_verified': user.email_verified,
-            'is_google_user': getattr(user, 'is_google_user', False),
-            'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
-        }
-        logger.info(f"[GoogleCallbackView] Success state={state_value} user={user.pk} email={email} expires_at={expires_at}")
-        # Mobile bridge deep link
+        elif self.provider == 'openrouter':
+            status_code, token_payload = exchange_openrouter_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
+            if status_code != 200:
+                return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
+            access_token = token_payload.get('key') or token_payload.get('access_token')
+            refresh_token = None
+            scope = oauth_state.scope
+            token_type = 'api_key'
+            if not access_token:
+                return Response({'detail': 'Provider did not return API key', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
+            user = oauth_state.user
+            if not user:
+                user = Custom_User.objects.create(
+                    username=f"or_{uuid.uuid4().hex[:10]}",
+                    email=f"pending_{uuid.uuid4().hex}@openrouter.local",
+                    is_openrouter_user=True
+                )
+            elif not getattr(user, 'is_openrouter_user', False):
+                user.is_openrouter_user = True
+                user.save(update_fields=['is_openrouter_user'])
+            expires_at = None
+            ProviderOAuthToken.objects.update_or_create(
+                user=user,
+                provider='openrouter',
+                defaults={
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'expires_at': expires_at,
+                    'scope': scope,
+                    'token_type': token_type,
+                }
+            )
+            oauth_state.mark_used()
+            refresh = RefreshToken.for_user(user)
+            payload = {
+                'message': 'OpenRouter OAuth success',
+                'user_id': str(user.pk),
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+                'provider_access_token': access_token if getattr(settings, 'OPENROUTER_EXPOSE_PROVIDER_TOKEN', True) else None,
+                'provider_refresh_token': None,
+                'provider_token_type': token_type,
+                'provider_scope': scope,
+                'provider_expires_at': None,
+                'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
+                'is_google_user': getattr(user, 'is_google_user', False),
+            }
+        else:
+            return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Bridge deep link
         if oauth_state.mobile_redirect:
             oauth_state.result_payload = json.dumps(payload)
             oauth_state.save(update_fields=["result_payload"])
             mobile_url = f"{oauth_state.mobile_redirect}?state={urllib.parse.quote(state_value)}&bridge=1"
             return redirect(mobile_url)
-        # Render HTML automatically for SSR callback path or if render=1 explicitly requested
+        # SSR: render HTML if requested
         if request.path.endswith('/callback/ssr/') or request.GET.get('render') == '1':
             html = f"""<html><body><script>window.opener && window.opener.postMessage({json.dumps(payload)}, '*');</script><pre>{json.dumps(payload, indent=2)}</pre></body></html>"""
             from django.http import HttpResponse
             return HttpResponse(html)
         return Response(payload)
 
-    # (POST not required for Google redirect callbacks normally, but allow parity with API clients)
-    def post(self, request):  # type: ignore[override]
+    def post(self, request):
         ser = OAuthCallbackSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        # Reuse GET logic by faking query params object
         for k, v in request.data.items():
             request.GET._mutable = True  # type: ignore
             request.GET[k] = v  # type: ignore
             request.GET._mutable = False  # type: ignore
         return self.get(request)
 
+class GoogleCallbackView(OAuthCallbackBase):
+    """
+    Handles the callback from Google OAuth2.
+
+    Inherits all behavior from OAuthCallbackBase.
+    """
+    provider = 'google'
+
+class OpenRouterCallbackView(OAuthCallbackBase):
+    """
+    Handles the callback from OpenRouter OAuth2.
+
+    Inherits all behavior from OAuthCallbackBase.
+    """
+    provider = 'openrouter'
 
 class OAuthResultView(APIView):
-    """Fetches stored bridge payload (one-time) given state.
+    """
+    Fetches the stored OAuth bridge payload (one-time) given a state.
 
-    GET /api/v1/auth_api/oauth/result/<state>/
+    Used by SPA/mobile clients to retrieve the result after a deep link redirect.
+
+    Path Parameter:
+        - state_value (str): The state value used in the OAuth flow.
+
+    Example Request:
+        GET /api/v1/auth_api/oauth/result/<state_value>/
+
+    Example Response (200):
+        {
+            "message": "Google OAuth success",
+            "user_id": "42",
+            "username": "john",
+            ...
+        }
+
+    Error Responses:
+        - 404: Not found (invalid state)
+        - 409: Result not ready (payload not yet stored)
+        - 410: Result already retrieved (one-time fetch)
     """
     permission_classes = [AllowAny]
 
@@ -991,7 +891,6 @@ class OAuthResultView(APIView):
         oauth_state.result_retrieved = True
         oauth_state.save(update_fields=['result_retrieved'])
         return Response(data)
-
 
 class SendLoginOTPView(APIView):
     """Sends a 6-digit OTP for passwordless login with simple rate limiting."""
@@ -1083,7 +982,7 @@ class LoginWithOTPView(APIView):
     def post(self, request):
         logger.info(f"[LoginWithOTPView] Incoming OTP login request: data={request.data}")
         serializer = LoginSerializer(data=request.data, context={'request': request})
-        """ try:
+        try:
             serializer.is_valid(raise_exception=True)
             user = serializer.validated_data['user']
             # Here you would generate and send the OTP
@@ -1092,4 +991,4 @@ class LoginWithOTPView(APIView):
             return Response(resp_data, status=status.HTTP_200_OK)
         except Exception as e:
             logger.exception(f"[LoginWithOTPView] Login with OTP failed: {str(e)}, req={request.data}")
-            return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST) """
+            return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST)

@@ -7,14 +7,12 @@ from .views import (
     LogoutView,
     HealthCheckView,
     LoginWithOTPView,
-    GoogleOAuthView,
-    OpenRouterOAuthView,
+
     OpenRouterAuthorizeView,
     OpenRouterCallbackView,
     SendLoginOTPView,
     VerifyLoginOTPView,
-    OpenRouterAuthorizeSSRView,
-    OpenRouterCallbackSSRView,
+
     GoogleAuthorizeView,
     GoogleCallbackView,
     OAuthResultView,
@@ -31,24 +29,17 @@ urlpatterns = [
     
     path("otp-login/", LoginWithOTPView.as_view(), name="otp-login"),
     
-    
-    path("google-oauth/", GoogleOAuthView.as_view(), name="google-oauth"),
-    path("google/authorize/", GoogleAuthorizeView.as_view(), name="google-authorize"),
-    path("google/callback/", GoogleCallbackView.as_view(), name="google-callback"),
-    # Legacy SSR paths now point to unified endpoints (mode=redirect triggers provider redirect)
-    path("google/authorize/ssr/", GoogleAuthorizeView.as_view(), name="google-authorize-ssr"),
-    path("google/callback/ssr/", GoogleCallbackView.as_view(), name="google-callback-ssr"),
-    
-    
-    path("openrouter-oauth/", OpenRouterOAuthView.as_view(), name="openrouter-oauth"),
+    # Google OAuth (unified)
+    path("google/authorize/", GoogleAuthorizeView.as_view(), name="google-authorize"), #* Start OAuth flow
+    path("google/callback/", GoogleCallbackView.as_view(), name="google-callback"), #* Finish OAuth flow
+
+    # OpenRouter OAuth (unified)
     path("openrouter/authorize/", OpenRouterAuthorizeView.as_view(), name="openrouter-authorize"),
     path("openrouter/callback/", OpenRouterCallbackView.as_view(), name="openrouter-callback"),
-    path("openrouter/authorize/ssr/", OpenRouterAuthorizeSSRView.as_view(), name="openrouter-authorize-ssr"),
-    path("openrouter/callback/ssr/", OpenRouterCallbackSSRView.as_view(), name="openrouter-callback-ssr"),
+
+    # Bridge result endpoint (for mobile/SPA)
     path("oauth/result/<str:state_value>/", OAuthResultView.as_view(), name="oauth-result"),
-    path("otp/send/", SendLoginOTPView.as_view(), name="send-login-otp"),
-    path("otp/verify/", VerifyLoginOTPView.as_view(), name="verify-login-otp"),
-    
+
     
     # JWT token refresh (SimpleJWT standard endpoint)
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),

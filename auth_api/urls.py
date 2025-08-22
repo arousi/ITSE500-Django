@@ -16,6 +16,12 @@ from .views import (
     GoogleAuthorizeView,
     GoogleCallbackView,
     OAuthResultView,
+    
+    GitHubAuthorizeView,
+    GitHubCallbackView,
+    
+    MicrosoftAuthorizeView,
+    MicrosoftCallbackView
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -37,6 +43,12 @@ urlpatterns = [
     path("openrouter/authorize/", OpenRouterAuthorizeView.as_view(), name="openrouter-authorize"),
     path("openrouter/callback/", OpenRouterCallbackView.as_view(), name="openrouter-callback"),
 
+    path('github/authorize/', GitHubAuthorizeView.as_view(), name='github-authorize'),
+    path('github/callback/', GitHubCallbackView.as_view(), name='github-callback'),
+    
+    path('microsoft/authorize/', MicrosoftAuthorizeView.as_view(), name='ms-authorize'),
+    path('microsoft/callback/', MicrosoftCallbackView.as_view(), name='ms-callback'),
+    
     # Bridge result endpoint (for mobile/SPA)
     path("oauth/result/<str:state_value>/", OAuthResultView.as_view(), name="oauth-result"),
 

@@ -81,6 +81,8 @@ class Custom_User(AbstractUser):
     # Provider flags
     is_google_user = models.BooleanField(default=False, help_text="Account created / linked via Google OAuth")
     is_openrouter_user = models.BooleanField(default=False, help_text="Account created / linked via OpenRouter OAuth")
+    is_github_user = models.BooleanField(default=False, help_text="Account created / linked via GitHub OAuth")
+    is_microsoft_user = models.BooleanField(default=False, help_text="Account created / linked via Microsoft OAuth")
     totp_secret = models.CharField(max_length=32, blank=True, null=True, help_text="TOTP secret for two-factor authentication app")
     
     def clean(self):

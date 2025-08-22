@@ -108,7 +108,6 @@ AUTH_USER_MODEL = 'user_mang.Custom_User'
 
 
 INSTALLED_APPS = [
-    'whitenoise.runserver_nostatic',
     'prompeteer_server',
     'corsheaders',
     'django.contrib.admin',

@@ -1,6 +1,7 @@
 from django.db import models
 from user_mang.models.custom_user import Custom_User
 import uuid
+from chat_api.models.message import Message
 
 # Import validators if needed in the Conversation model
 # Currently, no validators are directly used in this model.
@@ -18,7 +19,7 @@ class Conversation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)  # Matches app schema
     updated_at = models.DateTimeField(auto_now=True)  # Matches app schema
     local_only = models.BooleanField(default=False)  # Matches app schema
-
+    message_id = models.OneToOneField(Message, on_delete=models.CASCADE, related_name="conversation", null=True, blank=True)
     class Meta:
         verbose_name = "Conversation"
         verbose_name_plural = "Conversations"

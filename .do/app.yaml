@@ -1,45 +1,83 @@
+alerts:
+- rule: DEPLOYMENT_FAILED
+- rule: DEPLOYMENT_LIVE
+- rule: DEPLOYMENT_STARTED
+domains:
+- domain: itse500-ok.ly
+  type: PRIMARY
+  zone: itse500-ok.ly
+- domain: www.itse500-ok.ly
+  type: ALIAS
+  zone: itse500-ok.ly
+ingress:
+  rules:
+  - component:
+      name: web
+    match:
+      path:
+        prefix: /
 name: itse500-django
+region: fra
 services:
-  - name: web
-    github:
-      repo: arousi/ITSE500-Django
-      branch: main
-    run_command: gunicorn prompeteer_server.wsgi:application
-    build_command: pip install -r requirements.txt
-    environment_slug: python
-    instance_size_slug: basic-xxs
-    http_port: 8080
-    routes:
-      - path: /
-    envs:
-      - key: DJANGO_SETTINGS_MODULE
-        value: prompeteer_server.settings
-      - key: SECRET_KEY
-        value: 'django-insecure-(rswh098lcr!9ny7u$6i-nn1rd_73w_b@+3l(m4!uuw*8p30=f'
-        scope: RUN_AND_BUILD_TIME
-        type: SECRET
-      - key: DEBUG
-        value: "False"
-        scope: RUN_AND_BUILD_TIME
-      - key: GOOGLE_OAUTH_CLIENT_ID
-        value: 16029884030-t1bmq5n4l2hn7tetj33mu01qq6rf6bo1.apps.googleusercontent.com
-        scope: RUN_AND_BUILD_TIME
-        type: SECRET
-      - key: GOOGLE_OAUTH_CLIENT_SECRET
-        value: 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
-        scope: RUN_AND_BUILD_TIME
-        type: SECRET
-      - key: GOOGLE_OAUTH_REDIRECT_URI
-        value: https://itse500-ok.ly/api/v1/auth_api/google/callback/
-        scope: RUN_AND_BUILD_TIME
-      - key: GOOGLE_OAUTH_REDIRECT_URI_SSR
-        value: https://itse500-ok.ly/api/v1/auth_api/google/callback/ssr/
-        scope: RUN_AND_BUILD_TIME
-      - key: BACKEND_PASSWORD_SALT
-        value: Jv8Qw1pQh2Xk9sLz7Vt3Bf6Gm4Rj8Nw5Tz2Kc1Lh0Xy7Qp3V
-        scope: RUN_AND_BUILD_TIME
-        type: SECRET
-      - key: ALLOWED_HOSTS
-        value: '["itse500-ok.ly", "www.itse500-ok.ly", "157.230.29.188", "188.166.193.176"]'
-        scope: RUN_AND_BUILD_TIME
-    
+- build_command: |
+    pip install -r requirements.txt
+    python manage.py makemigrations auth_api user_mang chat_api crypto_api
+    python manage.py migrate --noinput
+  environment_slug: python
+  envs:
+  - key: DJANGO_SETTINGS_MODULE
+    scope: RUN_AND_BUILD_TIME
+    value: prompeteer_server.settings
+  - key: SECRET_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:KBuFXM/d1NTQPoo9yGMufnZBqAvtz0+I:nXtQde5hdFnX88FrS27S16+joesJKqrL7EyuHaoPi3+ooKuXUmB7vt1OpN4TQ6F+/tYaO1UxfQnAye2eqGTAMSHeZyRY5HgCI3NMMU2LAhdLxA==]
+  - key: DEBUG
+    scope: RUN_AND_BUILD_TIME
+    value: "False"
+  - key: OPENROUTER_PROVISIONING_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:IHwvpGlbyYyjbtpXC5nmVyUrVcwdD66J:VSCxxL66kqiJ4ePRxMFVgfnufUGGm6Td2gP/8qopDmVAUEbd96dII3MLvrh9qWjnRw51fprbeWkNWbWEIGzkP5LbHe+weyHly6jV5NkoCLk11n3Ax7Hca6U=]
+  - key: MS_CLIENT_ID
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:bZRusyFShY5xKz1Q1l2aNj4HaHRokx0t:RKODvXBXGpIU7DdUoaUcy6sMuDS6TW1/iqG4saKg5sxF0n1uKgU7JD2AmyCldR3QZ0R8zA==]
+  - key: MS_CLIENT_SECRET
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:UgXWLtngznwZ8pSJwhnbDLn0gimEPSo3:cu7Hd5v4XOwEijUANHy9jvudDA+DNgwqlvx4OCNLubjEtAzOaNN9pN1tFexoj0IcEelHZabRF+k=]
+  - key: GITHUB_CLIENT_ID
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:12x6ipwagunkziLKNCSZT6Bt44gXmhaE:idxDWzZNDpxlGOGHvu5UpHOZXWFyK9RUexXyNK66x6CtYvjB]
+  - key: GITHUB_CLIENT_SECRET
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:bH6jFGioyoXzvXhPL02a/YlZaT6cEH98:aUozG8qS7PTXrTFayGZcVSvQHmEgBr057jETSm9cyh1+97J/aUGbNwyGg31Sl6YlFNIZlc2KRWs=]
+  - key: GOOGLE_OAUTH_CLIENT_ID
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:/9YiCUMa7IiR63Q/j1p41kSHs0jUEiWt:WvhNGM7hpVa5fGP8Sw4vHGrYNqzAHkYkC98X4/EHvCihWKy3jcDU2mNIphaR5ZoI1UkrBHxXynfEdoPnmFor3l7Fs6ZyZZs+kI2J0n2/VTP4wn097Ht+]
+  - key: GOOGLE_OAUTH_CLIENT_SECRET
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:QaSin3suTZPpWipx1+6E23620p4EvJDF:/vkeSigP5TMPXB652WI9otufhNEa9UCkk3iX8ghMHcRlYKruZRm991FBXzne2UOl9WB/]
+  - key: BACKEND_PASSWORD_SALT
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: EV[1:1vblqiJmlmpfTxOb5vcjYJVsuz37a+Yy:S64vmodN0rT+yWKvtB2q5ZFVLnuqPHD6g8zGYbiP0+v8IR8O7sKXXFQJtXRkQRAfRBxGz2KczuQSgKR54Le6JQ==]
+  - key: ALLOWED_HOSTS
+    scope: RUN_AND_BUILD_TIME
+    value: '["itse500-ok.ly", "www.itse500-ok.ly", "157.230.29.188", "188.166.193.176"]'
+  github:
+    branch: main
+    repo: arousi/ITSE500-Django
+  http_port: 8080
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  name: web
+  run_command: |
+    gunicorn prompeteer_server.wsgi:application
+    python manage.py makemigrations auth_api user_mang chat_api crypto_api
+    python manage.py migrate --noinput

@@ -113,66 +113,6 @@ def fetch_google_userinfo(access_token: str):
 
 logger = logging.getLogger('auth_api')
 
-""" class VisitorLoginView(APIView):
-
-    API endpoint to allow a user to start a guest session as a Visitor (no account required).
-    Handles creation of a Visitor object and returns session details.
-
-    Example API Request (POST /api/v1/auth_api/visitor-login/):
-        {
-            "device_id": "abc123xyz"
-        }
-
-    Example API Response (201):
-        {
-            "message": "Visitor session started.",
-            "anon_id": "e7b8c1d2-...",
-            "device_id": "abc123xyz",
-            "date_joined": "2025-08-01T12:34:56Z"
-        }
-
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-
-        Handle POST request to start a visitor session.
-        Validates input, creates a Custom_User with is_visitor=True, and returns session info with JWT access token.
-
-        logger.info(f"[VisitorLoginView] Incoming visitor login request: data={request.data}")
-        serializer = VisitorSerializer(data=request.data)
-        try:
-            serializer.is_valid(raise_exception=True)
-            device_id = serializer.validated_data.get('device_id')
-            # Try to find an existing guest user for this device_id
-            guest_user = Custom_User.objects.filter(device_id=device_id, is_visitor=True).first()
-            if not guest_user:
-                # Create a new guest user
-                guest_user = Custom_User.objects.create(
-                    device_id=device_id,
-                    is_visitor=True,
-                )
-            # Generate a temporary JWT token for the guest user
-            refresh = RefreshToken.for_user(guest_user)
-            access_token = str(refresh.access_token)
-            resp_data = {
-                "message": "Visitor session started.",
-                "anon_id": str(getattr(guest_user, 'anon_id', guest_user.pk)),
-                "device_id": guest_user.device_id,
-                "date_joined": guest_user.date_joined,
-                "access_token": access_token,
-                "refresh_token": str(refresh),
-            }
-            logger.info(f"[VisitorLoginView] Visitor login success: status=201, resp={resp_data}")
-            return Response(resp_data, status=status.HTTP_201_CREATED)
-        except serializers.ValidationError as e:
-            logger.warning(f"[VisitorLoginView] Visitor login failed: status=400, errors={e.detail}, req={request.data}")
-            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.exception(f"[VisitorLoginView] Unexpected visitor login error: {str(e)}, req={request.data}")
-            return Response({"detail": "Visitor login failed due to a server error."},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-"""
 class RegisterView(APIView):
     """
     API endpoint to handle user registration.
@@ -250,22 +190,26 @@ class RegisterView(APIView):
                 return Response({"detail": "Registration failed due to a server error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Always persist device_id in related_devices
+        devices = []
         if device_id:
             try:
                 devices = user.related_devices if isinstance(user.related_devices, list) else []
             except Exception:
                 import json
                 try:
-                    devices = json.loads(user.related_devices or "[]")
+                    if isinstance(user.related_devices, str):
+                        devices = json.loads(user.related_devices or "[]")
+                    else:
+                        devices = user.related_devices or []
                 except Exception:
                     devices = []
             if device_id not in devices:
                 devices.append(device_id)
+                import json
                 try:
-                    user.related_devices = devices
-                except Exception:
-                    import json
                     user.related_devices = json.dumps(devices)
+                except Exception:
+                    user.related_devices = "[]"
                 user.device_id = device_id  # keep legacy field updated
                 user.last_login = timezone.now()
                 user.save()
@@ -351,8 +295,8 @@ class EmailPinVerifyView(APIView):
         if not created or (timezone.now() - created).total_seconds() > 600:
             return Response({"detail": "PIN expired."}, status=status.HTTP_400_BAD_REQUEST)
         user.email_verified = True
-        user.profile_email_pin = None
-        user.save(update_fields=["email_verified", "profile_email_pin"])
+        # user.profile_email_pin = None  # Removed because attribute does not exist
+        user.save(update_fields=["email_verified"])
         return Response({"message": "Email verified. You may now set your password."})
 
 class SetPasswordAfterEmailVerifyView(APIView):

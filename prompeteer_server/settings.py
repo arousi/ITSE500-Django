@@ -27,6 +27,17 @@ def _load_simple_env(env_path: Path):
 
 _load_simple_env(BASE_DIR / '.env')
 # ---------------------------------------------------------------
+# settings.py
+ZERUH_API_KEY = "7f97762a2fad9a7f4cbba0f827540f6e57160a154bbd48b67b7d8784911e66cf"
+
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND')
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL')
+
 #* app.yaml in production will take precedence than .env
 # Read env AFTER loading
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID','')

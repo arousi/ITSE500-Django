@@ -19,4 +19,4 @@ class UserKeyMaterial(models.Model):
         verbose_name_plural = "User Key Materials"
 
     def __str__(self):
-        return f"UserKeyMaterial(user={self.user_id}, version={self.version})"
+        return f"UserKeyMaterial(user={self.user.id}, version={self.version})"

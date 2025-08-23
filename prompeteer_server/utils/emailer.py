@@ -21,7 +21,7 @@ class ZeruhEmailVerifier:
             logger.warning("ZERUH_API_KEY not set in environment or settings.")
             return None
 
-        params = {"email_address": email, "timeout": timeout}
+        params = {"email_address": email, "timeout": timeout, "api_key": ZERUH_API_KEY}
         if ip_address:
             params["ip_address"] = ip_address
 
@@ -29,7 +29,6 @@ class ZeruhEmailVerifier:
             resp = requests.get(
                 f"{ZERUH_BASE_URL}/verify",
                 params=params,
-                headers={"X-Api-Key": ZERUH_API_KEY},
                 timeout=timeout + 5,
             )
             resp.raise_for_status()
@@ -49,7 +48,7 @@ class ZeruhEmailVerifier:
         try:
             resp = requests.get(
                 f"{ZERUH_BASE_URL}/account",
-                headers={"X-Api-Key": ZERUH_API_KEY},
+                params={"api_key": ZERUH_API_KEY},
                 timeout=10,
             )
             resp.raise_for_status()

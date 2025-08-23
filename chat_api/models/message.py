@@ -51,8 +51,6 @@ class Message(models.Model):
     
     user_id = models.ForeignKey(Custom_User, on_delete=models.CASCADE,
                                 related_name="messages")  # Foreign key to Custom_User
-    conversation_id = models.ForeignKey(Conversation, on_delete=models.CASCADE,
-                                     related_name="messages")  # Foreign key to Conversation
     request_id = models.OneToOneField(#we do the req id from front end
         MessageRequest,
         on_delete=models.CASCADE,
@@ -119,7 +117,7 @@ class Message(models.Model):
     vote = models.BooleanField(default=False, blank=True, null=True)  # Matches app schema
     
     def __str__(self):
-        return f"Message {self.message_id} in Conversation {self.conversation.id}"
+        return f"Message {self.message_id}"
 
     class Meta:
         verbose_name = "Message"

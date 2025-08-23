@@ -318,11 +318,13 @@ CORS_ALLOWED_ORIGINS = [
 ROOT_URLCONF = 'prompeteer_server.urls'
 
 
-
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'prompeteer_server' / 'static' / 'templates'],
+        'DIRS': [
+            BASE_DIR / 'templates',
+            BASE_DIR / 'staticfiles' / 'templates',
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

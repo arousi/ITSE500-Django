@@ -478,7 +478,7 @@ class HealthCheckView(APIView):
         logger.info(f"[HealthCheckView] Health check response: status=200, resp={resp_data}")
         return Response(resp_data, status=status.HTTP_200_OK)
 
-
+#* Base OAuth Authorize
 class OAuthAuthorizeBase(APIView):
     """
     Base class for starting an OAuth2 authorization flow (Google or OpenRouter).
@@ -512,6 +512,7 @@ class OAuthAuthorizeBase(APIView):
     provider = None  # 'google' or 'openrouter'
 
     def get(self, request):
+        import secrets
         base_ser = OAuthAuthorizeRequestSerializer(data=request.query_params)
         base_ser.is_valid(raise_exception=True)
         base_data = cast(Dict[str, Any], base_ser.validated_data)
@@ -591,6 +592,61 @@ class OAuthAuthorizeBase(APIView):
                 user=request.user if request.user.is_authenticated else None,
             )
             authorize_url = build_openrouter_authorize_url(state, code_challenge, scope, redirect_uri)
+        elif self.provider == 'microsoft':
+            import secrets, urllib.parse
+            state = secrets.token_urlsafe(24)
+            scope = request.query_params.get('scope', 'openid email profile User.Read')
+            redirect_uri = getattr(settings, 'MS_REDIRECT_URI', '')
+            if not redirect_uri:
+                return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
+            params = {
+                'client_id': getattr(settings, 'MS_CLIENT_ID', ''),
+                'response_type': 'code',
+                'redirect_uri': redirect_uri,
+                'response_mode': 'query',
+                'scope': scope,
+                'state': state,
+            }
+            authorize_url = f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize?{urllib.parse.urlencode(params)}"
+            expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
+            oauth_state = OAuthState.objects.create(
+                provider='microsoft',
+                state=state,
+                code_challenge=None,
+                code_verifier=None,
+                redirect_uri=redirect_uri,
+                mobile_redirect=None,
+                scope=scope,
+                expires_at=expires_at,
+                user=request.user if request.user.is_authenticated else None,
+            )
+        elif self.provider == 'github':
+            import secrets, urllib.parse
+            state = secrets.token_urlsafe(24)
+            scope = request.query_params.get('scope', 'read:user user:email')
+            redirect_uri = getattr(settings, 'GITHUB_REDIRECT_URI', '')
+            if not redirect_uri:
+                return Response({'detail': 'redirect_uri not configured'}, status=status.HTTP_400_BAD_REQUEST)
+            params = {
+                'client_id': getattr(settings, 'GITHUB_CLIENT_ID', ''),
+                'redirect_uri': redirect_uri,
+                'scope': scope,
+                'state': state,
+                'allow_signup': 'true',
+            }
+            authorize_url = f"https://github.com/login/oauth/authorize?{urllib.parse.urlencode(params)}"
+            expires_at = timezone.now() + timezone.timedelta(seconds=OAUTH_STATE_TTL_SECONDS)
+            oauth_state = OAuthState.objects.create(
+                provider='github',
+                state=state,
+                code_challenge=None,
+                code_verifier=None,
+                redirect_uri=redirect_uri,
+                mobile_redirect=None,
+                scope=scope,
+                expires_at=expires_at,
+                user=request.user if request.user.is_authenticated else None,
+            )
         else:
             return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -605,23 +661,7 @@ class OAuthAuthorizeBase(APIView):
             'bridge': bool(mobile_redirect)
         })
 
-class GoogleAuthorizeView(OAuthAuthorizeBase):
-    """
-    Starts the Google OAuth2 authorization flow.
-
-    Inherits all behavior from OAuthAuthorizeBase.
-    """
-    provider = 'google'
-
-
-class OpenRouterAuthorizeView(OAuthAuthorizeBase):
-    """
-    Starts the OpenRouter OAuth2 authorization flow.
-
-    Inherits all behavior from OAuthAuthorizeBase.
-    """
-    provider = 'openrouter'
-
+#* Base OAuth Callback
 class OAuthCallbackBase(APIView):
     """
     Base class for handling OAuth2 callback from Google or OpenRouter.
@@ -658,7 +698,7 @@ class OAuthCallbackBase(APIView):
         }
     """
     permission_classes = [AllowAny]
-    provider = None  # 'google' or 'openrouter'
+    provider = None
 
     def get(self, request):
         ser = OAuthCallbackSerializer(data=request.GET)
@@ -667,7 +707,8 @@ class OAuthCallbackBase(APIView):
         state_value = cb_data.get('state') or ''
         code = cb_data.get('code') or ''
         error = cb_data.get('error') or ''
-        logger.info(f"[{self.provider.capitalize()}CallbackView][GET] state={state_value} error={error} code_present={bool(code)}")
+        provider_name = str(self.provider) if self.provider else "Unknown"
+        logger.info(f"[{provider_name.capitalize()}CallbackView][GET] state={state_value} error={error} code_present={bool(code)}")
         try:
             oauth_state = OAuthState.objects.get(state=state_value, provider=self.provider)
         except OAuthState.DoesNotExist:
@@ -763,7 +804,6 @@ class OAuthCallbackBase(APIView):
                 'email': email,
                 'email_verified': user.email_verified,
                 'is_google_user': getattr(user, 'is_google_user', False),
-                'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
             }
         elif self.provider == 'openrouter':
             status_code, token_payload = exchange_openrouter_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
@@ -810,7 +850,6 @@ class OAuthCallbackBase(APIView):
                 'provider_scope': scope,
                 'provider_expires_at': None,
                 'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
-                'is_google_user': getattr(user, 'is_google_user', False),
             }
         else:
             return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)
@@ -856,22 +895,7 @@ class OAuthCallbackBase(APIView):
             request.GET._mutable = False  # type: ignore
         return self.get(request)
 
-class GoogleCallbackView(OAuthCallbackBase):
-    """
-    Handles the callback from Google OAuth2.
-
-    Inherits all behavior from OAuthCallbackBase.
-    """
-    provider = 'google'
-
-class OpenRouterCallbackView(OAuthCallbackBase):
-    """
-    Handles the callback from OpenRouter OAuth2.
-
-    Inherits all behavior from OAuthCallbackBase.
-    """
-    provider = 'openrouter'
-
+#* Result of OAuth view to be called
 class OAuthResultView(APIView):
     """
     Fetches the stored OAuth bridge payload (one-time) given a state.
@@ -912,6 +936,39 @@ class OAuthResultView(APIView):
         oauth_state.result_retrieved = True
         oauth_state.save(update_fields=['result_retrieved'])
         return Response(data)
+
+# -------------------------------- Providers -----------------------------------
+class GoogleAuthorizeView(OAuthAuthorizeBase):
+    """
+    Starts the Google OAuth2 authorization flow.
+
+    Inherits all behavior from OAuthAuthorizeBase.
+    """
+    provider = 'google'
+
+class OpenRouterAuthorizeView(OAuthAuthorizeBase):
+    """
+    Starts the OpenRouter OAuth2 authorization flow.
+
+    Inherits all behavior from OAuthAuthorizeBase.
+    """
+    provider = 'openrouter'
+
+class GoogleCallbackView(OAuthCallbackBase):
+    """
+    Handles the callback from Google OAuth2.
+
+    Inherits all behavior from OAuthCallbackBase.
+    """
+    provider = 'google'
+
+class OpenRouterCallbackView(OAuthCallbackBase):
+    """
+    Handles the callback from OpenRouter OAuth2.
+
+    Inherits all behavior from OAuthCallbackBase.
+    """
+    provider = 'openrouter'
 
 class GitHubAuthorizeView(OAuthAuthorizeBase):
     """
@@ -1263,6 +1320,8 @@ class MicrosoftCallbackView(OAuthCallbackBase):
             from django.http import HttpResponse
             return HttpResponse(html)
         return Response(payload)
+# -------------------------------- Providers -----------------------------------
+
 
 class SendLoginOTPView(APIView):
     """Sends a 6-digit OTP for passwordless login with simple rate limiting."""
@@ -1300,7 +1359,6 @@ class SendLoginOTPView(APIView):
         logger.info(f"[SendLoginOTPView] OTP sent email={email} count={user.login_otp_sent_count}")
         return Response({'message': 'OTP sent'}, status=status.HTTP_200_OK)
 
-
 class VerifyLoginOTPView(APIView):
     """Verifies OTP and returns JWT tokens."""
     permission_classes = [AllowAny]
@@ -1334,7 +1392,6 @@ class VerifyLoginOTPView(APIView):
             'refresh_token': str(refresh),
         }, status=status.HTTP_200_OK)
 
-
 class LoginWithOTPView(APIView):
     """
     Handles user login with OTP (One Time Password).
@@ -1364,7 +1421,6 @@ class LoginWithOTPView(APIView):
         except Exception as e:
             logger.exception(f"[LoginWithOTPView] Login with OTP failed: {str(e)}, req={request.data}")
             return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST)
-        
 
 class EnableTOTPView(APIView):
     """

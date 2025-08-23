@@ -27,7 +27,7 @@ def _load_simple_env(env_path: Path):
 
 _load_simple_env(BASE_DIR / '.env')
 # ---------------------------------------------------------------
-
+#* app.yaml in production will take precedence than .env
 # Read env AFTER loading
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID','')
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET','')
@@ -46,6 +46,10 @@ if GOOGLE_OAUTH_REDIRECT_URI and not GOOGLE_OAUTH_REDIRECT_URI.endswith('/'):
 if GOOGLE_OAUTH_REDIRECT_URI_SSR and not GOOGLE_OAUTH_REDIRECT_URI_SSR.endswith('/'):
     GOOGLE_OAUTH_REDIRECT_URI_SSR = GOOGLE_OAUTH_REDIRECT_URI_SSR + '/'
 
+# OpenRouter
+OPENROUTER_CLIENT_ID = os.getenv('OPENROUTER_CLIENT_ID', '')
+OPENROUTER_CLIENT_SECRET = os.getenv('OPENROUTER_CLIENT_SECRET', '')
+OPENROUTER_REDIRECT_URI = os.getenv('OPENROUTER_REDIRECT_URI', '')
 
 # GitHub
 GITHUB_CLIENT_ID = os.getenv('GITHUB_CLIENT_ID', '')

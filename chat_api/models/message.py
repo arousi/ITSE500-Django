@@ -2,7 +2,6 @@
 import uuid
 from django.db import models
 from user_mang.models.custom_user import Custom_User
-from chat_api.models.conversation import Conversation
 from django.core.exceptions import ValidationError
 import json
 # Normalized related fields

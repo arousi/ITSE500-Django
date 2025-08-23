@@ -135,7 +135,7 @@ class RegisterView(APIView):
         email = request.data.get('email')
         user_id = request.data.get('user_id') or request.data.get('uuid')
         username = request.data.get('username')
-        user = None
+        user = None  # type: ignore
 
         # Try to find existing user by email, uuid, username, or temp_id
         if email:
@@ -150,7 +150,12 @@ class RegisterView(APIView):
         created = False
         if not user:
             # Try to create new user
-            serializer = RegisterSerializer(data=request.data)
+            # --- PATCH: Make password optional ---
+            data = request.data.copy()
+            if 'user_password' not in data:
+                data['user_password'] = ''
+            serializer = RegisterSerializer(data=data)
+            # --- END PATCH ---
             try:
                 serializer.is_valid(raise_exception=True)
                 user: Custom_User = cast(Custom_User, serializer.save())  # type: ignore[assignment]
@@ -267,7 +272,7 @@ class RegisterView(APIView):
         }
         logger.info(f"[RegisterView] Registration/data sync success: status=201, user_id={user.user_id}")
         return Response(resp_data, status=status.HTTP_201_CREATED)
-    
+
 class EmailPinVerifyView(APIView):
     """Verify the 5-digit PIN sent to the user's email."""
     permission_classes = [AllowAny]

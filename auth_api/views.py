@@ -349,7 +349,26 @@ class LoginView(APIView):
             "user_id": 42,
             "access_token": "jwt-access-token",
             "refresh_token": "jwt-refresh-token",
-            "email_verified": true
+            "email_verified": true,
+            "conversations": [
+                {
+                    "conversation_id": "c1",
+                    "title": "My Conversation",
+                    "messages": [
+                        {
+                            "message_id": "m1",
+                            "content": "Hello!"
+                        }
+                    ]
+                }
+            ],
+            "attachments": [
+                {
+                    "id": 1,
+                    "type": "image",
+                    "file_path": "/media/attachments/1.png"
+                }
+            ]
         }
     """
     permission_classes = [AllowAny]
@@ -362,19 +381,32 @@ class LoginView(APIView):
             data = serializer.validated_data
             user: Custom_User = cast(Custom_User, data.get('user', None))  # type: ignore[assignment]
             refresh = RefreshToken.for_user(user)
+
+            # Fetch conversations and messages
+            from chat_api.models import Conversation
+            from chat_api.models.attachment import Attachment
+            from user_mang.serializers import ConversationSerializer, AttachmentSerializer
+
+            conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
+            conv_serializer = ConversationSerializer(conversations, many=True)
+
+            attachments = Attachment.objects.filter(user_id=user)
+            attach_serializer = AttachmentSerializer(attachments, many=True)
+
             resp_data = {
                 "message": "Login successful",
                 "user_id": user.pk,
                 "access_token": str(refresh.access_token),
                 "refresh_token": str(refresh),
-                "email_verified": getattr(user, "email_verified", False)  # Updated field name
+                "email_verified": getattr(user, "email_verified", False),
+                "conversations": conv_serializer.data,
+                "attachments": attach_serializer.data,
             }
             logger.info(f"[LoginView] Login success: status=200, user_id={user.pk}, resp={resp_data}")
             return Response(resp_data, status=status.HTTP_200_OK)
         except serializers.ValidationError as e:
             error_detail = str(e.detail)
             logger.warning(f"[LoginView] Login failed: status=400, errors={e.detail}, req={request.data}")
-            # Custom error responses based on validation error
             if "inactive" in error_detail:
                 return Response({"detail": "User account is Locked."}, status=status.HTTP_403_FORBIDDEN)
             elif "Invalid credentials" in error_detail:
@@ -384,7 +416,6 @@ class LoginView(APIView):
         except Exception as e:
             logger.exception(f"[LoginView] Login failed: {str(e)}, req={request.data}")
             return Response({"detail": "Login failed due to a server error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 class LogoutView(APIView):
     """
     Handles user logout by clearing the session.

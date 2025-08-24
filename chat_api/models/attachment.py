@@ -1,7 +1,6 @@
 import uuid
 from django.db import models
 from django.conf import settings
-from .conversation import Conversation
 from .message import Message
 
 def encrypted_upload_path(instance, filename):
@@ -37,8 +36,8 @@ class Attachment(models.Model):
     class Meta:
         db_table = "attachment"
         indexes = [
-            models.Index(fields=["conversation", "created_at"], name="attach_conv_created_idx"),
-            models.Index(fields=["message"], name="attach_message_idx"),
+            models.Index(fields=["message_id", "created_at"], name="attach_message_created_idx"),
+            models.Index(fields=["message_id"], name="attach_message_idx"),
         ]
         ordering = ["created_at"]
 

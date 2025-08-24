@@ -98,7 +98,7 @@ class ProviderOAuthToken(models.Model):
 	updated_at = models.DateTimeField(auto_now=True)
 
 	class Meta:
-		unique_together = ("user", "provider")
+		unique_together = ("user_id", "provider")
 
 	def expired(self):
 		return self.expires_at and timezone.now() >= self.expires_at

@@ -6,8 +6,6 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Conversation
 from .models import Message
-from .serializers import MessageSerializer, ConversationSerializer
-from .serializers import MessageRequestSerializer, MessageResponseSerializer, MessageOutputSerializer, AttachmentSerializer
 from .models.attachment import Attachment
 from rest_framework import viewsets, permissions
 from .models.message_request import MessageRequest

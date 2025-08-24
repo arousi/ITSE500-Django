@@ -1,7 +1,6 @@
 from django.db import models
 from user_mang.models.custom_user import Custom_User
 import uuid
-from chat_api.models.message import Message
 
 # Import validators if needed in the Conversation model
 # Currently, no validators are directly used in this model.

@@ -36,13 +36,14 @@ class Custom_User(AbstractUser):
     user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # Represents userID as the primary key
     is_visitor = models.BooleanField(default=False, help_text="Is this user a guest/visitor?")
     id = None
+    password = None  # Remove AbstractUser's password field from ORM
     phone_number = models.CharField(max_length=15, blank=True, null=True)  # Represents PhoneNumber
     biometric_enabled = models.BooleanField(default=False, blank=True)  # Represents biometric_enabled
     last_modified = models.DateTimeField(auto_now=True)  # Represents last_modified
     user_password = models.CharField(max_length=128, blank=True, null=True)  # Custom password field
     # Make email required but remove default to avoid unique collisions; keep unique constraint
     email = models.EmailField(max_length=254, unique=True)  # Single email field for user
-    password = None  # Remove AbstractUser's password field from ORM
+    
     device_id = models.CharField(max_length=128, blank=True, null=True)  # Device identifier from frontend (legacy single device)
     # Temporary local identifier sent by clients before receiving a server UUID
     temp_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
@@ -70,10 +71,6 @@ class Custom_User(AbstractUser):
     email_pin_created = models.DateTimeField(blank=True, null=True, help_text="When the PIN was generated")
     email_verified = models.BooleanField(default=False, help_text="Has the user verified their email?")
     is_archived = models.BooleanField(default=False, help_text="Is the user account archived?")
-    profile_email_verified = models.BooleanField(default=False)
-    profile_email_pin = models.CharField(max_length=10, blank=True, null=True)
-    profile_email_pin_created = models.DateTimeField(blank=True, null=True)
-    # OTP (One-Time Password) login fields
     login_otp = models.CharField(max_length=10, blank=True, null=True, help_text="Transient OTP for passwordless login")
     login_otp_created = models.DateTimeField(blank=True, null=True)
     login_otp_sent_count = models.PositiveIntegerField(default=0, help_text="Number of OTPs sent in current rate window")

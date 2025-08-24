@@ -27,13 +27,123 @@ from auth_api.models import ProviderOAuthToken  # lazy import
 
 # Get a logger specific to the user_mang app
 logger = logging.getLogger('user_mang')
-
 class UnifiedSyncView(APIView):
     """
-    Unified endpoint for syncing conversations/messages for both visitors and registered users.
-    - GET: Returns all conversations with nested messages for the resolved user.
-    - POST: Upserts conversations/messages/requests/responses/outputs for the resolved user.
-    - DELETE: Purges or archives all user data (attachments, messages, conversations, tokens).
+    GET:
+        Returns all conversations, attachments, and nested messages for the resolved user.
+        Example Request:
+            GET /api/v1/unified-sync/?user_id=123e4567-e89b-12d3-a456-426614174000
+
+        Example Response:
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "is_new": false,
+                "conversations": [
+                    {
+                        "conversation_id": "c1",
+                        "title": "My Conversation",
+                        "messages": [
+                            {
+                                "message_id": "m1",
+                                "content": "Hello!"
+                            }
+                        ]
+                    }
+                ],
+                "attachments": [
+                    {
+                        "id": 1,
+                        "type": "image",
+                        "file_path": "/media/attachments/1.png"
+                    }
+                ],
+                "temp_id": null
+            }
+
+    POST:
+        Upserts conversations/messages/requests/responses/outputs/attachments for the resolved user.
+        Example Request:
+            POST /api/v1/unified-sync/
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "conversations": [
+                    {
+                        "conversation_id": "c1",
+                        "title": "New Conversation"
+                    }
+                ],
+                "messages": [
+                    {
+                        "message_id": "m1",
+                        "conversation_id": "c1",
+                        "content": "Hello!"
+                    }
+                ],
+                "attachments": [
+                    {
+                        "id": 1,
+                        "type": "image",
+                        "file_path": "/media/attachments/1.png"
+                    }
+                ]
+            }
+
+        Example Response:
+            {
+                "summary": {
+                    "conversations_created": 1,
+                    "conversations_updated": 0,
+                    "messages_created": 1,
+                    "messages_updated": 0,
+                    "requests_created": 0,
+                    "requests_updated": 0,
+                    "responses_created": 0,
+                    "responses_updated": 0,
+                    "outputs_created": 0,
+                    "outputs_updated": 0,
+                    "attachments_created": 1,
+                    "attachments_updated": 0
+                },
+                "errors": {
+                    "conversations": [],
+                    "messages": [],
+                    "message_requests": [],
+                    "message_responses": [],
+                    "message_outputs": [],
+                    "attachments": []
+                },
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "attachments": [
+                    {
+                        "id": 1,
+                        "type": "image",
+                        "file_path": "/media/attachments/1.png"
+                    }
+                ],
+                "temp_id": null
+            }
+
+    DELETE:
+        Purges or archives all user data (attachments, messages, conversations, tokens).
+
+        Example Request:
+            DELETE /api/v1/unified-sync/
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "action": "delete"
+            }
+
+        Example Response:
+            {
+                "message": "User and all related data deleted successfully",
+                "deleted": {
+                    "attachments": 2,
+                    "messages": 5,
+                    "conversations": 1,
+                    "tokens": 1,
+                    "user": 1
+                }
+            }
     """
 
     # ---------- USER RESOLUTION HELPERS ----------
@@ -77,8 +187,10 @@ class UnifiedSyncView(APIView):
     def resolve_user(self, request):
         """
         Resolves user by user_id, anon_id, or temp_id (for visitors).
+        If temp_id is provided, it is always stored on the user (if not already).
+        Always returns a UUID (user_id) for the user.
         Also associates device if device_id is provided.
-        Returns (user, is_new_visitor, error_response).
+        Returns (user, is_new_visitor, error_response, temp_id).
         """
         user_id = request.data.get("user_id") or request.query_params.get("user_id")
         anon_id = request.data.get("anon_id") or request.query_params.get("anon_id")
@@ -89,7 +201,7 @@ class UnifiedSyncView(APIView):
         is_new_visitor = False
 
         if user_id:
-            user = Custom_User.objects.filter(user_id=user_id, is_visitor=False).first()
+            user = Custom_User.objects.filter(user_id=user_id).first()
         elif anon_id:
             user = Custom_User.objects.filter(user_id=anon_id, is_visitor=True).first()
         elif temp_id:
@@ -99,20 +211,26 @@ class UnifiedSyncView(APIView):
                 is_new_visitor = True
 
         if not user:
-            return None, False, Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return None, False, Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND), temp_id
+
+        # Always store temp_id if provided and not already set
+        if temp_id and (not user.temp_id or user.temp_id != temp_id):
+            user.temp_id = temp_id
+            user.save(update_fields=["temp_id"])
 
         if device_id:
             self._associate_device(user, device_id)
 
-        return user, is_new_visitor, None
+        return user, is_new_visitor, None, temp_id
 
     # ---------- ENDPOINTS ----------
 
     def get(self, request):
         """
-        Return all conversations and nested messages for the resolved user (visitor or registered).
+        Return all conversations, attachments, and nested messages for the resolved user (visitor or registered).
+        Always returns the user's UUID (user_id).
         """
-        user, is_new_visitor, error_response = self.resolve_user(request)
+        user, is_new_visitor, error_response, temp_id = self.resolve_user(request)
         if error_response:
             return error_response
 
@@ -120,20 +238,26 @@ class UnifiedSyncView(APIView):
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
         conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
-        serializer = ConversationSerializer(conversations, many=True)
+        conv_serializer = ConversationSerializer(conversations, many=True)
+
+        attachments = Attachment.objects.filter(user_id=user)
+        attach_serializer = AttachmentSerializer(attachments, many=True)
 
         return Response({
             "user_id": str(user.user_id),
             "is_new": is_new_visitor,
-            "conversations": serializer.data,
+            "conversations": conv_serializer.data,
+            "attachments": attach_serializer.data,
+            "temp_id": temp_id,
         }, status=status.HTTP_200_OK)
 
     def post(self, request):
         """
         Accepts lists of all normalized models from the frontend and stores/updates them.
         Handles both visitors and registered users.
+        Also upserts attachments.
         """
-        user, is_new_visitor, error_response = self.resolve_user(request)
+        user, is_new_visitor, error_response, temp_id = self.resolve_user(request)
         if error_response:
             return error_response
 
@@ -142,13 +266,14 @@ class UnifiedSyncView(APIView):
         reqs_data = request.data.get("message_requests", [])
         resps_data = request.data.get("message_responses", [])
         outs_data = request.data.get("message_outputs", [])
+        attachments_data = request.data.get("attachments", [])
 
-        if not all(isinstance(lst, list) for lst in [conversations_data, messages_data, reqs_data, resps_data, outs_data]):
+        if not all(isinstance(lst, list) for lst in [conversations_data, messages_data, reqs_data, resps_data, outs_data, attachments_data]):
             return Response({"error": "Invalid format for one or more model lists."},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        created, updated = dict(conv=0, msg=0, req=0, resp=0, out=0), dict(conv=0, msg=0, req=0, resp=0, out=0)
-        errors = {k: [] for k in ["conversations", "messages", "message_requests", "message_responses", "message_outputs"]}
+        created, updated = dict(conv=0, msg=0, req=0, resp=0, out=0, att=0), dict(conv=0, msg=0, req=0, resp=0, out=0, att=0)
+        errors = {k: [] for k in ["conversations", "messages", "message_requests", "message_responses", "message_outputs", "attachments"]}
 
         try:
             with transaction.atomic():
@@ -230,6 +355,25 @@ class UnifiedSyncView(APIView):
                     else:
                         errors["messages"].append(serializer.errors)
 
+                # Attachments
+                for att in attachments_data:
+                    att_id = att.get("id")
+                    if not att_id:
+                        errors["attachments"].append({"data": att, "error": "Missing id"})
+                        continue
+                    if user is not None:
+                        att["user"] = user.pk
+                    else:
+                        errors["attachments"].append({"data": att, "error": "User is None"})
+                        continue
+                    instance = Attachment.objects.filter(id=att_id).first()
+                    serializer = AttachmentSerializer(instance, data=att, partial=True)
+                    if serializer.is_valid():
+                        serializer.save()
+                        (created if instance is None else updated)["att"] += 1
+                    else:
+                        errors["attachments"].append(serializer.errors)
+
         except Exception as e:
             logger.error(f"Transaction failed: {str(e)}")
             return Response({
@@ -238,6 +382,10 @@ class UnifiedSyncView(APIView):
                 "errors": errors
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        # Return all attachments for the user after upsert
+        attachments = Attachment.objects.filter(user_id=user)
+        attach_serializer = AttachmentSerializer(attachments, many=True)
+
         return Response({
             "summary": {
                 "conversations_created": created["conv"], "conversations_updated": updated["conv"],
@@ -245,8 +393,12 @@ class UnifiedSyncView(APIView):
                 "requests_created": created["req"], "requests_updated": updated["req"],
                 "responses_created": created["resp"], "responses_updated": updated["resp"],
                 "outputs_created": created["out"], "outputs_updated": updated["out"],
+                "attachments_created": created["att"], "attachments_updated": updated["att"],
             },
-            "errors": errors
+            "errors": errors,
+            "user_id": str(user.user_id) if user else None,
+            "attachments": attach_serializer.data,
+            "temp_id": temp_id,
         }, status=status.HTTP_200_OK)
 
     def delete(self, request):
@@ -255,7 +407,7 @@ class UnifiedSyncView(APIView):
         - action=delete → permanently delete all user data.
         - action=archive → archive user and related data.
         """
-        user, _, error_response = self.resolve_user(request)
+        user, _, error_response, temp_id = self.resolve_user(request)
         if error_response:
             return error_response
 
@@ -305,4 +457,3 @@ class UnifiedSyncView(APIView):
 
         return Response({"error": "Specify action=delete or action=archive in query or body."},
                         status=status.HTTP_400_BAD_REQUEST)
-

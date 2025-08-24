@@ -18,9 +18,11 @@ class OAuthState(models.Model):
 	PROVIDER_CHOICES = (
 		("openrouter", "OpenRouter"),
 		("google", "Google"),
+		("github", "GitHub"),
+		("microsoft", "Microsoft"),
 	)
-
-	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	user_id = models.ForeignKey(Custom_User, null=True, blank=True, on_delete=models.SET_NULL, related_name="oauth_states")
+	oauth_state_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 	provider = models.CharField(max_length=32, choices=PROVIDER_CHOICES)
 	state = models.CharField(max_length=128, unique=True, db_index=True)
 	code_challenge = models.CharField(max_length=256)
@@ -32,10 +34,10 @@ class OAuthState(models.Model):
 	result_payload = models.TextField(blank=True, null=True)
 	result_retrieved = models.BooleanField(default=False)
 	scope = models.CharField(max_length=512, blank=True, null=True)
-	user = models.ForeignKey(Custom_User, null=True, blank=True, on_delete=models.SET_NULL, related_name="oauth_states")
+	
 	created_at = models.DateTimeField(auto_now_add=True)
 	expires_at = models.DateTimeField()
-	used = models.BooleanField(default=False)
+	is_used = models.BooleanField(default=False)
 
 	def is_expired(self):
 		return timezone.now() >= self.expires_at

@@ -31,6 +31,7 @@ from .serializers import (
     SendOTPSerializer,
     VerifyOTPSerializer,
 )
+from prompeteer_server.utils.emailer import send_verified_email
 
 OAUTH_STATE_TTL_SECONDS = 600  # 10 minutes
 OTP_EXPIRY_SECONDS = 300  # 5 minutes
@@ -135,8 +136,8 @@ class RegisterView(APIView):
         email = request.data.get('email')
         user_id = request.data.get('user_id') or request.data.get('uuid')
         username = request.data.get('username')
-        user = None  # type: ignore
-
+        user: Optional[Custom_User] = None
+        #! Errors here for static casting by PYLANCE!
         # Try to find existing user by email, uuid, username, or temp_id
         if email:
             user = Custom_User.objects.filter(email=email).first()
@@ -149,17 +150,10 @@ class RegisterView(APIView):
 
         created = False
         if not user:
-            # Try to create new user
-            # --- PATCH: Make password optional ---
-            data = request.data.copy()
-            if 'user_password' not in data:
-                data['user_password'] = ''
-            serializer = RegisterSerializer(data=data)
-            # --- END PATCH ---
+            serializer = RegisterSerializer(data=request.data)
             try:
                 serializer.is_valid(raise_exception=True)
                 user: Custom_User = cast(Custom_User, serializer.save())  # type: ignore[assignment]
-                # Hash password with backend salt same as login flow expects
                 raw_pw: str = str(request.data.get('user_password') or '')
                 BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
                 salted = (raw_pw + BACKEND_SALT).encode('utf-8')
@@ -170,22 +164,22 @@ class RegisterView(APIView):
                 user.profile_email_pin = pin
                 user.profile_email_pin_created = timezone.now()
                 user.email_verified = False
-                # Set temp_id and visitor flag if provided
                 if temp_id:
                     user.temp_id = temp_id
                     user.is_visitor = True
                 user.save()
                 # Send PIN email (best effort)
                 try:
-                    send_mail(
+                    result = send_verified_email(
                         subject="Your Email Verification PIN",
                         message=f"Your verification PIN is: {pin}",
-                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
                         recipient_list=[user.email],
-                        fail_silently=True,
+                        html_message=f"<b>Your verification PIN is: {pin}</b>",
+                        verify_with_zeruh=True,
                     )
-                except Exception:
-                    logger.warning("[RegisterView] PIN email send failed (non-fatal)")
+                    logger.info(f"[RegisterView] PIN email send result: {result}")
+                except Exception as e:
+                    logger.warning(f"[RegisterView] PIN email send failed (non-fatal): {e}")
                 created = True
             except serializers.ValidationError as e:
                 logger.warning(f"[RegisterView] Registration failed: status=400, errors={e.detail}, req={request.data}")
@@ -193,29 +187,12 @@ class RegisterView(APIView):
             except Exception as e:
                 logger.exception(f"[RegisterView] Unexpected registration error: {str(e)}, req={request.data}")
                 return Response({"detail": "Registration failed due to a server error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
         # Always persist device_id in related_devices
-        devices = []
+        devices = user.get_related_devices() if user else []
         if device_id:
-            try:
-                devices = user.related_devices if isinstance(user.related_devices, list) else []
-            except Exception:
-                import json
-                try:
-                    if isinstance(user.related_devices, str):
-                        devices = json.loads(user.related_devices or "[]")
-                    else:
-                        devices = user.related_devices or []
-                except Exception:
-                    devices = []
             if device_id not in devices:
                 devices.append(device_id)
-                import json
-                try:
-                    user.related_devices = json.dumps(devices)
-                except Exception:
-                    user.related_devices = "[]"
-                user.device_id = device_id  # keep legacy field updated
+                user.set_related_devices(devices)
                 user.last_login = timezone.now()
                 user.save()
 
@@ -224,6 +201,7 @@ class RegisterView(APIView):
 
         # Fetch all conversations/messages for this user (like SyncConversationsView.get)
         from chat_api.models import Conversation
+        from chat_api.models.message import Message
         conversations = Conversation.objects.filter(user_id=user)
         result = []
         for conv in conversations:
@@ -236,14 +214,16 @@ class RegisterView(APIView):
                 "local_only": conv.local_only,
             }
             conv_messages = []
-            for msg in conv.messages.all():
+            # Query Message objects directly to avoid relying on a related attribute on Conversation
+            msgs = Message.objects.filter(conversation=conv)
+            for msg in msgs:
                 msg_data = {
                     "message_id": str(msg.message_id),
                     "conversation_id": str(conv.conversation_id),
                     "user_id": str(user.user_id),
-                    "request_id": str(msg.request_id.id) if msg.request_id else None,
-                    "response_id": str(msg.response_id.id) if msg.response_id else None,
-                    "output_id": str(msg.output_id.id) if msg.output_id else None,
+                    "request_id": str(getattr(msg.request_id, 'pk', None)) if (msg.request_id and getattr(msg.request_id, 'pk', None) is not None) else None,
+                    "response_id": str(getattr(msg.response_id, 'pk', None)) if (msg.response_id and getattr(msg.response_id, 'pk', None) is not None) else None,
+                    "output_id": str(getattr(msg.output_id, 'pk', None)) if (msg.output_id and getattr(msg.output_id, 'pk', None) is not None) else None,
                     "timestamp": msg.timestamp,
                     "vote": bool(msg.vote),
                     "has_image": bool(msg.has_image),
@@ -272,7 +252,7 @@ class RegisterView(APIView):
         }
         logger.info(f"[RegisterView] Registration/data sync success: status=201, user_id={user.user_id}")
         return Response(resp_data, status=status.HTTP_201_CREATED)
-
+    
 class EmailPinVerifyView(APIView):
     """Verify the 5-digit PIN sent to the user's email."""
     permission_classes = [AllowAny]
@@ -332,6 +312,7 @@ class SetPasswordAfterEmailVerifyView(APIView):
             user.user_password = backend_hash
             user.save(update_fields=["user_password"])
             return Response({"message": "Password set successfully. You may now log in."})
+
 
 class LoginView(APIView):
     """
@@ -416,6 +397,7 @@ class LoginView(APIView):
         except Exception as e:
             logger.exception(f"[LoginView] Login failed: {str(e)}, req={request.data}")
             return Response({"detail": "Login failed due to a server error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
 class LogoutView(APIView):
     """
     Handles user logout by clearing the session.
@@ -636,7 +618,7 @@ class OAuthAuthorizeBase(APIView):
         return Response({
             'authorize_url': authorize_url,
             'state': state,
-            'state_id': str(oauth_state.id),
+            'state_id': str(oauth_state.user_id),
             'expires_at': expires_at.isoformat(),
             'bridge': bool(mobile_redirect)
         })
@@ -721,7 +703,7 @@ class OAuthCallbackBase(APIView):
             userinfo = fetch_google_userinfo(access_token) if access_token else None
             email = (userinfo or {}).get('email') if userinfo else None
             email_verified_claim = (userinfo or {}).get('email_verified') if userinfo else None
-            user = oauth_state.user
+            user = oauth_state.user_id
             if not user:
                 if email and Custom_User.objects.filter(email=email).exists():
                     user = Custom_User.objects.get(email=email)
@@ -795,7 +777,7 @@ class OAuthCallbackBase(APIView):
             token_type = 'api_key'
             if not access_token:
                 return Response({'detail': 'Provider did not return API key', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
-            user = oauth_state.user
+            user = oauth_state.user_id
             if not user:
                 user = Custom_User.objects.create(
                     username=f"or_{uuid.uuid4().hex[:10]}",
@@ -853,7 +835,7 @@ class OAuthCallbackBase(APIView):
                 </style>
             </head>
             <body>
-                <div class="msg">✅ All is fine! You may close this tab.</div>
+                <div class="msg"> All is fine! You may close this tab.</div>
                 <script>
                 if (window.opener) {
                     window.opener.postMessage({success: true, type: "oauth"}, "*");
@@ -991,7 +973,7 @@ class GitHubAuthorizeView(OAuthAuthorizeBase):
         return Response({
             'authorize_url': authorize_url,
             'state': state,
-            'state_id': str(oauth_state.id),
+            'state_id': str(oauth_state.oauth_state_id),
             'expires_at': expires_at.isoformat(),
             'bridge': False
         })
@@ -1049,7 +1031,7 @@ class GitHubCallbackView(OAuthCallbackBase):
             if isinstance(emails, list):
                 primary = next((e for e in emails if e.get('primary')), None)
                 email = primary.get('email') if primary else None
-        user = oauth_state.user
+        user = oauth_state.user_id
         if not user:
             if email and Custom_User.objects.filter(email=email).exists():
                 user = Custom_User.objects.get(email=email)
@@ -1117,7 +1099,7 @@ class GitHubCallbackView(OAuthCallbackBase):
                 </style>
             </head>
             <body>
-                <div class="msg">✅ All is fine! You may close this tab.</div>
+                <div class="msg"> All is fine! You may close this tab.</div>
                 <script>
                 if (window.opener) {
                     window.opener.postMessage({success: true, type: "oauth"}, "*");
@@ -1171,7 +1153,7 @@ class MicrosoftAuthorizeView(OAuthAuthorizeBase):
         return Response({
             'authorize_url': authorize_url,
             'state': state,
-            'state_id': str(oauth_state.id),
+            'state_id': str(oauth_state.oauth_state_id),
             'expires_at': expires_at.isoformat(),
             'bridge': False
         })
@@ -1220,7 +1202,7 @@ class MicrosoftCallbackView(OAuthCallbackBase):
         )
         user_data = user_resp.json()
         email = user_data.get('mail') or user_data.get('userPrincipalName')
-        user = oauth_state.user
+        user = oauth_state.user_id
         if not user:
             if email and Custom_User.objects.filter(email=email).exists():
                 user = Custom_User.objects.get(email=email)
@@ -1242,9 +1224,9 @@ class MicrosoftCallbackView(OAuthCallbackBase):
             if email and not user.email:
                 user.email = email
                 update_fields.append('email')
-            if not getattr(user, 'is_ms_user', False):
-                user.is_ms_user = True
-                update_fields.append('is_ms_user')
+            if not getattr(user, 'is_microsoft_user', False):
+                user.is_microsoft_user = True
+                update_fields.append('is_microsoft_user')
             if email and not user.email_verified:
                 user.email_verified = True
                 update_fields.append('email_verified')
@@ -1304,7 +1286,7 @@ class MicrosoftCallbackView(OAuthCallbackBase):
 
 
 class SendLoginOTPView(APIView):
-    """Sends a 6-digit OTP for passwordless login with simple rate limiting."""
+    """Sends a 6-digit OTP for passwordless login with simple rate limiting in case of the first 1 not working or not being received."""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -1329,13 +1311,17 @@ class SendLoginOTPView(APIView):
         user.login_otp_last_sent = now
         user.login_otp_sent_count += 1
         user.save(update_fields=['login_otp','login_otp_created','login_otp_last_sent','login_otp_sent_count'])
-        send_mail(
-            subject='Your Login OTP',
-            message=f'Your one-time login code is: {otp}',
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-            recipient_list=[email],
-            fail_silently=True,
-        )
+        try:
+            result = send_verified_email(
+                subject="Your Login OTP",
+                message=f"Your login OTP is: {otp}",
+                recipient_list=[user.email],
+                html_message=f"<b>Your login OTP is: {otp}</b>",
+                verify_with_zeruh=True,
+            )
+            logger.info(f"[SendLoginOTPView] OTP email send result: {result}")
+        except Exception as e:
+            logger.warning(f"[SendLoginOTPView] OTP email send failed (non-fatal): {e}")
         logger.info(f"[SendLoginOTPView] OTP sent email={email} count={user.login_otp_sent_count}")
         return Response({'message': 'OTP sent'}, status=status.HTTP_200_OK)
 
@@ -1393,7 +1379,10 @@ class LoginWithOTPView(APIView):
         serializer = LoginSerializer(data=request.data, context={'request': request})
         try:
             serializer.is_valid(raise_exception=True)
-            user = serializer.validated_data['user']
+            validated_data = getattr(serializer, 'validated_data', None)
+            user = validated_data.get('user') if validated_data and 'user' in validated_data else None
+            if not user:
+                return Response({"detail": "User not found or invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
             # Here you would generate and send the OTP
             resp_data = {"message": "OTP sent successfully."}
             logger.info(f"[LoginWithOTPView] OTP sent: status=200, user_id={user.pk}, resp={resp_data}")

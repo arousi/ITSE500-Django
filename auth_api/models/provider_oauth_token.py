@@ -86,8 +86,8 @@ class ProviderOAuthToken(models.Model):
 
 	PROVIDER_CHOICES = OAuthState.PROVIDER_CHOICES
 
-	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-	user = models.ForeignKey(Custom_User, on_delete=models.CASCADE, related_name="provider_tokens")
+	provider_oauth_token_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	user_id = models.ForeignKey(Custom_User, on_delete=models.CASCADE, related_name="provider_tokens")
 	provider = models.CharField(max_length=32, choices=PROVIDER_CHOICES, db_index=True)
 	access_token = models.TextField()
 	refresh_token = models.TextField(blank=True, null=True)
@@ -125,5 +125,5 @@ class ProviderOAuthToken(models.Model):
 		super().save(*args, **kwargs)
 
 	def __str__(self):
-		return f"ProviderOAuthToken(user={self.user.id}, provider={self.provider})"
+		return f"ProviderOAuthToken(user={self.user_id.id}, provider={self.provider})"
 

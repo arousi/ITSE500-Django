@@ -13,13 +13,13 @@ class Conversation(models.Model):
     user_id = models.ForeignKey(Custom_User, on_delete=models.CASCADE,
                              related_name="conversations", blank=True)  # Foreign key to Custom_User
     # visitor_id field removed; use user_id for both registered and guest (is_visitor=True)
-    
     title = models.CharField(max_length=255, blank=True, null=True, default="Title")  # Matches app schema
     
     created_at = models.DateTimeField(auto_now_add=True)  # Matches app schema
     updated_at = models.DateTimeField(auto_now=True)  # Matches app schema
     local_only = models.BooleanField(default=False)  # Matches app schema
-    message_id = models.OneToOneField(Message, on_delete=models.CASCADE, related_name="conversation", null=True, blank=True)
+
+    
     class Meta:
         verbose_name = "Conversation"
         verbose_name_plural = "Conversations"

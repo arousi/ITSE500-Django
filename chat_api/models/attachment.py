@@ -14,10 +14,8 @@ class Attachment(models.Model):
     to locate and decrypt (nonce/iv, algo, key reference). The raw key material (UMK) lives in
     crypto_api.UserKeyMaterial and is never exposed here.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="attachments")
-    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="attachments")
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="attachments")
+    attachment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    message_id = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="attachments")
 
     type = models.CharField(max_length=32)  # image | embedding | pdf | other
     mime_type = models.CharField(max_length=128, blank=True, null=True)
@@ -46,7 +44,7 @@ class Attachment(models.Model):
 
     def __str__(self):
         try:
-            mid = getattr(self.message, 'message_id', None)
+            mid = getattr(self.message_id, 'message_id', None)
         except Exception:
             mid = None
-        return f"Attachment {self.id} ({self.type}) msg={mid}"
+        return f"Attachment {self.attachment_id} ({self.type}) msg={mid}"

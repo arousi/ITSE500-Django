@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.core.exceptions import ValidationError
 import uuid
+import json
 import hashlib
 from django.conf import settings
 
@@ -17,6 +18,20 @@ class CustomUserManager(UserManager):
             user.user_password = hashlib.sha256(salted).hexdigest()
         user.save(using=self._db)
         return user
+    
+    def get_related_devices(self):
+        if isinstance(self.related_devices, list):
+            return self.related_devices
+        try:
+            return json.loads(self.related_devices or "[]")
+        except Exception:
+            return []
+
+    def set_related_devices(self, devices):
+        if isinstance(self.model._meta.get_field('related_devices'), models.JSONField):
+            self.related_devices = devices
+        else:
+            self.related_devices = json.dumps(devices)
 
     def create_user(self, username, email=None, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', False)
@@ -36,15 +51,14 @@ class Custom_User(AbstractUser):
     user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # Represents userID as the primary key
     is_visitor = models.BooleanField(default=False, help_text="Is this user a guest/visitor?")
     id = None
-    password = None  # Remove AbstractUser's password field from ORM
     phone_number = models.CharField(max_length=15, blank=True, null=True)  # Represents PhoneNumber
     biometric_enabled = models.BooleanField(default=False, blank=True)  # Represents biometric_enabled
     last_modified = models.DateTimeField(auto_now=True)  # Represents last_modified
     user_password = models.CharField(max_length=128, blank=True, null=True)  # Custom password field
     # Make email required but remove default to avoid unique collisions; keep unique constraint
     email = models.EmailField(max_length=254, unique=True)  # Single email field for user
-    
-    device_id = models.CharField(max_length=128, blank=True, null=True)  # Device identifier from frontend (legacy single device)
+    password = None  # Remove AbstractUser's password field from ORM
+    devices_id = models.JSONField(max_length=128, blank=True, null=True)  # Device identifier from frontend (legacy single device)
     # Temporary local identifier sent by clients before receiving a server UUID
     temp_id = models.CharField(max_length=64, blank=True, null=True, unique=True)
     # List of associated device IDs for this user/visitor
@@ -62,6 +76,20 @@ class Custom_User(AbstractUser):
         # Check the user_password field instead of password
         return self.user_password == raw_password
 
+    def get_related_devices(self):
+        if isinstance(self.related_devices, list):
+            return self.related_devices
+        try:
+            return json.loads(self.related_devices or "[]")
+        except Exception:
+            return []
+
+    def set_related_devices(self, devices):
+        if isinstance(self._meta.get_field('related_devices'), models.JSONField):
+            self.related_devices = devices
+        else:
+            self.related_devices = json.dumps(devices)
+    
     @property
     def is_password_usable(self):
         return bool(self.user_password)
@@ -71,6 +99,7 @@ class Custom_User(AbstractUser):
     email_pin_created = models.DateTimeField(blank=True, null=True, help_text="When the PIN was generated")
     email_verified = models.BooleanField(default=False, help_text="Has the user verified their email?")
     is_archived = models.BooleanField(default=False, help_text="Is the user account archived?")
+    # OTP (One-Time Password) login fields
     login_otp = models.CharField(max_length=10, blank=True, null=True, help_text="Transient OTP for passwordless login")
     login_otp_created = models.DateTimeField(blank=True, null=True)
     login_otp_sent_count = models.PositiveIntegerField(default=0, help_text="Number of OTPs sent in current rate window")
@@ -78,10 +107,9 @@ class Custom_User(AbstractUser):
     # Provider flags
     is_google_user = models.BooleanField(default=False, help_text="Account created / linked via Google OAuth")
     is_openrouter_user = models.BooleanField(default=False, help_text="Account created / linked via OpenRouter OAuth")
-    is_github_user = models.BooleanField(default=False, help_text="Account created / linked via GitHub OAuth")
     is_microsoft_user = models.BooleanField(default=False, help_text="Account created / linked via Microsoft OAuth")
-    totp_secret = models.CharField(max_length=32, blank=True, null=True, help_text="TOTP secret for two-factor authentication app")
-    
+    is_github_user = models.BooleanField(default=False, help_text="Account created / linked via GitHub OAuth")
+
     def clean(self):
         super().clean()
         if not self.username:

@@ -2,6 +2,7 @@
 import uuid
 from django.db import models
 from user_mang.models.custom_user import Custom_User
+from chat_api.models.conversation import Conversation
 from django.core.exceptions import ValidationError
 import json
 # Normalized related fields
@@ -47,7 +48,13 @@ class Message(models.Model):
     message_id = models.UUIDField(primary_key=True, default=uuid.uuid4,
                                   editable=False)  # Represents messageID
     # we do conv id from front end
-    
+    conversation = models.ForeignKey(
+        'chat_api.Conversation',
+        on_delete=models.CASCADE,
+        related_name='messages',
+        null=True,
+        blank=True
+    )
     user_id = models.ForeignKey(Custom_User, on_delete=models.CASCADE,
                                 related_name="messages")  # Foreign key to Custom_User
     request_id = models.OneToOneField(#we do the req id from front end
@@ -116,7 +123,7 @@ class Message(models.Model):
     vote = models.BooleanField(default=False, blank=True, null=True)  # Matches app schema
     
     def __str__(self):
-        return f"Message {self.message_id}"
+        return f"Message {self.message_id} "
 
     class Meta:
         verbose_name = "Message"

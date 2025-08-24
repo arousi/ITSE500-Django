@@ -29,8 +29,11 @@ from auth_api.models import ProviderOAuthToken  # lazy import
 logger = logging.getLogger('user_mang')
 class UnifiedSyncView(APIView):
     """
+    Unified endpoint for syncing conversations/messages for both visitors and registered users.
+
     GET:
         Returns all conversations, attachments, and nested messages for the resolved user.
+
         Example Request:
             GET /api/v1/unified-sync/?user_id=123e4567-e89b-12d3-a456-426614174000
 
@@ -62,6 +65,71 @@ class UnifiedSyncView(APIView):
 
     POST:
         Upserts conversations/messages/requests/responses/outputs/attachments for the resolved user.
+
+        Example Request:
+            POST /api/v1/unified-sync/
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "conversations": [
+                    {
+                        "conversation_id": "c1",
+                        "title": "New Conversation"
+                    }
+                "messages": [
+                    {
+                        "message_id": "m1",
+                        "conversation_id": "c1",
+                        "content": "Hello!"
+                    }
+                ],
+                "attachments": [
+                    {
+                        "id": 1,
+                        "type": "image",
+                        "file_path": "/media/attachments/1.png"
+                    }
+                ],
+                ]
+            }
+
+        Example Response:
+            {
+                "summary": {
+                    "conversations_created": 1,
+                    "conversations_updated": 0,
+                    "messages_created": 1,
+                    "messages_updated": 0,
+                    "requests_created": 0,
+                    "requests_updated": 0,
+                    "responses_created": 0,
+                    "responses_updated": 0,
+                    "outputs_created": 0,
+                    "outputs_updated": 0,
+                    "attachments_created": 1,
+                    "attachments_updated": 0
+                },
+                "errors": {
+                    "conversations": [],
+                    "messages": [],
+                    "message_requests": [],
+                    "message_responses": [],
+                    "message_outputs": [],
+                    "attachments": []
+                },
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "attachments": [
+                    {
+                        "id": 1,
+                        "type": "image",
+                        "file_path": "/media/attachments/1.png"
+                    }
+                ],
+                "temp_id": null
+            }
+
+    POST:
+        Upserts conversations/messages/requests/responses/outputs/attachments for the resolved user.
+
         Example Request:
             POST /api/v1/unified-sync/
             {
@@ -145,9 +213,7 @@ class UnifiedSyncView(APIView):
                 }
             }
     """
-
-    # ---------- USER RESOLUTION HELPERS ----------
-
+# ---------- USER RESOLUTION HELPERS ----------
     def _create_visitor(self, temp_id: str):
         """Create a new visitor if none exists for the given temp_id."""
         user = Custom_User(

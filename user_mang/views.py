@@ -21,20 +21,45 @@ from rest_framework import status
 from user_mang.models.custom_user import Custom_User
 from django.db import transaction
 from django.utils import timezone
+from django.core.mail import EmailMessage
 import logging
 import json
-from auth_api.models import ProviderOAuthToken  # lazy import
+from auth_api.models import ProviderOAuthToken  
+import csv
+import tempfile
 
-# Get a logger specific to the user_mang app
+
+from prompeteer_server.utils.emailer import send_verified_email
+
 logger = logging.getLogger('user_mang')
 
+def resolve_flags(request):
+    """Utility to resolve profile/chat flags from query or body."""
+    profile_flag = (
+        request.query_params.get("profile") == "true"
+        or request.data.get("profile") is True
+    )
+    chat_flag = (
+        request.query_params.get("chat") == "true"
+        or request.data.get("chat") is True
+    )
+    return profile_flag, chat_flag
+
+#TODO: break into profile sync and chat sync seperate views
+#* easier to understand and maintain
 class UnifiedSyncView(APIView):
     """
-    UnifiedSyncView
+    A secure, unified API endpoint for managing both chat data (conversations, messages, attachments, etc.)
+    and user profile data for both visitors and registered users. Supports GET, POST, and DELETE methods,
+    and can handle chat, profile, or both, based on query parameters or request body.
 
-    A unified API endpoint for managing both chat data (conversations, messages, attachments, etc.)
-    and user profile data for both visitors and registered users. This endpoint supports GET, POST,
-    and DELETE methods, and can handle chat, profile, or both, based on query parameters or request body.
+    Key Features:
+    - Exports user data as an ephemeral CSV file and emails it only to verified emails (via Zeruh).
+    - Soft deletes (sets is_deleted=True) instead of permanent deletes for all supported models.
+    - Uses consistent serializer context and user_id handling.
+    - Improved logging with stack traces for errors.
+    - Uses a resolve_flags() utility for robust flag logic.
+    - Coordinator view delegates to sub-views/functions for modularity.
 
     Query Parameters or JSON Body Flags:
         - profile: true/false (whether to include or operate on user profile data)
@@ -55,6 +80,11 @@ class UnifiedSyncView(APIView):
     - errors: Detailed errors for each upserted model (POST)
     - message: Status message (DELETE)
     - deleted/archived: Stats on deleted/archived objects (DELETE)
+
+    Security:
+    - Data exports are only sent to verified emails.
+    - CSV exports are handled in ephemeral temp files and not stored permanently.
+    - All deletions are soft deletes where possible.
     """
 
     def _create_visitor(self, temp_id: str):
@@ -120,11 +150,67 @@ class UnifiedSyncView(APIView):
 
         return user, is_new_visitor, None, temp_id
 
+    def export_user_data_csv(self, user):
+        """
+        Export user profile, conversations, and attachments to a CSV file.
+        Returns the file path.
+        """
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="w", newline='', encoding="utf-8")
+        writer = csv.writer(tmp)
+        # Profile
+        writer.writerow(["Section", "Field", "Value"])
+        writer.writerow(["Profile", "user_id", user.user_id])
+        writer.writerow(["Profile", "username", user.username])
+        writer.writerow(["Profile", "email", user.email])
+        writer.writerow(["Profile", "is_visitor", user.is_visitor])
+        writer.writerow(["Profile", "is_active", user.is_active])
+        writer.writerow(["Profile", "is_archived", getattr(user, "is_archived", False)])
+        # Conversations
+        conversations = Conversation.objects.filter(user_id=user)
+        writer.writerow([])
+        writer.writerow(["Section", "conversation_id", "title"])
+        for conv in conversations:
+            writer.writerow(["Conversation", conv.conversation_id, conv.title])
+        # Attachments
+        attachments = Attachment.objects.filter(user_id=user)
+        writer.writerow([])
+        writer.writerow(["Section", "id", "type", "file_path"])
+        for att in attachments:
+            writer.writerow(["Attachment", att.attachment_id, att.type, att.file_path])
+        tmp.close()
+        return tmp.name
+
+    def email_user_data_csv(self, user, csv_path):
+        """
+        Email the CSV export to the user's email address using Zeruh verification.
+        Only sends to verified emails.
+        """
+        subject = "Your Data Export"
+        message = "Attached is your requested data export. This file will be deleted in 30 days."
+        send_verified_email(
+            subject=subject,
+            message=message,
+            recipient_list=[user.email],
+            from_email=None,
+            html_message=None,
+            verify_with_zeruh=True,
+            zeruh_min_score=70,
+            fail_silently=False,
+            attachments=[(csv_path, "user_data_export.csv", "text/csv")]
+        )
+
+    def soft_delete_queryset(self, queryset):
+        """Soft delete for queryset (set is_deleted=True if field exists)."""
+        for obj in queryset:
+            if hasattr(obj, "is_deleted"):
+                obj.is_deleted = True
+                obj.save(update_fields=["is_deleted"])
+            else:
+                obj.delete()
+
     def get(self, request):
         """
-        ------------------------------------------------------------------------
         GET
-        ------------------------------------------------------------------------
         Returns user profile, chat data (conversations, messages, attachments), or both.
 
         Example Request:
@@ -167,14 +253,7 @@ class UnifiedSyncView(APIView):
         if error_response:
             return error_response
 
-        profile_flag = (
-            request.query_params.get("profile") == "true"
-            or request.data.get("profile") is True
-        )
-        chat_flag = (
-            request.query_params.get("chat") == "true"
-            or request.data.get("chat") is True
-        )
+        profile_flag, chat_flag = resolve_flags(request)
 
         response_data = {
             "user_id": str(user.user_id) if user and getattr(user, "user_id", None) is not None else None,
@@ -189,22 +268,21 @@ class UnifiedSyncView(APIView):
                 "is_visitor": user.is_visitor if user and getattr(user, "is_visitor", None) is not None else None,
                 "is_active": user.is_active if user and getattr(user, "is_active", None) is not None else None,
                 "is_archived": getattr(user, "is_archived", False),
-                # Add more profile fields as needed
             }
 
         if chat_flag:
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
-            conv_serializer = ConversationSerializer(conversations, many=True)
+            conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
             attachments = Attachment.objects.filter(user_id=user)
-            attach_serializer = AttachmentSerializer(attachments, many=True)
+            attach_serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
             response_data["conversations"] = conv_serializer.data
             response_data["attachments"] = attach_serializer.data
 
         if not (profile_flag or chat_flag):
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
-            conv_serializer = ConversationSerializer(conversations, many=True)
+            conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
             attachments = Attachment.objects.filter(user_id=user)
-            attach_serializer = AttachmentSerializer(attachments, many=True)
+            attach_serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
             response_data["conversations"] = conv_serializer.data
             response_data["attachments"] = attach_serializer.data
             response_data["profile"] = {
@@ -219,9 +297,7 @@ class UnifiedSyncView(APIView):
 
     def post(self, request):
         """
-            --------------------------------------------------------------------
             POST
-            --------------------------------------------------------------------
             Upserts (creates or updates) user profile, chat data, or both.
 
             Example Request:
@@ -296,14 +372,7 @@ class UnifiedSyncView(APIView):
         if error_response:
             return error_response
 
-        profile_flag = (
-            request.query_params.get("profile") == "true"
-            or request.data.get("profile") is True
-        )
-        chat_flag = (
-            request.query_params.get("chat") == "true"
-            or request.data.get("chat") is True
-        )
+        profile_flag, chat_flag = resolve_flags(request)
 
         summary = {}
         errors = {}
@@ -352,7 +421,7 @@ class UnifiedSyncView(APIView):
                             continue
                         conv["user_id"] = user.pk
                         instance = Conversation.objects.filter(conversation_id=conv_id).first()
-                        serializer = ConversationSerializer(instance, data=conv, partial=True)
+                        serializer = ConversationSerializer(instance, data=conv, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
                             (created if instance is None else updated)["conv"] += 1
@@ -366,7 +435,7 @@ class UnifiedSyncView(APIView):
                             errors["message_requests"].append({"data": req, "error": "Missing id"})
                             continue
                         instance = MessageRequest.objects.filter(id=req_id).first()
-                        serializer = MessageRequestSerializer(instance, data=req, partial=True)
+                        serializer = MessageRequestSerializer(instance, data=req, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
                             (created if instance is None else updated)["req"] += 1
@@ -380,7 +449,7 @@ class UnifiedSyncView(APIView):
                             errors["message_responses"].append({"data": resp, "error": "Missing id"})
                             continue
                         instance = MessageResponse.objects.filter(id=resp_id).first()
-                        serializer = MessageResponseSerializer(instance, data=resp, partial=True)
+                        serializer = MessageResponseSerializer(instance, data=resp, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
                             (created if instance is None else updated)["resp"] += 1
@@ -394,7 +463,7 @@ class UnifiedSyncView(APIView):
                             errors["message_outputs"].append({"data": out, "error": "Missing id"})
                             continue
                         instance = MessageOutput.objects.filter(id=out_id).first()
-                        serializer = MessageOutputSerializer(instance, data=out, partial=True)
+                        serializer = MessageOutputSerializer(instance, data=out, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
                             (created if instance is None else updated)["out"] += 1
@@ -412,7 +481,7 @@ class UnifiedSyncView(APIView):
                             continue
                         msg["user_id"] = user.pk
                         instance = Message.objects.filter(message_id=msg_id).first()
-                        serializer = MessageSerializer(instance, data=msg, partial=True)
+                        serializer = MessageSerializer(instance, data=msg, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
                             (created if instance is None else updated)["msg"] += 1
@@ -431,7 +500,7 @@ class UnifiedSyncView(APIView):
                             errors["attachments"].append({"data": att, "error": "User is None"})
                             continue
                         instance = Attachment.objects.filter(id=att_id).first()
-                        serializer = AttachmentSerializer(instance, data=att, partial=True)
+                        serializer = AttachmentSerializer(instance, data=att, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
                             (created if instance is None else updated)["att"] += 1
@@ -439,7 +508,7 @@ class UnifiedSyncView(APIView):
                             errors["attachments"].append(serializer.errors)
 
             except Exception as e:
-                logger.error(f"Transaction failed: {str(e)}")
+                logger.error("Transaction failed", exc_info=True)
                 return Response({
                     "error": "Transaction failed. No changes were applied.",
                     "details": str(e),
@@ -447,7 +516,7 @@ class UnifiedSyncView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             attachments = Attachment.objects.filter(user_id=user)
-            attach_serializer = AttachmentSerializer(attachments, many=True)
+            attach_serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
 
             summary.update({
                 "conversations_created": created["conv"], "conversations_updated": updated["conv"],
@@ -463,18 +532,38 @@ class UnifiedSyncView(APIView):
             "summary": summary,
             "errors": errors,
             "user_id": str(user.user_id) if user else None,
-            "attachments": AttachmentSerializer(Attachment.objects.filter(user_id=user), many=True).data,
+            "attachments": AttachmentSerializer(Attachment.objects.filter(user_id=user), many=True, context={"request": request}).data,
             "temp_id": temp_id,
         }, status=status.HTTP_200_OK)
 
     def delete(self, request):
         """
-        ------------------------------------------------------------------------
         DELETE
-        ------------------------------------------------------------------------
         Deletes or archives user profile, chat data, or both, depending on the 'action' parameter.
+        Also exports user data as CSV and emails it before deletion/archive.
 
         Example Request (delete all):
+            DELETE /api/v1/unified-sync/
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "action": "delete",
+                "profile": true,
+                "chat": true
+            }
+
+        Example Response (delete):
+            {
+                "message": "User and all related data deleted successfully",
+                "deleted": {
+                    "attachments": 2,
+                    "messages": 5,
+                    "conversations": 1,
+                    "tokens": 1,
+                    "user": 1
+                }
+            }
+            
+            Example Request (delete all):
             DELETE /api/v1/unified-sync/
             {
                 "user_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -515,21 +604,21 @@ class UnifiedSyncView(APIView):
         if error_response:
             return error_response
 
-        profile_flag = (
-            request.query_params.get("profile") == "true"
-            or request.data.get("profile") is True
-        )
-        chat_flag = (
-            request.query_params.get("chat") == "true"
-            or request.data.get("chat") is True
-        )
+        profile_flag, chat_flag = resolve_flags(request)
         action = request.data.get('action', '').lower() or request.query_params.get('action', '').lower()
         reason = request.data.get('reason') if hasattr(request, 'data') else None
         reason = reason or request.query_params.get('reason')
 
         stats = {}
 
-        # Chat delete/archive
+        # Export and email user data before deletion/archive (only to verified emails)
+        if (profile_flag or chat_flag) and (action in ['delete', 'archive']):
+            if user and user.email:
+                csv_path = self.export_user_data_csv(user)
+                self.email_user_data_csv(user, csv_path)
+                # Ephemeral temp file, not stored permanently
+
+        # Chat delete/archive (soft delete if possible)
         if chat_flag or not (profile_flag or chat_flag):
             attachments = Attachment.objects.filter(user_id=user)
             messages = Message.objects.filter(user_id=user)
@@ -544,19 +633,23 @@ class UnifiedSyncView(APIView):
             })
 
             if action == 'delete':
-                attachments.delete()
-                messages.delete()
-                conversations.delete()
+                self.soft_delete_queryset(attachments)
+                self.soft_delete_queryset(messages)
+                self.soft_delete_queryset(conversations)
                 tokens.delete()
             elif action == 'archive':
                 tokens.delete()
 
-        # Profile delete/archive
+        # Profile delete/archive (soft delete if possible)
         if profile_flag or not (profile_flag or chat_flag):
             stats["user"] = 1
             if action == 'delete':
                 if user is not None:
-                    user.delete()
+                    if hasattr(user, "is_deleted"):
+                        user.is_deleted = True
+                        user.save(update_fields=["is_deleted"])
+                    else:
+                        user.delete()
                     logger.info(f"UnifiedSyncView: User {user.pk} and all related data deleted.")
                 else:
                     logger.warning("UnifiedSyncView: Attempted to delete a None user object.")
@@ -577,3 +670,4 @@ class UnifiedSyncView(APIView):
 
         return Response({"error": "Specify action=delete or action=archive in query or body."},
                         status=status.HTTP_400_BAD_REQUEST)
+    

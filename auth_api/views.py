@@ -173,6 +173,7 @@ logger = logging.getLogger('auth_api')
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 """
+
 class RegisterView(APIView):
     """
     API endpoint to handle user registration.
@@ -208,6 +209,41 @@ class RegisterView(APIView):
             user = Custom_User.objects.filter(temp_id=temp_id).first()
 
         created = False
+        
+        # SECURITY: If the identifier already exists, do NOT issue tokens or return user data.
+        # - If the account is unverified, (re)send the verification PIN and instruct the client to check email.
+        # - If the account is already verified, return a generic "invalid credentials." response.
+        if user:
+            logger.info(f"[RegisterView] Registration attempted for existing account: email={email} identifier={user_id or username or temp_id}")
+            try:
+                if not getattr(user, 'email_verified', False):
+                    # Ensure a PIN exists and send it (best-effort, non-fatal)
+                    pin = getattr(user, 'profile_email_pin', None)
+                    if not pin:
+                        pin = f"{random.randint(10000, 99999)}"
+                        user.profile_email_pin = pin
+                        user.profile_email_pin_created = timezone.now()
+                        try:
+                            user.save(update_fields=['profile_email_pin', 'profile_email_pin_created'])
+                        except Exception:
+                            user.save()
+                    try:
+                        send_mail(
+                            subject="Your Email Verification PIN",
+                            message=f"Your verification PIN is: {pin}",
+                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
+                            recipient_list=[user.email],
+                            fail_silently=True,
+                        )
+                    except Exception:
+                        logger.warning("[RegisterView] Failed to resend verification PIN to existing user (non-fatal)")
+                    # Inform client to check email — do NOT issue tokens or return user data
+                    return Response({'detail': 'Email already registered. Check your email for verification PIN.'}, status=status.HTTP_200_OK)
+            except Exception:
+                logger.exception("[RegisterView] Error while handling existing user during registration attempt")
+            # Generic response to avoid leaking any info for verified accounts
+            return Response({'detail': 'invalid credentials.'}, status=status.HTTP_409_CONFLICT)
+        
         if not user:
             # Try to create new user
             serializer = RegisterSerializer(data=request.data)
@@ -287,7 +323,12 @@ class RegisterView(APIView):
                 "local_only": conv.local_only,
             }
             conv_messages = []
-            for msg in conv.messages.all():
+            # Try the preferred related name first, fall back to the default reverse relation
+            try:
+                related_msgs = conv.messages.all()
+            except Exception:
+                related_msgs = conv.message_set.all()
+            for msg in related_msgs:
                 msg_data = {
                     "message_id": str(msg.message_id),
                     "conversation_id": str(conv.conversation_id),
@@ -1332,38 +1373,6 @@ class VerifyLoginOTPView(APIView):
             'access_token': str(refresh.access_token),
             'refresh_token': str(refresh),
         }, status=status.HTTP_200_OK)
-
-
-class LoginWithOTPView(APIView):
-    """
-    Handles user login with OTP (One Time Password).
-
-    Example API Request (POST /api/v1/auth_api/login-with-otp/):
-        {
-            "email": "john@example.com"
-        }
-
-    Example API Response (200):
-        {
-            "message": "OTP sent successfully."
-        }
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        logger.info(f"[LoginWithOTPView] Incoming OTP login request: data={request.data}")
-        serializer = LoginSerializer(data=request.data, context={'request': request})
-        try:
-            serializer.is_valid(raise_exception=True)
-            user = serializer.validated_data['user']
-            # Here you would generate and send the OTP
-            resp_data = {"message": "OTP sent successfully."}
-            logger.info(f"[LoginWithOTPView] OTP sent: status=200, user_id={user.pk}, resp={resp_data}")
-            return Response(resp_data, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.exception(f"[LoginWithOTPView] Login with OTP failed: {str(e)}, req={request.data}")
-            return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST)
-        
 
 class EnableTOTPView(APIView):
     """

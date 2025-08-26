@@ -174,6 +174,7 @@ logger = logging.getLogger('auth_api')
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 """
+
 class RegisterView(APIView):
     """
     API endpoint to handle user registration.
@@ -221,20 +222,35 @@ class RegisterView(APIView):
                     pin = getattr(user, 'profile_email_pin', None)
                     if not pin:
                         pin = f"{random.randint(10000, 99999)}"
-                        user.profile_email_pin = pin
-                        user.profile_email_pin_created = timezone.now()
+                        user.email_pin = pin
+                        user.email_pin_created = timezone.now()
                         try:
-                            user.save(update_fields=['profile_email_pin', 'profile_email_pin_created'])
+                            user.save(update_fields=['email_pin', 'email_pin_created'])
                         except Exception:
                             user.save()
                     try:
-                        send_mail(
+                        # Use send_verified_email (Zeruh + Maileroo) then fallback to send_mail if not sent
+                        result = send_verified_email(
                             subject="Your Email Verification PIN",
                             message=f"Your verification PIN is: {pin}",
-                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
                             recipient_list=[user.email],
-                            fail_silently=True,
+                            html_message=f"<b>Your verification PIN is: {pin}</b>",
+                            verify_with_zeruh=True,
                         )
+                        logger.info(f"[RegisterView] Resend PIN result: {result}")
+                        recipient_result = result.get(user.email) if isinstance(result, dict) else None
+                        if not recipient_result or not recipient_result.get('sent'):
+                            try:
+                                send_mail(
+                                    subject="Your Email Verification PIN",
+                                    message=f"Your verification PIN is: {pin}",
+                                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
+                                    recipient_list=[user.email],
+                                    fail_silently=False,
+                                )
+                                logger.info(f"[RegisterView] Fallback direct send_mail succeeded for {user.email}")
+                            except Exception as e:
+                                logger.warning(f"[RegisterView] Fallback direct send_mail failed for {user.email}: {e}")
                     except Exception:
                         logger.warning("[RegisterView] Failed to resend verification PIN to existing user (non-fatal)")
                     # Inform client to check email — do NOT issue tokens or return user data

@@ -106,7 +106,6 @@ class MailerooClient:
             logger.exception("Maileroo send_email exception for %s: %s", to_email, e)
             return {"success": False, "status_code": None, "body": None, "error": str(e)}
 
-
 def send_verified_email(
     subject: str,
     message: str,
@@ -115,144 +114,138 @@ def send_verified_email(
     html_message: Optional[str] = None,
     verify_with_zeruh: bool = True,
     zeruh_min_score: int = 10,
+    maileroo_max_attempts: int = 3,
+    maileroo_backoff_seconds: float = 0.5,
+    allow_smtp_fallback: bool = False,   # default: do NOT fallback to Django SMTP
+    smtp_max_attempts: int = 3,
+    smtp_backoff_seconds: float = 0.5,
     fail_silently: bool = False,
-    max_attempts: int = 3,
-    attempt_backoff_seconds: float = 0.5,
-    use_maileroo_if_deliverable: bool = True,
     **kwargs
 ) -> dict:
     """
-    Send an email after verifying recipients with Zeruh and optionally using Maileroo.
-
-    Returns per-recipient results:
-      {
-        "<email>": {
-           "sent": bool,
-           "attempts": int,
-           "verification": {...} | None,
-           "reason": str | None,
-           "error": str | None,
-           "maileroo": {...} | None
-        }
-      }
+    Strict flow:
+      - Verify recipient via Zeruh (required when verify_with_zeruh=True).
+      - If verdict is deliverable/risky and score >= zeruh_min_score:
+          Attempt Maileroo send (with retries). Return per-recipient maileroo result.
+      - If verdict is undeliverable/low-score -> do NOT send, return reason.
+      - If Zeruh API call fails:
+          - If allow_smtp_fallback==True: attempt Django SMTP (best-effort).
+          - Otherwise do NOT send and return verification error.
     """
     results = {}
     if not recipient_list:
         return results
 
     for email in recipient_list:
-        result = {"sent": False, "attempts": 0, "verification": None, "reason": None, "error": None, "maileroo": None}
-        proceed_to_send = True
-        zeruh_failed = False
-        maileroo_attempted = False
+        r = {"sent": False, "attempts": 0, "verification": None, "reason": None, "error": None, "maileroo": None, "smtp": None}
 
-        # Zeruh verification
+        # 1) Zeruh verification (if requested)
+        verification = None
         if verify_with_zeruh:
             try:
                 verification = ZeruhEmailVerifier.verify(email)
             except Exception as e:
-                logger.exception("Zeruh verify unexpected error for %s: %s", email, e)
+                logger.exception("Zeruh verify failed unexpectedly for %s: %s", email, e)
                 verification = None
+            r["verification"] = verification
 
-            result["verification"] = verification
             if not verification or not verification.get("success"):
-                # Zeruh API error/unavailable -> attempt fallback send but mark verification failure
-                zeruh_failed = True
-                result["reason"] = "Zeruh error or unavailable"
-                proceed_to_send = True  # allow fallback send
-                logger.warning("Zeruh verify unavailable for %s; attempting fallback send", email)
+                r["reason"] = "Zeruh unavailable or error"
+                # Do not proceed to Maileroo; allow optional SMTP fallback below if configured
+                if not allow_smtp_fallback:
+                    results[email] = r
+                    continue
             else:
                 verdict = verification.get("result", {}) or {}
                 status = verdict.get("status")
-                score = verdict.get("score", 0) or 0
+                score = (verdict.get("score") or 0)
                 if status not in ("deliverable", "risky") or score < zeruh_min_score:
-                    result["reason"] = f"Zeruh status={status}, score={score}"
-                    proceed_to_send = False
-                    logger.info("Skipping send to %s due to Zeruh verdict: %s", email, result["reason"])
-                else:
-                    proceed_to_send = True
-
-        if not proceed_to_send:
-            results[email] = result
-            continue
-
-        # If deliverable and Maileroo is configured & allowed, try Maileroo first
-        if use_maileroo_if_deliverable and MAILEROO_API_KEY and result.get("verification"):
-            verdict = result["verification"].get("result", {}) or {}
-            status = verdict.get("status")
-            score = (verdict.get("score") or 0)
-            if status in ("deliverable", "risky") and score >= zeruh_min_score:
-                maileroo_attempted = True
-                maileroo_resp = MailerooClient.send_email(subject, message, email, from_email=from_email, html_message=html_message)
-                result["maileroo"] = maileroo_resp
-                if maileroo_resp.get("success"):
-                    result["sent"] = True
-                    result["attempts"] = 1
-                    logger.info("Maileroo delivered email to %s", email)
-                    results[email] = result
+                    r["reason"] = f"Zeruh verdict prevents send: status={status}, score={score}"
+                    results[email] = r
                     continue
-                else:
-                    logger.warning("Maileroo failed for %s: %s; falling back to Django backend", email, maileroo_resp.get("error"))
+                # else: eligible to send via Maileroo
 
-        # Attempt sending with retries via Django backend (fallback)
-        attempts = 0
-        sent = False
-        last_error = None
-        for attempt in range(1, max_attempts + 1):
-            attempts = attempt
-            try:
-                msg = EmailMessage(
-                    subject=subject,
-                    body=message,
-                    from_email=from_email or getattr(settings, "DEFAULT_FROM_EMAIL", None),
-                    to=[email],
-                )
-                if html_message:
-                    # Use HTML body if provided
-                    msg.content_subtype = "html"
-                    msg.body = html_message
-                sent_count = msg.send(fail_silently=fail_silently)
-                result["attempts"] = attempts
-                if sent_count and sent_count > 0:
-                    result["sent"] = True
-                    sent = True
-                    logger.info("Email sent to %s (attempt %d) via Django backend", email, attempt)
-                    break
-                else:
-                    last_error = "Email backend reported 0 delivered"
-                    logger.warning("Email backend returned 0 for %s on attempt %d", email, attempt)
-            except (smtplib.SMTPException, socket.error) as e:
-                last_error = str(e)
-                logger.warning("SMTP/socket error sending to %s on attempt %d: %s", email, attempt, e)
-                if fail_silently:
-                    # if failing silently, do not raise; just record and break to avoid noisy retries
-                    break
-            except Exception as e:
-                last_error = str(e)
-                logger.exception("Unexpected error sending to %s on attempt %d: %s", email, attempt, e)
-                if fail_silently:
-                    break
+        # 2) Maileroo: attempt as primary sender if configured
+        maileroo_used = False
+        if MAILEROO_API_KEY:
+            maileroo_used = True
+            maileroo_attempts = 0
+            maileroo_success = False
+            last_maileroo_err = None
+            for attempt in range(1, maileroo_max_attempts + 1):
+                maileroo_attempts = attempt
+                try:
+                    maileroo_resp = MailerooClient.send_email(subject, message, email, from_email=from_email, html_message=html_message)
+                    r["maileroo"] = maileroo_resp
+                    if maileroo_resp.get("success"):
+                        r["sent"] = True
+                        r["attempts"] = maileroo_attempts
+                        maileroo_success = True
+                        logger.info("Maileroo sent to %s (attempt %d)", email, attempt)
+                        break
+                    else:
+                        last_maileroo_err = maileroo_resp.get("error") or f"HTTP {maileroo_resp.get('status_code')}"
+                        logger.warning("Maileroo response for %s attempt %d: %s", email, attempt, last_maileroo_err)
+                except Exception as e:
+                    last_maileroo_err = str(e)
+                    logger.exception("Maileroo exception for %s attempt %d: %s", email, attempt, e)
 
-            # backoff before next attempt
-            time.sleep(attempt_backoff_seconds * (2 ** (attempt - 1)))
+                time.sleep(maileroo_backoff_seconds * (2 ** (attempt - 1)))
 
-        if not sent:
-            result["sent"] = False
-            result["attempts"] = attempts
-            result["error"] = last_error
-            if zeruh_failed and last_error:
-                result["reason"] = f"Zeruh unavailable and send failed: {last_error}"
-            elif zeruh_failed:
-                result["reason"] = "Zeruh unavailable and send not confirmed"
-            else:
-                result["reason"] = result.get("reason") or "send failed"
+            if maileroo_success:
+                results[email] = r
+                continue
 
-            logger.error("Failed to send email to %s after %d attempts: %s", email, attempts, last_error)
+            # Maileroo exhausted and failed
+            r["reason"] = r.get("reason") or "Maileroo failed"
+            r["error"] = last_maileroo_err
+        else:
+            r["reason"] = r.get("reason") or "Maileroo not configured"
 
-        # ensure we report maileroo attempt if attempted
-        if maileroo_attempted and result.get("maileroo") is None:
-            result["maileroo"] = {"success": False, "error": "maileroo attempted but no response"}
+        # 3) Optional SMTP fallback (only if explicitly allowed)
+        if allow_smtp_fallback:
+            smtp_attempts = 0
+            smtp_sent = False
+            last_smtp_err = None
+            for attempt in range(1, smtp_max_attempts + 1):
+                smtp_attempts = attempt
+                try:
+                    msg = EmailMessage(
+                        subject=subject,
+                        body=message,
+                        from_email=from_email or getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                        to=[email],
+                    )
+                    if html_message:
+                        msg.content_subtype = "html"
+                        msg.body = html_message
+                    sent_count = msg.send(fail_silently=fail_silently)
+                    r["smtp"] = {"sent_count": sent_count}
+                    r["attempts"] = smtp_attempts
+                    if sent_count and sent_count > 0:
+                        r["sent"] = True
+                        smtp_sent = True
+                        logger.info("SMTP sent to %s (attempt %d)", email, attempt)
+                        break
+                    else:
+                        last_smtp_err = "Email backend reported 0 delivered"
+                        logger.warning("SMTP backend returned 0 for %s on attempt %d", email, attempt)
+                except Exception as e:
+                    last_smtp_err = str(e)
+                    logger.exception("SMTP exception for %s on attempt %d: %s", email, attempt, e)
+                    if fail_silently:
+                        break
 
-        results[email] = result
+                time.sleep(smtp_backoff_seconds * (2 ** (attempt - 1)))
+
+            if smtp_sent:
+                results[email] = r
+                continue
+
+            r["error"] = r.get("error") or last_smtp_err
+            r["reason"] = r.get("reason") or "SMTP fallback failed"
+
+        # 4) If we get here, nothing sent
+        results[email] = r
 
     return results

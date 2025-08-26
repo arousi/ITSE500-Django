@@ -806,7 +806,7 @@ class OAuthCallbackBase(APIView):
                 'user_id': str(user.pk),
                 'access_token': str(refresh.access_token),
                 'refresh_token': str(refresh),
-                'provider_access_token': access_token if getattr(settings, 'OPENROUTER_EXPOSE_PROVIDER_TOKEN', True) else None,
+                'provider_access_token': access_token if getattr(settings, 'OPENROUTER_EXPOSE_PROVIDER_TOKEN', True) else None, #* User's api key secrete is given back to him.
                 'provider_refresh_token': None,
                 'provider_token_type': token_type,
                 'provider_scope': scope,

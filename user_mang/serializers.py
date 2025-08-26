@@ -1,4 +1,3 @@
-# serializers.py
 from rest_framework import serializers
 
 from chat_api.models.conversation import Conversation
@@ -50,6 +49,9 @@ class MessageResponseSerializer(serializers.ModelSerializer):
     Serialize a provider/model *response* aggregate (metadata + usage + settings).
     Primary key: `response_id` (string).
     """
+
+    # Expose user as read-only PK if present
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = MessageResponse
@@ -105,21 +107,22 @@ class MessageOutputSerializer(serializers.ModelSerializer):
 class AttachmentSerializer(serializers.ModelSerializer):
     """
     Serialize an artifact attached to a message (image/pdf/embedding/etc.).
-    - `encrypted_blob` and image/file URLs are returned as absolute URLs.
-    - Validates `type` against a small allowed set for consistency.
+    - Accepts 'id' in payload as an alias to attachment_id to match the UnifiedSyncView.
+    - user_id is read-only and the view should call serializer.save(user=user) on create.
     """
 
-    # Present related FKs as primary keys; write requires valid PKs
+    # Allow clients to send "id" mapping to attachment_id (convenience)
+    id = serializers.CharField(source="attachment_id", required=False)
     user_id = serializers.PrimaryKeyRelatedField(read_only=True)
     conversation_id = serializers.PrimaryKeyRelatedField(queryset=Conversation.objects.all())
     message_id = serializers.PrimaryKeyRelatedField(queryset=Message.objects.all())
 
-    # File fields -> URLs in output
     encrypted_blob = serializers.FileField(use_url=True, required=False, allow_null=True)
 
     class Meta:
         model = Attachment
         fields = [
+            "id",  # alias -> attachment_id
             "attachment_id",
             "user_id",
             "conversation_id",
@@ -138,7 +141,8 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "key_ref",
             "created_at",
         ]
-        read_only_fields = ["attachment_id", "created_at"]
+        # allow attachment_id to be set when creating (client-provided id) so not read-only
+        read_only_fields = ["created_at"]
 
     def validate_type(self, value: str):
         allowed = {"image", "embedding", "pdf", "other"}
@@ -159,7 +163,6 @@ class MessageSerializer(serializers.ModelSerializer):
     - File fields (`img_Url`, `doc_url`) are rendered as URLs.
     """
 
-    # FK/1-1 fields for writing (accept PKs) ...
     conversation_id = serializers.PrimaryKeyRelatedField(queryset=Conversation.objects.all())
     request_id = serializers.PrimaryKeyRelatedField(
         queryset=MessageRequest.objects.all(), required=False, allow_null=True
@@ -171,20 +174,18 @@ class MessageSerializer(serializers.ModelSerializer):
         queryset=MessageOutput.objects.all(), required=False, allow_null=True
     )
 
-    # ... and nested read-only views
     request = MessageRequestSerializer(source="request_id", read_only=True)
     response = MessageResponseSerializer(source="response_id", read_only=True)
     output = MessageOutputSerializer(source="output_id", read_only=True)
 
-    # Files as URLs when present
     img_Url = serializers.ImageField(use_url=True, required=False, allow_null=True)
     doc_url = serializers.FileField(use_url=True, required=False, allow_null=True)
 
     class Meta:
         model = Message
         fields = [
-            "message_id",
-            "user_id",               # set by view; keep read-only to avoid client spoofing
+            "message_id",        # allow client to provide message_id for upsert
+            "user_id",           # set by view; kept read-only to avoid spoofing
             "conversation_id",
             "request_id",
             "response_id",
@@ -197,12 +198,12 @@ class MessageSerializer(serializers.ModelSerializer):
             "has_embedding",
             "has_document",
             "doc_url",
-            # nested read-only projections
             "request",
             "response",
             "output",
         ]
-        read_only_fields = ["message_id", "timestamp", "user_id"]
+        # allow message_id to be provided by client (used as external pk for upsert)
+        read_only_fields = ["timestamp", "user_id"]
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -217,7 +218,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = [
-            "conversation_id",
+            "conversation_id",   # allow client to provide conversation_id for upsert/create
             "user_id",
             "title",
             "created_at",
@@ -225,4 +226,5 @@ class ConversationSerializer(serializers.ModelSerializer):
             "local_only",
             "messages",
         ]
-        read_only_fields = ["conversation_id", "created_at", "updated_at", "user_id"]
+        # keep created/updated/user read-only but allow providing conversation_id for upsert
+        read_only_fields = ["created_at", "updated_at", "user_id"]

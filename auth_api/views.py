@@ -114,6 +114,66 @@ def fetch_google_userinfo(access_token: str):
 
 logger = logging.getLogger('auth_api')
 
+""" class VisitorLoginView(APIView):
+
+    API endpoint to allow a user to start a guest session as a Visitor (no account required).
+    Handles creation of a Visitor object and returns session details.
+
+    Example API Request (POST /api/v1/auth_api/visitor-login/):
+        {
+            "device_id": "abc123xyz"
+        }
+
+    Example API Response (201):
+        {
+            "message": "Visitor session started.",
+            "anon_id": "e7b8c1d2-...",
+            "device_id": "abc123xyz",
+            "date_joined": "2025-08-01T12:34:56Z"
+        }
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        Handle POST request to start a visitor session.
+        Validates input, creates a Custom_User with is_visitor=True, and returns session info with JWT access token.
+
+        logger.info(f"[VisitorLoginView] Incoming visitor login request: data={request.data}")
+        serializer = VisitorSerializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+            device_id = serializer.validated_data.get('device_id')
+            # Try to find an existing guest user for this device_id
+            guest_user = Custom_User.objects.filter(device_id=device_id, is_visitor=True).first()
+            if not guest_user:
+                # Create a new guest user
+                guest_user = Custom_User.objects.create(
+                    device_id=device_id,
+                    is_visitor=True,
+                )
+            # Generate a temporary JWT token for the guest user
+            refresh = RefreshToken.for_user(guest_user)
+            access_token = str(refresh.access_token)
+            resp_data = {
+                "message": "Visitor session started.",
+                "anon_id": str(getattr(guest_user, 'anon_id', guest_user.pk)),
+                "device_id": guest_user.device_id,
+                "date_joined": guest_user.date_joined,
+                "access_token": access_token,
+                "refresh_token": str(refresh),
+            }
+            logger.info(f"[VisitorLoginView] Visitor login success: status=201, resp={resp_data}")
+            return Response(resp_data, status=status.HTTP_201_CREATED)
+        except serializers.ValidationError as e:
+            logger.warning(f"[VisitorLoginView] Visitor login failed: status=400, errors={e.detail}, req={request.data}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception(f"[VisitorLoginView] Unexpected visitor login error: {str(e)}, req={request.data}")
+            return Response({"detail": "Visitor login failed due to a server error."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+"""
 class RegisterView(APIView):
     """
     API endpoint to handle user registration.
@@ -149,6 +209,41 @@ class RegisterView(APIView):
             user = Custom_User.objects.filter(temp_id=temp_id).first()
 
         created = False
+        
+        # SECURITY: If the identifier already exists, do NOT issue tokens or return user data.
+        # - If the account is unverified, (re)send the verification PIN and instruct the client to check email.
+        # - If the account is already verified, return a generic "invalid credentials." response.
+        if user:
+            logger.info(f"[RegisterView] Registration attempted for existing account: email={email} identifier={user_id or username or temp_id}")
+            try:
+                if not getattr(user, 'email_verified', False):
+                    # Ensure a PIN exists and send it (best-effort, non-fatal)
+                    pin = getattr(user, 'profile_email_pin', None)
+                    if not pin:
+                        pin = f"{random.randint(10000, 99999)}"
+                        user.profile_email_pin = pin
+                        user.profile_email_pin_created = timezone.now()
+                        try:
+                            user.save(update_fields=['profile_email_pin', 'profile_email_pin_created'])
+                        except Exception:
+                            user.save()
+                    try:
+                        send_mail(
+                            subject="Your Email Verification PIN",
+                            message=f"Your verification PIN is: {pin}",
+                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
+                            recipient_list=[user.email],
+                            fail_silently=True,
+                        )
+                    except Exception:
+                        logger.warning("[RegisterView] Failed to resend verification PIN to existing user (non-fatal)")
+                    # Inform client to check email — do NOT issue tokens or return user data
+                    return Response({'detail': 'Email already registered. Check your email for verification PIN.'}, status=status.HTTP_200_OK)
+            except Exception:
+                logger.exception("[RegisterView] Error while handling existing user during registration attempt")
+            # Generic response to avoid leaking any info for verified accounts
+            return Response({'detail': 'invalid credentials.'}, status=status.HTTP_409_CONFLICT)
+        
         if not user:
             serializer = RegisterSerializer(data=request.data)
             try:
@@ -214,9 +309,7 @@ class RegisterView(APIView):
                 "local_only": conv.local_only,
             }
             conv_messages = []
-            # Query Message objects directly to avoid relying on a related attribute on Conversation
-            msgs = Message.objects.filter(conversation=conv)
-            for msg in msgs:
+            for msg in conv.messages.all():
                 msg_data = {
                     "message_id": str(msg.message_id),
                     "conversation_id": str(conv.conversation_id),
@@ -1358,6 +1451,7 @@ class VerifyLoginOTPView(APIView):
             'refresh_token': str(refresh),
         }, status=status.HTTP_200_OK)
 
+
 class LoginWithOTPView(APIView):
     """
     Handles user login with OTP (One Time Password).
@@ -1379,10 +1473,7 @@ class LoginWithOTPView(APIView):
         serializer = LoginSerializer(data=request.data, context={'request': request})
         try:
             serializer.is_valid(raise_exception=True)
-            validated_data = getattr(serializer, 'validated_data', None)
-            user = validated_data.get('user') if validated_data and 'user' in validated_data else None
-            if not user:
-                return Response({"detail": "User not found or invalid credentials."}, status=status.HTTP_400_BAD_REQUEST)
+            user = serializer.validated_data['user']
             # Here you would generate and send the OTP
             resp_data = {"message": "OTP sent successfully."}
             logger.info(f"[LoginWithOTPView] OTP sent: status=200, user_id={user.pk}, resp={resp_data}")
@@ -1390,6 +1481,7 @@ class LoginWithOTPView(APIView):
         except Exception as e:
             logger.exception(f"[LoginWithOTPView] Login with OTP failed: {str(e)}, req={request.data}")
             return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST)
+        
 
 class EnableTOTPView(APIView):
     """

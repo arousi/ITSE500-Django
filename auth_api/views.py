@@ -273,6 +273,21 @@ class RegisterView(APIView):
                         verify_with_zeruh=True,
                     )
                     logger.info(f"[RegisterView] PIN email send result: {result}")
+                    # fallback: if Zeruh prevented send, try direct send_mail (best-effort)
+                    recipient_result = result.get(user.email) if isinstance(result, dict) else None
+                    if not recipient_result or not recipient_result.get('sent'):
+                        try:
+                            send_mail(
+                                subject="Your Email Verification PIN",
+                                message=f"Your verification PIN is: {pin}",
+                                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+                                recipient_list=[user.email],
+                                html_message=f"<b>Your verification PIN is: {pin}</b>",
+                                fail_silently=False,
+                            )
+                            logger.info(f"[RegisterView] Fallback direct send_mail succeeded for {user.email}")
+                        except Exception as e:
+                            logger.warning(f"[RegisterView] Fallback direct send_mail failed for {user.email}: {e}")
                 except Exception as e:
                     logger.warning(f"[RegisterView] PIN email send failed (non-fatal): {e}")
                 created = True

@@ -68,7 +68,7 @@ def send_verified_email(
     from_email=None,
     html_message=None,
     verify_with_zeruh=True,
-    zeruh_min_score=70,
+    zeruh_min_score=10,
     fail_silently=False,
     max_attempts: int = 3,
     attempt_backoff_seconds: float = 0.5,

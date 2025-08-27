@@ -4,8 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import Custom_User
-from user_mang.serializers import (ConversationSerializer,  # <-- Add this import
-                                    AttachmentSerializer,
+from user_mang.serializers import (ConversationSerializer,                                    AttachmentSerializer,
                                     MessageSerializer,
                                     MessageRequestSerializer,
                                     MessageResponseSerializer,
@@ -127,7 +126,7 @@ class UnifiedSyncView(APIView):
             user.save()
 
     def resolve_user(self, request):
-        """Resolve the user for this request.
+        """Resolve the user for this request. 
 
         Behavior summary (new additions):
         - Authenticated requests operate on `request.user` and any client-supplied `user_id` is ignored for writes.

@@ -208,8 +208,8 @@ class UnifiedSyncView(APIView):
         writer.writerow(["Section", "conversation_id", "title"])
         for conv in conversations:
             writer.writerow(["Conversation", conv.conversation_id, conv.title])
-        # Attachments
-        attachments = Attachment.objects.filter(user_id=user)
+    # Attachments
+        attachments = Attachment.objects.filter(message_id__user_id=user)
         writer.writerow([])
         writer.writerow(["Section", "id", "type", "file_path"])
         for att in attachments:
@@ -339,7 +339,7 @@ class UnifiedSyncView(APIView):
         if chat_flag:
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
             conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
-            attachments = Attachment.objects.filter(user_id=user)
+            attachments = Attachment.objects.filter(message_id__user_id=user)
             attach_serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
             response_data["conversations"] = conv_serializer.data
             response_data["attachments"] = attach_serializer.data
@@ -347,7 +347,7 @@ class UnifiedSyncView(APIView):
         if not (profile_flag or chat_flag):
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
             conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
-            attachments = Attachment.objects.filter(user_id=user)
+            attachments = Attachment.objects.filter(message_id__user_id=user)
             attach_serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
             response_data["conversations"] = conv_serializer.data
             response_data["attachments"] = attach_serializer.data
@@ -586,7 +586,7 @@ class UnifiedSyncView(APIView):
                     "errors": errors
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            attachments = Attachment.objects.filter(user_id=user)
+            attachments = Attachment.objects.filter(message_id__user_id=user)
             attach_serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
 
             summary.update({
@@ -603,7 +603,7 @@ class UnifiedSyncView(APIView):
             "summary": summary,
             "errors": errors,
             "user_id": str(user.user_id) if user else None,
-            "attachments": AttachmentSerializer(Attachment.objects.filter(user_id=user), many=True, context={"request": request}).data,
+            "attachments": AttachmentSerializer(Attachment.objects.filter(message_id__user_id=user), many=True, context={"request": request}).data,
             "temp_id": temp_id,
         }, status=status.HTTP_200_OK)
 
@@ -691,7 +691,7 @@ class UnifiedSyncView(APIView):
 
         # Chat delete/archive (soft delete if possible)
         if chat_flag or not (profile_flag or chat_flag):
-            attachments = Attachment.objects.filter(user_id=user)
+            attachments = Attachment.objects.filter(message_id__user_id=user)
             messages = Message.objects.filter(user_id=user)
             conversations = Conversation.objects.filter(user_id=user)
             tokens = ProviderOAuthToken.objects.filter(user=user)

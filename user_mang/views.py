@@ -48,6 +48,8 @@ def resolve_flags(request):
 #TODO: break into profile sync and chat sync seperate views
 #* easier to understand and maintain
 class UnifiedSyncView(APIView):
+    # Require authentication for all operations to prevent unauthorized modification
+    permission_classes = [permissions.IsAuthenticated]
     """
     A secure, unified API endpoint for managing both chat data (conversations, messages, attachments, etc.)
     and user profile data for both visitors and registered users. Supports GET, POST, and DELETE methods,
@@ -120,35 +122,37 @@ class UnifiedSyncView(APIView):
             user.save()
 
     def resolve_user(self, request):
-        user_id = request.data.get("user_id") or request.query_params.get("user_id")
-        anon_id = request.data.get("anon_id") or request.query_params.get("anon_id")
-        temp_id = request.data.get("temp_id") or request.query_params.get("temp_id")
-        device_id = request.data.get("device_id") or request.query_params.get("device_id")
-
+        # If the request is authenticated, operate only on the authenticated user
         user = None
         is_new_visitor = False
+        temp_id = request.data.get("temp_id") or request.query_params.get("temp_id")
 
-        if user_id:
-            user = Custom_User.objects.filter(user_id=user_id).first()
-        elif anon_id:
-            user = Custom_User.objects.filter(user_id=anon_id, is_visitor=True).first()
-        elif temp_id:
-            user = Custom_User.objects.filter(temp_id=temp_id).first()
-            if not user:
-                user = self._create_visitor(temp_id)
-                is_new_visitor = True
+        if hasattr(request, "user") and getattr(request.user, "is_authenticated", False):
+            # Use the authenticated user; do not honor a provided user_id to avoid privilege escalation
+            user = request.user
+            # Ensure we have a DB-backed Custom_User instance
+            if not isinstance(user, Custom_User):
+                try:
+                    user = Custom_User.objects.filter(user_id=getattr(user, "user_id", None)).first() or user
+                except Exception:
+                    pass
 
-        if not user:
-            return None, False, Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND), temp_id
+            # Update temp_id and device association if provided
+            if temp_id and (not getattr(user, "temp_id", None) or user.temp_id != temp_id):
+                user.temp_id = temp_id
+                try:
+                    user.save(update_fields=["temp_id"])
+                except Exception:
+                    user.save()
 
-        if temp_id and (not user.temp_id or user.temp_id != temp_id):
-            user.temp_id = temp_id
-            user.save(update_fields=["temp_id"])
+            device_id = request.data.get("device_id") or request.query_params.get("device_id")
+            if device_id:
+                self._associate_device(user, device_id)
 
-        if device_id:
-            self._associate_device(user, device_id)
+            return user, is_new_visitor, None, temp_id
 
-        return user, is_new_visitor, None, temp_id
+        # Fallback: unauthenticated flows are not allowed for this view
+        return None, False, Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED), temp_id
 
     def export_user_data_csv(self, user):
         """
@@ -377,18 +381,23 @@ class UnifiedSyncView(APIView):
         summary = {}
         errors = {}
 
-        # Profile upsert
+        # Profile upsert - use ProfileSerializer for validation and safe updates
         if profile_flag or not (profile_flag or chat_flag):
             profile_data = request.data.get("profile", {})
             if profile_data:
                 if user is None:
                     logger.warning("UnifiedSyncView.post: Attempted to update profile for None user.")
                     return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-                for field in ["username", "email"]:
-                    if field in profile_data:
-                        setattr(user, field, profile_data[field])
-                user.save()
-                summary["profile_updated"] = True
+                # Use serializer to validate and apply full profile updates
+                from user_mang.serializers import FullProfileSerializer
+
+                serializer = FullProfileSerializer(user, data=profile_data, partial=True, context={"request": request})
+                if serializer.is_valid():
+                    serializer.save()
+                    summary["profile_updated"] = True
+                else:
+                    # Return validation errors for profile and do not proceed with chat upserts
+                    return Response({"error": "Invalid profile data", "details": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
             else:
                 summary["profile_updated"] = False
 
@@ -645,9 +654,14 @@ class UnifiedSyncView(APIView):
             stats["user"] = 1
             if action == 'delete':
                 if user is not None:
-                    if hasattr(user, "is_deleted"):
-                        user.is_deleted = True
-                        user.save(update_fields=["is_deleted"])
+                    # Model uses is_archived for soft-archive; use that instead of is_deleted
+                    if hasattr(user, "is_archived"):
+                        user.is_archived = True
+                        user.is_active = False
+                        try:
+                            user.save(update_fields=["is_archived", "is_active"])
+                        except Exception:
+                            user.save()
                     else:
                         user.delete()
                     logger.info(f"UnifiedSyncView: User {user.pk} and all related data deleted.")

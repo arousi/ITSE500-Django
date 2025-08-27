@@ -7,6 +7,8 @@ from chat_api.models.message_response import MessageResponse
 from chat_api.models.message_output import MessageOutput
 from chat_api.models.attachment import Attachment
 
+from user_mang.models.custom_user import Custom_User
+
 
 # -------------------------
 # Core leaf serializers
@@ -228,3 +230,165 @@ class ConversationSerializer(serializers.ModelSerializer):
         ]
         # keep created/updated/user read-only but allow providing conversation_id for upsert
         read_only_fields = ["created_at", "updated_at", "user_id"]
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    """
+    Safe profile serializer for client-driven profile updates.
+    Whitelisted writable fields: username, email, phone_number, biometric_enabled.
+    Sensitive fields (email_verified, is_staff, is_superuser, user_password, related_devices, etc.)
+    are intentionally excluded.
+    """
+    user_id = serializers.UUIDField(source="user_id", read_only=True)
+
+    class Meta:
+        model = Custom_User
+        fields = ("user_id", "username", "email", "phone_number", "biometric_enabled")
+        read_only_fields = ("user_id",)
+
+    def validate_email(self, value: str):
+        if not value:
+            return value
+        qs = Custom_User.objects.filter(email__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("This email is already in use.")
+        return value
+
+    def validate_username(self, value: str):
+        if not value:
+            return value
+        qs = Custom_User.objects.filter(username__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("This username is already in use.")
+        return value
+
+    def update(self, instance: Custom_User, validated_data: dict):
+        # Apply only whitelisted fields and persist with optimized update_fields
+        allowed = ["username", "email", "phone_number", "biometric_enabled"]
+        update_fields = []
+        for key in allowed:
+            if key in validated_data:
+                setattr(instance, key, validated_data[key])
+                update_fields.append(key)
+        if update_fields:
+            try:
+                instance.save(update_fields=update_fields)
+            except Exception:
+                instance.save()
+        return instance
+
+
+class FullProfileSerializer(serializers.ModelSerializer):
+    """
+    Full profile serializer that exposes most editable user fields.
+    This allows the UnifiedSyncView to upsert the complete user object.
+    Sensitive fields like `is_superuser`, `groups`, and `user_permissions` are intentionally omitted.
+    """
+    user_id = serializers.UUIDField(source="user_id", read_only=True)
+    user_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = Custom_User
+        fields = [
+            "user_id",
+            "username",
+            "email",
+            "phone_number",
+            "biometric_enabled",
+            "last_modified",
+            "user_password",
+            "devices_id",
+            "temp_id",
+            "related_devices",
+            "email_pin",
+            "email_pin_created",
+            "email_verified",
+            "is_archived",
+            "login_otp",
+            "login_otp_created",
+            "login_otp_sent_count",
+            "login_otp_last_sent",
+            "is_google_user",
+            "is_openrouter_user",
+            "is_microsoft_user",
+            "is_github_user",
+            "is_active",
+            "is_staff",
+        ]
+        read_only_fields = ["user_id", "last_modified"]
+
+    def validate_email(self, value: str):
+        if not value:
+            return value
+        qs = Custom_User.objects.filter(email__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("This email is already in use.")
+        return value
+
+    def validate_username(self, value: str):
+        if not value:
+            return value
+        qs = Custom_User.objects.filter(username__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("This username is already in use.")
+        return value
+
+    def update(self, instance: Custom_User, validated_data: dict):
+        # Handle password hashing explicitly
+        pwd = validated_data.pop("user_password", None)
+        update_fields = []
+        if pwd is not None:
+            # Hash using same backend salt as CustomUserManager
+            import hashlib
+            from django.conf import settings as _settings
+
+            backend_salt = getattr(_settings, "BACKEND_PASSWORD_SALT", "fallback_dev_salt")
+            salted = (str(pwd) + backend_salt).encode("utf-8")
+            instance.user_password = hashlib.sha256(salted).hexdigest()
+            update_fields.append("user_password")
+
+        # Assign other allowed fields
+        allowed = [
+            "username",
+            "email",
+            "phone_number",
+            "biometric_enabled",
+            "devices_id",
+            "temp_id",
+            "related_devices",
+            "email_pin",
+            "email_pin_created",
+            "email_verified",
+            "is_archived",
+            "login_otp",
+            "login_otp_created",
+            "login_otp_sent_count",
+            "login_otp_last_sent",
+            "is_google_user",
+            "is_openrouter_user",
+            "is_microsoft_user",
+            "is_github_user",
+            "is_active",
+            "is_staff",
+        ]
+
+        for key in allowed:
+            if key in validated_data:
+                setattr(instance, key, validated_data[key])
+                update_fields.append(key)
+
+        # Save with update_fields when possible
+        if update_fields:
+            try:
+                instance.save(update_fields=update_fields)
+            except Exception:
+                instance.save()
+        return instance

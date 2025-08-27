@@ -2,6 +2,7 @@ import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import Custom_User
 from user_mang.serializers import (ConversationSerializer,  # <-- Add this import
                                     AttachmentSerializer,
@@ -27,6 +28,9 @@ import json
 from auth_api.models import ProviderOAuthToken  
 import csv
 import tempfile
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.conf import settings
+from datetime import datetime, timedelta
 
 
 from prompeteer_server.utils.emailer import send_verified_email
@@ -48,8 +52,9 @@ def resolve_flags(request):
 #TODO: break into profile sync and chat sync seperate views
 #* easier to understand and maintain
 class UnifiedSyncView(APIView):
-    # Require authentication for all operations to prevent unauthorized modification
-    permission_classes = [permissions.IsAuthenticated]
+    # Accept JWT auth but allow explicit unauthenticated visitor flows controlled by resolve_user
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.AllowAny]
     """
     A secure, unified API endpoint for managing both chat data (conversations, messages, attachments, etc.)
     and user profile data for both visitors and registered users. Supports GET, POST, and DELETE methods,
@@ -122,22 +127,30 @@ class UnifiedSyncView(APIView):
             user.save()
 
     def resolve_user(self, request):
-        # If the request is authenticated, operate only on the authenticated user
+        """Resolve the user for this request.
+
+        Behavior summary (new additions):
+        - Authenticated requests operate on `request.user` and any client-supplied `user_id` is ignored for writes.
+        - Unauthenticated requests may only use `temp_id` to create/lookup a visitor. Device association is attached
+          when `device_id` is provided.
+        - A limited unauthenticated GET-by-UUID is allowed only when `allow_public_uuid=true` and the method is GET.
+
+        Returns: (user, is_new_visitor, error_response_or_none, temp_id_or_none)
+        """
         user = None
         is_new_visitor = False
         temp_id = request.data.get("temp_id") or request.query_params.get("temp_id")
+        device_id = request.data.get("device_id") or request.query_params.get("device_id")
 
+        # Authenticated path: always operate on request.user
         if hasattr(request, "user") and getattr(request.user, "is_authenticated", False):
-            # Use the authenticated user; do not honor a provided user_id to avoid privilege escalation
             user = request.user
-            # Ensure we have a DB-backed Custom_User instance
             if not isinstance(user, Custom_User):
                 try:
                     user = Custom_User.objects.filter(user_id=getattr(user, "user_id", None)).first() or user
                 except Exception:
                     pass
 
-            # Update temp_id and device association if provided
             if temp_id and (not getattr(user, "temp_id", None) or user.temp_id != temp_id):
                 user.temp_id = temp_id
                 try:
@@ -145,13 +158,34 @@ class UnifiedSyncView(APIView):
                 except Exception:
                     user.save()
 
-            device_id = request.data.get("device_id") or request.query_params.get("device_id")
             if device_id:
                 self._associate_device(user, device_id)
 
             return user, is_new_visitor, None, temp_id
 
-        # Fallback: unauthenticated flows are not allowed for this view
+        # Unauthenticated path: allow visitor creation/lookup via temp_id only
+        if temp_id:
+            user = Custom_User.objects.filter(temp_id=temp_id).first()
+            if not user:
+                user = self._create_visitor(temp_id)
+                is_new_visitor = True
+            if device_id:
+                self._associate_device(user, device_id)
+            return user, is_new_visitor, None, temp_id
+
+        # Allow unauthenticated limited GET-by-UUID only when explicitly requested
+        user_id = request.query_params.get("user_id") or request.data.get("user_id")
+        allow_public_uuid = (
+            request.query_params.get("allow_public_uuid") == "true"
+            or request.data.get("allow_public_uuid") is True
+        )
+        if request.method == "GET" and allow_public_uuid and user_id:
+            user = Custom_User.objects.filter(user_id=user_id).first()
+            if not user:
+                return None, False, Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND), None
+            return user, False, None, None
+
+        # Deny other unauthenticated access
         return None, False, Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED), temp_id
 
     def export_user_data_csv(self, user):
@@ -256,6 +290,35 @@ class UnifiedSyncView(APIView):
         user, is_new_visitor, error_response, temp_id = self.resolve_user(request)
         if error_response:
             return error_response
+
+        # If unauthenticated visitor requested a token via temp_id, issue JWTs for sync
+        try:
+            is_auth = hasattr(request, "user") and getattr(request.user, "is_authenticated", False)
+        except Exception:
+            is_auth = False
+
+        if (not is_auth) and temp_id and user is not None and getattr(user, "is_visitor", False):
+            # Issue visitor sync tokens with shorter, configurable lifetimes
+            refresh = RefreshToken.for_user(user)
+
+            # Configurable lifetimes (seconds) via settings; defaults: 5m access, 1h refresh
+            access_life = int(getattr(settings, "VISITOR_ACCESS_TOKEN_LIFETIME_SECONDS", 300))
+            refresh_life = int(getattr(settings, "VISITOR_REFRESH_TOKEN_LIFETIME_SECONDS", 3600))
+
+            now = datetime.utcnow()
+            # Set custom expiration claims (epoch seconds)
+            access_token = refresh.access_token
+            access_token["exp"] = int((now + timedelta(seconds=access_life)).timestamp())
+            refresh["exp"] = int((now + timedelta(seconds=refresh_life)).timestamp())
+
+            access = str(access_token)
+            refresh_token = str(refresh)
+            return Response({
+                "user_id": str(user.user_id),
+                "is_new": is_new_visitor,
+                "temp_id": temp_id,
+                "tokens": {"access": access, "refresh": refresh_token}
+            }, status=status.HTTP_200_OK)
 
         profile_flag, chat_flag = resolve_flags(request)
 

@@ -29,6 +29,10 @@ services:
     scope: RUN_AND_BUILD_TIME
     type: SECRET
     value: 224f52eb58c3d95ff60836b7cf4799ee894f9e7406465d3510e0c5a4228c84fb
+  - key: ZERUH_API_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+    value: 7f97762a2fad9a7f4cbba0f827540f6e57160a154bbd48b67b7d8784911e66cf
   - key: DJANGO_SETTINGS_MODULE
     scope: RUN_AND_BUILD_TIME
     value: prompeteer_server.settings

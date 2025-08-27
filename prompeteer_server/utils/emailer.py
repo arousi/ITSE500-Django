@@ -19,7 +19,7 @@ ZERUH_BASE_URL = "https://api.zeruh.com/v1"
 
 # Maileroo configuration (env var or Django settings)
 MAILEROO_API_KEY = os.environ.get("MAILEROO_API_KEY") or getattr(settings, "MAILEROO_API_KEY", None)
-MAILEROO_SEND_URL = getattr(settings, "MAILEROO_SEND_URL", "https://api.maileroo.example/v1/send")
+MAILEROO_SEND_URL = getattr(settings, "MAILEROO_SEND_URL", "B91FEB7ED85DEAFE.MAILEROO.ORG")
 
 
 class ZeruhEmailVerifier:

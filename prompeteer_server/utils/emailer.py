@@ -25,10 +25,10 @@ ZERUH_BASE_URL = "https://api.zeruh.com/v1"
 MAILEROO_API_KEY = os.environ.get("MAILEROO_API_KEY") or getattr(settings, "MAILEROO_API_KEY", None)
 
 # Base API endpoint
-MAILEROO_API_BASE_URL = os.environ.get("MAILEROO_API_BASE_URL") or getattr(settings, "MAILEROO_API_BASE_URL", "https://api.maileroo.com")
+MAILEROO_API_BASE_URL = os.environ.get("MAILEROO_API_BASE_URL") or getattr(settings, "MAILEROO_API_BASE_URL", "https://smtp.maileroo.com/api/v2/")
 
 # Send endpoint (defaults to /send)
-MAILEROO_SEND_URL = os.environ.get("MAILEROO_SEND_URL") or getattr(settings, "MAILEROO_SEND_URL", f"{MAILEROO_API_BASE_URL}/send")
+MAILEROO_SEND_URL = os.environ.get("MAILEROO_SEND_URL") or getattr(settings, "MAILEROO_SEND_URL", f"{MAILEROO_API_BASE_URL}/emails")
 
 # SMTP fallback config (only if you want to use Django’s EmailMessage as backup)
 MAILEROO_SMTP_HOST = "smtp.maileroo.com"

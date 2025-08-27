@@ -1,110 +1,204 @@
 # ...existing code...
 import os
-import json
-import smtplib
-import socket
 import time
-import requests
-from typing import Iterable, Optional
+import base64
 import logging
+from typing import Iterable, Optional, Union, List, Dict, Any
+
+import requests
 
 from django.conf import settings
 from django.core.mail import EmailMessage
 
 logger = logging.getLogger("emailer")
 
-# Always prefer environment variable (works for .env, app.yaml, and settings.py)
+# Zeruh
 ZERUH_API_KEY = os.environ.get("ZERUH_API_KEY") or getattr(settings, "ZERUH_API_KEY", None)
 ZERUH_BASE_URL = "https://api.zeruh.com/v1"
 
-# Maileroo configuration (env var or Django settings)
+# Maileroo configuration
+# - MAILEROO_API_KEY : your Maileroo sending key
+# - MAILEROO_API_BASE_URL : the Maileroo API base URL (default uses documented endpoint)
+# - MAILEROO_SEND_URL : optional full send endpoint; if present it must be a full URL (https://...)
+# - MAILEROO_SENDER_DOMAIN : your verified sending domain (used only for constructing from addresses)
+# Maileroo configuration
 MAILEROO_API_KEY = os.environ.get("MAILEROO_API_KEY") or getattr(settings, "MAILEROO_API_KEY", None)
-MAILEROO_SEND_URL = getattr(settings, "MAILEROO_SEND_URL", "B91FEB7ED85DEAFE.MAILEROO.ORG")
+
+# Base API endpoint
+MAILEROO_API_BASE_URL = os.environ.get("MAILEROO_API_BASE_URL") or getattr(settings, "MAILEROO_API_BASE_URL", "https://api.maileroo.com")
+
+# Send endpoint (defaults to /send)
+MAILEROO_SEND_URL = os.environ.get("MAILEROO_SEND_URL") or getattr(settings, "MAILEROO_SEND_URL", f"{MAILEROO_API_BASE_URL}/send")
+
+# SMTP fallback config (only if you want to use Django’s EmailMessage as backup)
+MAILEROO_SMTP_HOST = "smtp.maileroo.com"
+MAILEROO_SMTP_PORT = 587
+MAILEROO_SMTP_USER = "ITSE500-OK-2025@b91feb7ed85deafe.maileroo.org"
+MAILEROO_SMTP_PASSWORD = "dde58a8292c2074bd896110b"
+
+# For constructing from addresses
+MAILEROO_SENDER_DOMAIN = os.environ.get("MAILEROO_SENDER_DOMAIN") or getattr(settings, "MAILEROO_SENDER_DOMAIN", "b91feb7ed85deafe.maileroo.org")
+
+# Normalize send URL:
+def _resolve_maileroo_send_url() -> str:
+    # If explicit full send URL provided and looks valid, use it.
+    if MAILEROO_SEND_URL:
+        if MAILEROO_SEND_URL.lower().startswith("http://") or MAILEROO_SEND_URL.lower().startswith("https://"):
+            # If accidentally set to the same value as the sender domain, ignore it and use base endpoint
+            if MAILEROO_SENDER_DOMAIN and MAILEROO_SEND_URL.lower().find(MAILEROO_SENDER_DOMAIN.lower()) != -1:
+                logger.warning("MAILEROO_SEND_URL appears to be the sender domain; using API base URL instead.")
+            else:
+                return MAILEROO_SEND_URL
+        else:
+            # Provided value missing scheme — likely a mistake (domain only). Warn and fall back to base.
+            logger.warning("MAILEROO_SEND_URL missing scheme or invalid; falling back to MAILEROO_API_BASE_URL.")
+    # Default send endpoint path under base URL
+    base = MAILEROO_API_BASE_URL.rstrip("/")
+    return f"{base}/emails"
+
+MAILEROO_RESOLVED_SEND_URL = _resolve_maileroo_send_url()
 
 
 class ZeruhEmailVerifier:
     @staticmethod
     def verify(email: str, ip_address: Optional[str] = None, timeout: int = 20) -> Optional[dict]:
-        """
-        Verify an email address using Zeruh.
-        Returns the Zeruh API response as dict, or None on error.
-        """
         if not ZERUH_API_KEY:
-            logger.warning("ZERUH_API_KEY not set in environment or settings.")
+            logger.debug("Zeruh API key not configured.")
             return None
-
         params = {"email_address": email, "timeout": timeout, "api_key": ZERUH_API_KEY}
         if ip_address:
             params["ip_address"] = ip_address
-
         try:
-            resp = requests.get(
-                f"{ZERUH_BASE_URL}/verify",
-                params=params,
-                timeout=timeout + 5,
-            )
+            resp = requests.get(f"{ZERUH_BASE_URL}/verify", params=params, timeout=timeout + 5)
             resp.raise_for_status()
             return resp.json()
-        except Exception as e:
-            logger.exception("Zeruh verify failed for %s: %s", email, e)
+        except Exception as exc:
+            logger.warning("Zeruh verify failed for %s: %s", email, exc)
             return None
 
     @staticmethod
     def account_info() -> Optional[dict]:
-        """
-        Get Zeruh account info (credits, etc).
-        """
         if not ZERUH_API_KEY:
-            logger.warning("ZERUH_API_KEY not set in environment or settings.")
             return None
         try:
-            resp = requests.get(
-                f"{ZERUH_BASE_URL}/account",
-                params={"api_key": ZERUH_API_KEY},
-                timeout=10,
-            )
+            resp = requests.get(f"{ZERUH_BASE_URL}/account", params={"api_key": ZERUH_API_KEY}, timeout=10)
             resp.raise_for_status()
             return resp.json()
-        except Exception as e:
-            logger.exception("Zeruh account info failed: %s", e)
+        except Exception as exc:
+            logger.warning("Zeruh account_info failed: %s", exc)
             return None
 
 
 class MailerooClient:
     @staticmethod
-    def send_email(subject: str, message: str, to_email: str, from_email: Optional[str] = None, html_message: Optional[str] = None, timeout: int = 10) -> dict:
-        """
-        Send email via Maileroo API.
-        Returns dict: { "success": bool, "status_code": int|None, "body": dict|str|None, "error": str|None }
-        """
+    def _normalize_recipients(to: Union[str, Iterable[str], Iterable[dict]]) -> List[dict]:
+        if not to:
+            return []
+        if isinstance(to, str):
+            return [{"address": to}]
+        recipients: List[dict] = []
+        for item in to:
+            if isinstance(item, str):
+                recipients.append({"address": item})
+            elif isinstance(item, dict):
+                recipients.append(item)
+        return recipients
+
+    @staticmethod
+    def _encode_attachment(att: Any) -> dict:
+        if isinstance(att, dict):
+            return {
+                "file_name": att.get("file_name"),
+                "content_type": att.get("content_type"),
+                "content": att.get("content"),
+                "inline": bool(att.get("inline", False)),
+            }
+        try:
+            f = att
+            f.seek(0)
+            raw = f.read()
+            if isinstance(raw, str):
+                raw = raw.encode()
+            content_b64 = base64.b64encode(raw).decode("ascii")
+            return {
+                "file_name": getattr(f, "name", "attachment"),
+                "content_type": getattr(f, "content_type", None),
+                "content": content_b64,
+                "inline": False,
+            }
+        except Exception as e:
+            logger.exception("attachment encode failed: %s", e)
+            raise
+
+    @staticmethod
+    def send_email(
+        subject: str,
+        message: str,
+        to: Union[str, Iterable[str], Iterable[dict]],
+        from_email: Optional[str] = None,
+        from_name: Optional[str] = None,
+        html_message: Optional[str] = None,
+        attachments: Optional[Iterable[Any]] = None,
+        headers: Optional[dict] = None,
+        tags: Optional[dict] = None,
+        timeout: int = 10,
+    ) -> dict:
         if not MAILEROO_API_KEY:
             return {"success": False, "status_code": None, "body": None, "error": "MAILEROO_API_KEY not configured"}
 
-        payload = {
+        # Build sender address safely. Use verified sender domain only for from address, not for API URL.
+        sender_addr = from_email or getattr(settings, "DEFAULT_FROM_EMAIL", None) or (f"no-reply@{MAILEROO_SENDER_DOMAIN}" if MAILEROO_SENDER_DOMAIN else None)
+        if not sender_addr:
+            return {"success": False, "status_code": None, "body": None, "error": "No sender address configured (DEFAULT_FROM_EMAIL or MAILEROO_SENDER_DOMAIN required)"}
+
+        sender = {"address": sender_addr}
+        if from_name:
+            sender["display_name"] = from_name
+
+        payload: dict = {
+            "from": sender,
+            "to": MailerooClient._normalize_recipients(to),
             "subject": subject,
-            "to": to_email,
-            "from": from_email or getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            "text": message,
+            "plain": message,
         }
         if html_message:
             payload["html"] = html_message
+        if headers:
+            payload["headers"] = headers
+        if tags:
+            payload["tags"] = tags
+        if attachments:
+            encoded = []
+            for att in attachments:
+                try:
+                    encoded.append(MailerooClient._encode_attachment(att))
+                except Exception:
+                    logger.warning("Skipping invalid attachment")
+            if encoded:
+                payload["attachments"] = encoded
 
-        headers = {
-            "Authorization": f"Bearer {MAILEROO_API_KEY}",
+        req_headers = {
             "Content-Type": "application/json",
+            "Authorization": f"Bearer {MAILEROO_API_KEY}",
+            "X-Api-Key": MAILEROO_API_KEY,
         }
 
+        url = MAILEROO_RESOLVED_SEND_URL
         try:
-            resp = requests.post(MAILEROO_SEND_URL, headers=headers, json=payload, timeout=timeout)
+            resp = requests.post(url, headers=req_headers, json=payload, timeout=timeout)
             try:
                 body = resp.json()
             except Exception:
                 body = resp.text
             success = 200 <= resp.status_code < 300
             return {"success": success, "status_code": resp.status_code, "body": body, "error": None if success else f"HTTP {resp.status_code}"}
-        except Exception as e:
-            logger.exception("Maileroo send_email exception for %s: %s", to_email, e)
-            return {"success": False, "status_code": None, "body": None, "error": str(e)}
+        except requests.exceptions.MissingSchema as ms:
+            logger.exception("Maileroo send failed due to invalid URL (%s). Resolved URL=%s", ms, url)
+            return {"success": False, "status_code": None, "body": None, "error": f"Invalid Maileroo URL: {url}"}
+        except Exception as exc:
+            logger.exception("Maileroo send_email exception: %s", exc)
+            return {"success": False, "status_code": None, "body": None, "error": str(exc)}
+
 
 def send_verified_email(
     subject: str,
@@ -116,99 +210,79 @@ def send_verified_email(
     zeruh_min_score: int = 10,
     maileroo_max_attempts: int = 3,
     maileroo_backoff_seconds: float = 0.5,
-    allow_smtp_fallback: bool = False,   # default: do NOT fallback to Django SMTP
+    allow_smtp_fallback: bool = False,
     smtp_max_attempts: int = 3,
     smtp_backoff_seconds: float = 0.5,
     fail_silently: bool = False,
+    attachments: Optional[Iterable[Any]] = None,
     **kwargs
 ) -> dict:
-    """
-    Strict flow:
-      - Verify recipient via Zeruh (required when verify_with_zeruh=True).
-      - If verdict is deliverable/risky and score >= zeruh_min_score:
-          Attempt Maileroo send (with retries). Return per-recipient maileroo result.
-      - If verdict is undeliverable/low-score -> do NOT send, return reason.
-      - If Zeruh API call fails:
-          - If allow_smtp_fallback==True: attempt Django SMTP (best-effort).
-          - Otherwise do NOT send and return verification error.
-    """
-    results = {}
+    results: Dict[str, dict] = {}
     if not recipient_list:
         return results
 
     for email in recipient_list:
-        r = {"sent": False, "attempts": 0, "verification": None, "reason": None, "error": None, "maileroo": None, "smtp": None}
+        result: dict = {"sent": False, "attempts": 0, "verification": None, "reason": None, "error": None, "maileroo": None, "smtp": None}
 
-        # 1) Zeruh verification (if requested)
-        verification = None
+        # Zeruh verification
         if verify_with_zeruh:
-            try:
-                verification = ZeruhEmailVerifier.verify(email)
-            except Exception as e:
-                logger.exception("Zeruh verify failed unexpectedly for %s: %s", email, e)
-                verification = None
-            r["verification"] = verification
-
+            verification = ZeruhEmailVerifier.verify(email)
+            result["verification"] = verification
             if not verification or not verification.get("success"):
-                r["reason"] = "Zeruh unavailable or error"
-                # Do not proceed to Maileroo; allow optional SMTP fallback below if configured
+                result["reason"] = "Zeruh unavailable or error"
                 if not allow_smtp_fallback:
-                    results[email] = r
+                    results[email] = result
                     continue
             else:
-                verdict = verification.get("result", {}) or {}
+                verdict = (verification.get("result") or {}) or {}
                 status = verdict.get("status")
-                score = (verdict.get("score") or 0)
+                score = int(verdict.get("score") or 0)
                 if status not in ("deliverable", "risky") or score < zeruh_min_score:
-                    r["reason"] = f"Zeruh verdict prevents send: status={status}, score={score}"
-                    results[email] = r
+                    result["reason"] = f"Zeruh verdict prevents send: status={status}, score={score}"
+                    results[email] = result
                     continue
-                # else: eligible to send via Maileroo
 
-        # 2) Maileroo: attempt as primary sender if configured
-        maileroo_used = False
+        # Maileroo primary sender
         if MAILEROO_API_KEY:
-            maileroo_used = True
-            maileroo_attempts = 0
-            maileroo_success = False
-            last_maileroo_err = None
+            last_err = None
             for attempt in range(1, maileroo_max_attempts + 1):
-                maileroo_attempts = attempt
+                result["attempts"] = attempt
                 try:
-                    maileroo_resp = MailerooClient.send_email(subject, message, email, from_email=from_email, html_message=html_message)
-                    r["maileroo"] = maileroo_resp
-                    if maileroo_resp.get("success"):
-                        r["sent"] = True
-                        r["attempts"] = maileroo_attempts
-                        maileroo_success = True
-                        logger.info("Maileroo sent to %s (attempt %d)", email, attempt)
+                    resp = MailerooClient.send_email(
+                        subject=subject,
+                        message=message,
+                        to=email,
+                        from_email=from_email or getattr(settings, "DEFAULT_FROM_EMAIL", None) or (f"no-reply@{MAILEROO_SENDER_DOMAIN}" if MAILEROO_SENDER_DOMAIN else None),
+                        html_message=html_message,
+                        attachments=attachments,
+                        timeout=10,
+                    )
+                    result["maileroo"] = resp
+                    if resp.get("success"):
+                        result["sent"] = True
+                        result["error"] = None
+                        logger.info("Maileroo delivered to %s (attempt %d)", email, attempt)
                         break
                     else:
-                        last_maileroo_err = maileroo_resp.get("error") or f"HTTP {maileroo_resp.get('status_code')}"
-                        logger.warning("Maileroo response for %s attempt %d: %s", email, attempt, last_maileroo_err)
+                        last_err = resp.get("error") or f"HTTP {resp.get('status_code')}"
+                        logger.warning("Maileroo response for %s attempt %d: %s", email, attempt, last_err)
                 except Exception as e:
-                    last_maileroo_err = str(e)
+                    last_err = str(e)
                     logger.exception("Maileroo exception for %s attempt %d: %s", email, attempt, e)
 
                 time.sleep(maileroo_backoff_seconds * (2 ** (attempt - 1)))
 
-            if maileroo_success:
-                results[email] = r
-                continue
-
-            # Maileroo exhausted and failed
-            r["reason"] = r.get("reason") or "Maileroo failed"
-            r["error"] = last_maileroo_err
+            if not result["sent"]:
+                result["reason"] = result.get("reason") or "Maileroo failed"
+                result["error"] = last_err
         else:
-            r["reason"] = r.get("reason") or "Maileroo not configured"
+            result["reason"] = "Maileroo not configured"
 
-        # 3) Optional SMTP fallback (only if explicitly allowed)
-        if allow_smtp_fallback:
-            smtp_attempts = 0
-            smtp_sent = False
-            last_smtp_err = None
+        # Optional SMTP fallback (explicit)
+        if not result["sent"] and allow_smtp_fallback:
+            last_err = None
             for attempt in range(1, smtp_max_attempts + 1):
-                smtp_attempts = attempt
+                result["attempts"] = attempt
                 try:
                     msg = EmailMessage(
                         subject=subject,
@@ -220,32 +294,24 @@ def send_verified_email(
                         msg.content_subtype = "html"
                         msg.body = html_message
                     sent_count = msg.send(fail_silently=fail_silently)
-                    r["smtp"] = {"sent_count": sent_count}
-                    r["attempts"] = smtp_attempts
+                    result["smtp"] = {"sent_count": sent_count}
                     if sent_count and sent_count > 0:
-                        r["sent"] = True
-                        smtp_sent = True
-                        logger.info("SMTP sent to %s (attempt %d)", email, attempt)
+                        result["sent"] = True
+                        logger.info("SMTP fallback delivered to %s (attempt %d)", email, attempt)
                         break
                     else:
-                        last_smtp_err = "Email backend reported 0 delivered"
+                        last_err = "Email backend reported 0 delivered"
                         logger.warning("SMTP backend returned 0 for %s on attempt %d", email, attempt)
-                except Exception as e:
-                    last_smtp_err = str(e)
-                    logger.exception("SMTP exception for %s on attempt %d: %s", email, attempt, e)
+                except Exception as exc:
+                    last_err = str(exc)
+                    logger.exception("SMTP exception for %s attempt %d: %s", email, attempt, exc)
                     if fail_silently:
                         break
-
                 time.sleep(smtp_backoff_seconds * (2 ** (attempt - 1)))
+            if not result["sent"]:
+                result["error"] = result.get("error") or last_err
+                result["reason"] = result.get("reason") or "SMTP fallback failed"
 
-            if smtp_sent:
-                results[email] = r
-                continue
-
-            r["error"] = r.get("error") or last_smtp_err
-            r["reason"] = r.get("reason") or "SMTP fallback failed"
-
-        # 4) If we get here, nothing sent
-        results[email] = r
+        results[email] = result
 
     return results

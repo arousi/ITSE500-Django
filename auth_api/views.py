@@ -69,16 +69,12 @@ def exchange_openrouter_token(code: str, code_verifier: str, redirect_uri: str):
     }
     if redirect_uri:
         json_body['callback_url'] = redirect_uri
+    resp = requests.post(token_url, json=json_body, timeout=15)
     try:
-        resp = requests.post(token_url, json=json_body, timeout=15)
-        try:
-            payload = resp.json()
-        except Exception:
-            payload = {'raw': resp.text}
-        return resp.status_code, payload
-    except requests.exceptions.RequestException as e:
-        logger.exception('[exchange_openrouter_token] RequestException during token exchange')
-        return 0, {'error': str(e)}
+        payload = resp.json()
+    except Exception:
+        payload = {'raw': resp.text}
+    return resp.status_code, payload
 
 def build_google_authorize_url(state: str, code_challenge: str, scope: str, redirect_uri: str) -> str:
     base_auth = getattr(settings, 'GOOGLE_OAUTH_AUTH_URL', 'https://accounts.google.com/o/oauth2/v2/auth')
@@ -101,16 +97,12 @@ def exchange_google_token(code: str, code_verifier: str, redirect_uri: str):
         'code_verifier': code_verifier,
         'client_secret': client_secret,
     }
+    resp = requests.post(token_url, data=data, timeout=15)
     try:
-        resp = requests.post(token_url, data=data, timeout=15)
-        try:
-            payload = resp.json()
-        except Exception:
-            payload = {'raw': resp.text}
-        return resp.status_code, payload
-    except requests.exceptions.RequestException as e:
-        logger.exception('[exchange_google_token] RequestException during token exchange')
-        return 0, {'error': str(e)}
+        payload = resp.json()
+    except Exception:
+        payload = {'raw': resp.text}
+    return resp.status_code, payload
 
 def fetch_google_userinfo(access_token: str):
     try:
@@ -363,7 +355,7 @@ class SetPasswordAfterEmailVerifyView(APIView):
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
         password = serializers.CharField(min_length=6)
-
+  
     def post(self, request):  # type: ignore[override]
             logger.info(f"[SetPasswordAfterEmailVerifyView] Incoming set-password request: data={request.data}")
             ser = self.InputSerializer(data=request.data)
@@ -384,6 +376,7 @@ class SetPasswordAfterEmailVerifyView(APIView):
             user.user_password = backend_hash
             user.save(update_fields=["user_password"])
             return Response({"message": "Password set successfully. You may now log in."})
+
 
 class LoginView(APIView):
     """
@@ -661,7 +654,7 @@ class OAuthAuthorizeBase(APIView):
                 mobile_redirect=None,
                 scope=scope,
                 expires_at=expires_at,
-                user_id=request.user if request.user.is_authenticated else None,
+                user=request.user if request.user.is_authenticated else None,
             )
         elif self.provider == 'github':
             import secrets, urllib.parse
@@ -688,7 +681,7 @@ class OAuthAuthorizeBase(APIView):
                 mobile_redirect=None,
                 scope=scope,
                 expires_at=expires_at,
-                user_id=request.user if request.user.is_authenticated else None,
+                user=request.user if request.user.is_authenticated else None,
             )
         else:
             return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)
@@ -773,141 +766,141 @@ class OAuthCallbackBase(APIView):
             return Response({'detail': 'Missing authorization code'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Provider-specific token exchange and user logic
-        try:
-            if self.provider == 'google':
-                status_code, token_payload = exchange_google_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
-                if status_code != 200:
-                    logger.warning(f"[GoogleCallback] Token exchange failed: status={status_code} payload={token_payload}")
-                    return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
-                access_token = token_payload.get('access_token')
-                refresh_token = token_payload.get('refresh_token')
-                expires_in = token_payload.get('expires_in')
-                id_token = token_payload.get('id_token')
-                userinfo = fetch_google_userinfo(access_token) if access_token else None
-                email = (userinfo or {}).get('email') if userinfo else None
-                email_verified_claim = (userinfo or {}).get('email_verified') if userinfo else None
-                user = oauth_state.user_id
-                if not user:
-                    if email and Custom_User.objects.filter(email=email).exists():
-                        user = Custom_User.objects.get(email=email)
-                    else:
-                        base_username = (email.split('@')[0] if email else f"g_{uuid.uuid4().hex[:6]}")
-                        candidate = base_username
-                        idx = 1
-                        while Custom_User.objects.filter(username=candidate).exists():
-                            candidate = f"{base_username}{idx}"
-                            idx += 1
-                        user = Custom_User.objects.create(
-                            username=candidate,
-                            email=email or f"pending_{uuid.uuid4().hex}@google.local",
-                            email_verified=bool(email_verified_claim) if email_verified_claim is not None else bool(email),
-                            is_google_user=True
-                        )
+        if self.provider == 'google':
+            status_code, token_payload = exchange_google_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
+            if status_code != 200:
+                return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
+            access_token = token_payload.get('access_token')
+            refresh_token = token_payload.get('refresh_token')
+            expires_in = token_payload.get('expires_in')
+            id_token = token_payload.get('id_token')
+            userinfo = fetch_google_userinfo(access_token) if access_token else None
+            email = (userinfo or {}).get('email') if userinfo else None
+            email_verified_claim = (userinfo or {}).get('email_verified') if userinfo else None
+            user = oauth_state.user_id
+            if not user:
+                if email and Custom_User.objects.filter(email=email).exists():
+                    user = Custom_User.objects.get(email=email)
                 else:
-                    update_fields: list[str] = []
-                    if email and not user.email:
-                        user.email = email
-                        update_fields.append('email')
-                    if not getattr(user, 'is_google_user', False):
-                        user.is_google_user = True
-                        update_fields.append('is_google_user')
-                    if email and not user.email_verified and (email_verified_claim or email_verified_claim is None):
-                        if email_verified_claim is None or bool(email_verified_claim):
-                            user.email_verified = True
-                            update_fields.append('email_verified')
-                    if update_fields:
-                        user.save(update_fields=update_fields)
-                expires_sec: int = 0
-                if expires_in not in (None, ''):
-                    try:
-                        expires_sec = int(expires_in)
-                    except Exception:
-                        expires_sec = 0
-                expires_at = timezone.now() + timezone.timedelta(seconds=expires_sec) if expires_sec else None
-                ProviderOAuthToken.objects.update_or_create(
-                    user_id=user,
-                    provider='google',
-                    defaults={
-                        'access_token': access_token,
-                        'refresh_token': refresh_token,
-                        'expires_at': expires_at,
-                        'scope': oauth_state.scope,
-                        'token_type': token_payload.get('token_type') or 'Bearer',
-                    }
-                )
-                oauth_state.mark_used()
-                refresh = RefreshToken.for_user(user)
-                payload = {
-                    'message': 'Google OAuth success',
-                    'user_id': str(user.pk),
-                    'username': user.username,
-                    'access_token': str(refresh.access_token),
-                    'refresh_token': str(refresh),
-                    'provider_scope': oauth_state.scope,
-                    'provider_expires_at': expires_at.isoformat() if expires_at else None,
-                    'id_token': id_token,
-                    'email': email,
-                    'email_verified': user.email_verified,
-                    'is_google_user': getattr(user, 'is_google_user', False),
-                }
-            elif self.provider == 'openrouter':
-                status_code, token_payload = exchange_openrouter_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
-                if status_code != 200:
-                    logger.warning(f"[OpenRouterCallback] Token exchange failed: status={status_code} payload={token_payload}")
-                    return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
-                access_token = token_payload.get('key') or token_payload.get('access_token')
-                refresh_token = None
-                scope = oauth_state.scope
-                token_type = 'api_key'
-                if not access_token:
-                    return Response({'detail': 'Provider did not return API key', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
-                user = oauth_state.user_id
-                if not user:
+                    base_username = (email.split('@')[0] if email else f"g_{uuid.uuid4().hex[:6]}")
+                    candidate = base_username
+                    idx = 1
+                    while Custom_User.objects.filter(username=candidate).exists():
+                        candidate = f"{base_username}{idx}"
+                        idx += 1
                     user = Custom_User.objects.create(
-                        username=f"or_{uuid.uuid4().hex[:10]}",
-                        email=f"pending_{uuid.uuid4().hex}@openrouter.local",
-                        is_openrouter_user=True
+                        username=candidate,
+                        email=email or f"pending_{uuid.uuid4().hex}@google.local",
+                        email_verified=bool(email_verified_claim) if email_verified_claim is not None else bool(email),
+                        is_google_user=True
                     )
-                elif not getattr(user, 'is_openrouter_user', False):
-                    user.is_openrouter_user = True
-                    user.save(update_fields=['is_openrouter_user'])
-                expires_at = None
-                ProviderOAuthToken.objects.update_or_create(
-                    user_id=user,
-                    provider='openrouter',
-                    defaults={
-                        'access_token': access_token,
-                        'refresh_token': refresh_token,
-                        'expires_at': expires_at,
-                        'scope': scope,
-                        'token_type': token_type,
-                    }
-                )
-                oauth_state.mark_used()
-                refresh = RefreshToken.for_user(user)
-                payload = {
-                    'message': 'OpenRouter OAuth success',
-                    'user_id': str(user.pk),
-                    'access_token': str(refresh.access_token),
-                    'refresh_token': str(refresh),
-                    'provider_access_token': access_token if getattr(settings, 'OPENROUTER_EXPOSE_PROVIDER_TOKEN', True) else None, #* User's api key secrete is given back to him.
-                    'provider_refresh_token': None,
-                    'provider_token_type': token_type,
-                    'provider_scope': scope,
-                    'provider_expires_at': None,
-                    'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
-                }
             else:
-                return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            # Catch unexpected errors, log full traceback and return 500 with brief info
-            logger.exception(f"[OAuthCallbackBase] Unexpected error handling provider={self.provider} state={state_value}")
-            return Response({'detail': 'Internal server error while completing OAuth callback', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                update_fields: list[str] = []
+                if email and not user.email:
+                    user.email = email
+                    update_fields.append('email')
+                if not getattr(user, 'is_google_user', False):
+                    user.is_google_user = True
+                    update_fields.append('is_google_user')
+                if email and not user.email_verified and (email_verified_claim or email_verified_claim is None):
+                    if email_verified_claim is None or bool(email_verified_claim):
+                        user.email_verified = True
+                        update_fields.append('email_verified')
+                if update_fields:
+                    user.save(update_fields=update_fields)
+            expires_sec: int = 0
+            if expires_in not in (None, ''):
+                try:
+                    expires_sec = int(expires_in)
+                except Exception:
+                    expires_sec = 0
+            expires_at = timezone.now() + timezone.timedelta(seconds=expires_sec) if expires_sec else None
+            ProviderOAuthToken.objects.update_or_create(
+                user_id=user,
+                provider='google',
+                defaults={
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'expires_at': expires_at,
+                    'scope': oauth_state.scope,
+                    'token_type': token_payload.get('token_type') or 'Bearer',
+                }
+            )
+            oauth_state.mark_used()
+            refresh = RefreshToken.for_user(user)
+            payload = {
+                'message': 'Google OAuth success',
+                'user_id': str(user.pk),
+                'username': user.username,
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+                'provider_scope': oauth_state.scope,
+                'provider_expires_at': expires_at.isoformat() if expires_at else None,
+                'id_token': id_token,
+                'email': email,
+                'email_verified': user.email_verified,
+                'is_google_user': getattr(user, 'is_google_user', False),
+            }
+        elif self.provider == 'openrouter':
+            status_code, token_payload = exchange_openrouter_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
+            if status_code != 200:
+                return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
+            access_token = token_payload.get('key') or token_payload.get('access_token')
+            refresh_token = None
+            scope = oauth_state.scope
+            token_type = 'api_key'
+            if not access_token:
+                return Response({'detail': 'Provider did not return API key', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
+            user = oauth_state.user_id
+            if not user:
+                user = Custom_User.objects.create(
+                    username=f"or_{uuid.uuid4().hex[:10]}",
+                    email=f"pending_{uuid.uuid4().hex}@openrouter.local",
+                    is_openrouter_user=True
+                )
+            elif not getattr(user, 'is_openrouter_user', False):
+                user.is_openrouter_user = True
+                user.save(update_fields=['is_openrouter_user'])
+            expires_at = None
+            ProviderOAuthToken.objects.update_or_create(
+                user_id=user,
+                provider='openrouter',
+                defaults={
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'expires_at': expires_at,
+                    'scope': scope,
+                    'token_type': token_type,
+                }
+            )
+            oauth_state.mark_used()
+            refresh = RefreshToken.for_user(user)
+            payload = {
+                'message': 'OpenRouter OAuth success',
+                'user_id': str(user.pk),
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
+                'provider_access_token': access_token if getattr(settings, 'OPENROUTER_EXPOSE_PROVIDER_TOKEN', True) else None, #* User's api key secrete is given back to him.
+                'provider_refresh_token': None,
+                'provider_token_type': token_type,
+                'provider_scope': scope,
+                'provider_expires_at': None,
+                'is_openrouter_user': getattr(user, 'is_openrouter_user', False),
+            }
+        else:
+            return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Persist the result payload so SPA/mobile bridge polling can retrieve it.
+        # Previously this was only stored for mobile_redirect flows; store it for all successful callbacks.
+        try:
+            if payload is not None:
+                oauth_state.result_payload = json.dumps(payload)
+                oauth_state.save(update_fields=["result_payload"])
+        except Exception:
+            logger.exception(f"[OAuthCallbackBase] Failed to persist result_payload for state={state_value}")
 
         # Bridge deep link
         if oauth_state.mobile_redirect:
-            oauth_state.result_payload = json.dumps(payload)
-            oauth_state.save(update_fields=["result_payload"])
             mobile_url = f"{oauth_state.mobile_redirect}?state={urllib.parse.quote(state_value)}&bridge=1"
             return redirect(mobile_url)
         # SSR: render HTML if requested

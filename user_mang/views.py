@@ -691,10 +691,10 @@ class UnifiedSyncView(APIView):
 
         # Chat delete/archive (soft delete if possible)
         if chat_flag or not (profile_flag or chat_flag):
-            attachments = Attachment.objects.filter(message_id__user_id=user)
+            attachments = Attachment.objects.filter(user_id=user)
             messages = Message.objects.filter(user_id=user)
             conversations = Conversation.objects.filter(user_id=user)
-            tokens = ProviderOAuthToken.objects.filter(user=user)
+            tokens = ProviderOAuthToken.objects.filter(user_id=user)
 
             stats.update({
                 "attachments": attachments.count(),

@@ -49,6 +49,11 @@ urlpatterns = [
     path('microsoft/authorize/', MicrosoftAuthorizeView.as_view(), name='ms-authorize'),
     path('microsoft/callback/', MicrosoftCallbackView.as_view(), name='ms-callback'),
     
+    path("google/authorize/ssr/", GoogleAuthorizeView.as_view(), name="google-authorize-ssr"),
+    path("openrouter/authorize/ssr/", OpenRouterAuthorizeView.as_view(), name="openrouter-authorize-ssr"),
+    path("github/authorize/ssr/", GitHubAuthorizeView.as_view(), name="github-authorize-ssr"),
+    path("microsoft/authorize/ssr/", MicrosoftAuthorizeView.as_view(), name="ms-authorize-ssr"),
+    
     # Bridge result endpoint (for mobile/SPA)
     path("oauth/result/<str:state_value>/", OAuthResultView.as_view(), name="oauth-result"),
 

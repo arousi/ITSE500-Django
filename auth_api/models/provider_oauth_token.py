@@ -89,6 +89,8 @@ class ProviderOAuthToken(models.Model):
 	provider_oauth_token_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 	user_id = models.ForeignKey(Custom_User, on_delete=models.CASCADE, related_name="provider_tokens")
 	provider = models.CharField(max_length=32, choices=PROVIDER_CHOICES, db_index=True)
+	# External provider account id (sub/id) - used to uniquely identify the external account
+	provider_account_id = models.CharField(max_length=256, blank=True, null=True, db_index=True)
 	access_token = models.TextField()
 	refresh_token = models.TextField(blank=True, null=True)
 	token_type = models.CharField(max_length=32, blank=True, null=True)
@@ -98,7 +100,9 @@ class ProviderOAuthToken(models.Model):
 	updated_at = models.DateTimeField(auto_now=True)
 
 	class Meta:
-		unique_together = ("user_id", "provider")
+		# Ensure the same external account (provider + provider_account_id) cannot be linked to multiple local users
+		# Also keep user+provider unique so a single user links at most one account per provider
+		unique_together = (("provider", "provider_account_id"), ("user_id", "provider"))
 
 	def expired(self):
 		return self.expires_at and timezone.now() >= self.expires_at
@@ -125,5 +129,5 @@ class ProviderOAuthToken(models.Model):
 		super().save(*args, **kwargs)
 
 	def __str__(self):
-		return f"ProviderOAuthToken(user={self.user_id.id}, provider={self.provider})"
+		return f"ProviderOAuthToken(user={self.user_id.id}, provider={self.provider}, provider_account_id={getattr(self, 'provider_account_id', None)})"
 

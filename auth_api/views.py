@@ -115,67 +115,6 @@ def fetch_google_userinfo(access_token: str):
 
 logger = logging.getLogger('auth_api')
 
-""" class VisitorLoginView(APIView):
-
-    API endpoint to allow a user to start a guest session as a Visitor (no account required).
-    Handles creation of a Visitor object and returns session details.
-
-    Example API Request (POST /api/v1/auth_api/visitor-login/):
-        {
-            "device_id": "abc123xyz"
-        }
-
-    Example API Response (201):
-        {
-            "message": "Visitor session started.",
-            "anon_id": "e7b8c1d2-...",
-            "device_id": "abc123xyz",
-            "date_joined": "2025-08-01T12:34:56Z"
-        }
-
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-
-        Handle POST request to start a visitor session.
-        Validates input, creates a Custom_User with is_visitor=True, and returns session info with JWT access token.
-
-        logger.info(f"[VisitorLoginView] Incoming visitor login request: data={request.data}")
-        serializer = VisitorSerializer(data=request.data)
-        try:
-            serializer.is_valid(raise_exception=True)
-            device_id = serializer.validated_data.get('device_id')
-            # Try to find an existing guest user for this device_id
-            guest_user = Custom_User.objects.filter(device_id=device_id, is_visitor=True).first()
-            if not guest_user:
-                # Create a new guest user
-                guest_user = Custom_User.objects.create(
-                    device_id=device_id,
-                    is_visitor=True,
-                )
-            # Generate a temporary JWT token for the guest user
-            refresh = RefreshToken.for_user(guest_user)
-            access_token = str(refresh.access_token)
-            resp_data = {
-                "message": "Visitor session started.",
-                "anon_id": str(getattr(guest_user, 'anon_id', guest_user.pk)),
-                "device_id": guest_user.device_id,
-                "date_joined": guest_user.date_joined,
-                "access_token": access_token,
-                "refresh_token": str(refresh),
-            }
-            logger.info(f"[VisitorLoginView] Visitor login success: status=201, resp={resp_data}")
-            return Response(resp_data, status=status.HTTP_201_CREATED)
-        except serializers.ValidationError as e:
-            logger.warning(f"[VisitorLoginView] Visitor login failed: status=400, errors={e.detail}, req={request.data}")
-            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.exception(f"[VisitorLoginView] Unexpected visitor login error: {str(e)}, req={request.data}")
-            return Response({"detail": "Visitor login failed due to a server error."},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-"""
-
 class RegisterView(APIView):
     """
     API endpoint to handle user registration.
@@ -416,7 +355,7 @@ class SetPasswordAfterEmailVerifyView(APIView):
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
         password = serializers.CharField(min_length=6)
-  
+
     def post(self, request):  # type: ignore[override]
             logger.info(f"[SetPasswordAfterEmailVerifyView] Incoming set-password request: data={request.data}")
             ser = self.InputSerializer(data=request.data)
@@ -437,7 +376,6 @@ class SetPasswordAfterEmailVerifyView(APIView):
             user.user_password = backend_hash
             user.save(update_fields=["user_password"])
             return Response({"message": "Password set successfully. You may now log in."})
-
 
 class LoginView(APIView):
     """

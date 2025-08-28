@@ -596,7 +596,7 @@ class OAuthAuthorizeBase(APIView):
                 mobile_redirect=mobile_redirect,
                 scope=scope,
                 expires_at=expires_at,
-                user=request.user if request.user.is_authenticated else None,
+                user_id=request.user if request.user.is_authenticated else None,
             )
             authorize_url = build_google_authorize_url(state, code_challenge, scope, redirect_uri)
         elif self.provider == 'openrouter':
@@ -624,7 +624,7 @@ class OAuthAuthorizeBase(APIView):
                 mobile_redirect=mobile_redirect,
                 scope=scope,
                 expires_at=expires_at,
-                user=request.user if request.user.is_authenticated else None,
+                user_id=request.user if request.user.is_authenticated else None,
             )
             authorize_url = build_openrouter_authorize_url(state, code_challenge, scope, redirect_uri)
         elif self.provider == 'microsoft':
@@ -653,7 +653,7 @@ class OAuthAuthorizeBase(APIView):
                 mobile_redirect=None,
                 scope=scope,
                 expires_at=expires_at,
-                user=request.user if request.user.is_authenticated else None,
+                user_id=request.user if request.user.is_authenticated else None,
             )
         elif self.provider == 'github':
             import secrets, urllib.parse
@@ -680,7 +680,7 @@ class OAuthAuthorizeBase(APIView):
                 mobile_redirect=None,
                 scope=scope,
                 expires_at=expires_at,
-                user=request.user if request.user.is_authenticated else None,
+                user_id=request.user if request.user.is_authenticated else None,
             )
         else:
             return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)

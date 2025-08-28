@@ -43,11 +43,22 @@ class OAuthState(models.Model):
 		return timezone.now() >= self.expires_at
 
 	def mark_used(self):
-		self.used = True
-		# Security: drop verifier once consumed
+		# Mark this state as used and drop the verifier for security
+		self.is_used = True
 		self.code_verifier = None
-		self.save(update_fields=["used", "code_verifier"])
+		self.save(update_fields=["is_used", "code_verifier"])
+
+	@property
+	def used(self):
+		"""Backward-compatible alias for the boolean flag.
+		Some existing code references `used`; keep a property so both work.
+		"""
+		return bool(self.is_used)
+
+	@used.setter
+	def used(self, val: bool):
+		self.is_used = bool(val)
 
 	def __str__(self):
-		return f"OAuthState(provider={self.provider}, state={self.state}, used={self.used})"
+		return f"OAuthState(provider={self.provider}, state={self.state}, used={self.is_used})"
 

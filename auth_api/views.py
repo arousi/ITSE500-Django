@@ -825,7 +825,7 @@ class OAuthCallbackBase(APIView):
                         expires_sec = 0
                 expires_at = timezone.now() + timezone.timedelta(seconds=expires_sec) if expires_sec else None
                 ProviderOAuthToken.objects.update_or_create(
-                    user=user,
+                    user_id=user,
                     provider='google',
                     defaults={
                         'access_token': access_token,
@@ -873,7 +873,7 @@ class OAuthCallbackBase(APIView):
                     user.save(update_fields=['is_openrouter_user'])
                 expires_at = None
                 ProviderOAuthToken.objects.update_or_create(
-                    user=user,
+                    user_id=user,
                     provider='openrouter',
                     defaults={
                         'access_token': access_token,
@@ -1150,7 +1150,7 @@ class GitHubCallbackView(OAuthCallbackBase):
             if update_fields:
                 user.save(update_fields=update_fields)
         ProviderOAuthToken.objects.update_or_create(
-            user=user,
+            user_id=user,
             provider='github',
             defaults={
                 'access_token': access_token,
@@ -1321,7 +1321,7 @@ class MicrosoftCallbackView(OAuthCallbackBase):
             if update_fields:
                 user.save(update_fields=update_fields)
         ProviderOAuthToken.objects.update_or_create(
-            user=user,
+            user_id=user,
             provider='microsoft',
             defaults={
                 'access_token': access_token,

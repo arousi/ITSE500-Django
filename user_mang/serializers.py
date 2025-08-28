@@ -296,22 +296,17 @@ class FullProfileSerializer(serializers.ModelSerializer):
         fields = [
             "user_id",
             "username",
+            "firstname",
+            "lastname",
             "email",
             "phone_number",
-            "biometric_enabled",
             "last_modified",
-            "user_password",
             "devices_id",
             "temp_id",
             "related_devices",
-            "email_pin",
             "email_pin_created",
             "email_verified",
             "is_archived",
-            "login_otp",
-            "login_otp_created",
-            "login_otp_sent_count",
-            "login_otp_last_sent",
             "is_google_user",
             "is_openrouter_user",
             "is_microsoft_user",
@@ -341,7 +336,7 @@ class FullProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("This username is already in use.")
         return value
 
-    def update(self, instance: Custom_User, validated_data: dict):
+    def update(self, instance: Custom_User, validated_data: dict):  
         # Handle password hashing explicitly
         pwd = validated_data.pop("user_password", None)
         update_fields = []
@@ -392,3 +387,49 @@ class FullProfileSerializer(serializers.ModelSerializer):
             except Exception:
                 instance.save()
         return instance
+
+
+class FullChatSerializer(serializers.Serializer):
+        """
+        Composite serializer that returns the complete chat payload for a user.
+        Fields:
+            - conversations: ConversationSerializer (with nested messages)
+            - messages: MessageSerializer (flat list)
+            - message_request: MessageRequestSerializer
+            - message_response: MessageResponseSerializer
+            - message_output: MessageOutputSerializer
+            - attachments: AttachmentSerializer
+
+        This serializer is intentionally a non-model `Serializer` since it aggregates
+        multiple querysets and models into a single response shape used by
+        `UnifiedSyncView.get`.
+        """
+
+        conversations = ConversationSerializer(many=True, read_only=True)
+        messages = MessageSerializer(many=True, read_only=True)
+        message_request = MessageRequestSerializer(many=True, read_only=True)
+        message_response = MessageResponseSerializer(many=True, read_only=True)
+        message_output = MessageOutputSerializer(many=True, read_only=True)
+        attachments = AttachmentSerializer(many=True, read_only=True)
+
+        def to_representation(self, instance):
+                """Accept a dict-like instance with keys matching the field names.
+
+                Expected input format (from the view) is a dict:
+                        {
+                            "conversations": <qs>,
+                            "messages": <qs>,
+                            "message_request": <qs>,
+                            "message_response": <qs>,
+                            "message_output": <qs>,
+                            "attachments": <qs>,
+                        }
+                """
+                if isinstance(instance, dict):
+                        ret = {}
+                        for field_name, field in self.fields.items():
+                                value = instance.get(field_name) if isinstance(instance, dict) else None
+                                # If a queryset or list-like is provided, let the child serializer handle it
+                                ret[field_name] = field.to_representation(value) if value is not None else []
+                        return ret
+                return super().to_representation(instance)

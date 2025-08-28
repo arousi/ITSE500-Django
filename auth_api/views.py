@@ -19,8 +19,9 @@ from django.contrib.auth import logout
 from rest_framework import status, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from user_mang.models.custom_user import Custom_User
 from .models import OAuthState, ProviderOAuthToken
 from .serializers import (
@@ -534,11 +535,21 @@ class LogoutView(APIView):
             "detail": "Logged out successfully."
         }
     """
+    # Require JWT and authenticated user
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        logger.info(f"[LogoutView] Incoming logout request: user_id={getattr(request.user, 'pk', None)}")
+        user = getattr(request, 'user', None)
+        logger.info(f"[LogoutView] Incoming logout request: user_id={getattr(user, 'pk', None)}")
+    # Clear authentication/session
         logout(request)
-        logger.info(f"[LogoutView] User logged out: {request.user.pk if request.user.is_authenticated else 'anonymous'}")
-        resp_data = {"detail": "Logged out successfully."}
+        logger.info(f"[LogoutView] User logged out: {user.user_id if user and getattr(user, 'is_authenticated', False) else 'anonymous'}")
+
+    # No server-side token deletion: keep provider OAuth tokens intact so the user
+    # can re-login via OAuth from another interface. We also avoid blacklisting
+    # refresh tokens here; clients should discard tokens client-side after logout.
+        resp_data = {"detail": "Logged out successfully. Please discard tokens client-side."}
         logger.info(f"[LogoutView] Logout response: status=200, resp={resp_data}")
         return Response(resp_data, status=status.HTTP_200_OK)
 

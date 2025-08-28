@@ -50,6 +50,7 @@ def resolve_flags(request):
 
 #TODO: break into profile sync and chat sync seperate views
 #* easier to understand and maintain
+
 class UnifiedSyncView(APIView):
     # Accept JWT auth but allow explicit unauthenticated visitor flows controlled by resolve_user
     authentication_classes = [JWTAuthentication]
@@ -126,15 +127,20 @@ class UnifiedSyncView(APIView):
             user.save()
 
     def resolve_user(self, request):
-        """Resolve the user for this request. 
+        """Resolve the user for this request.
 
-        Behavior summary (new additions):
-        - Authenticated requests operate on `request.user` and any client-supplied `user_id` is ignored for writes.
-        - Unauthenticated requests may only use `temp_id` to create/lookup a visitor. Device association is attached
-          when `device_id` is provided.
+        Behavior summary:
+        - Authenticated requests operate on `request.user`. Any client-supplied `user_id` is ignored for write
+            operations to prevent privilege escalation.
+        - Unauthenticated requests may create or lookup a visitor by `temp_id`. When `device_id` is provided the
+            visitor will be associated with that device.
         - A limited unauthenticated GET-by-UUID is allowed only when `allow_public_uuid=true` and the method is GET.
 
-        Returns: (user, is_new_visitor, error_response_or_none, temp_id_or_none)
+        Returns a 4-tuple: (user, is_new_visitor, error_response_or_none, temp_id_or_none)
+
+        Notes:
+        - Caller should short-circuit and return `error_response_or_none` when it is not None.
+        - This helper enforces the current security model where writes require authentication or a valid `temp_id`.
         """
         user = None
         is_new_visitor = False
@@ -246,44 +252,66 @@ class UnifiedSyncView(APIView):
                 obj.delete()
 
     def get(self, request):
-        """
-        GET
-        Returns user profile, chat data (conversations, messages, attachments), or both.
+        """GET
+
+        Returns a nested payload containing `profile` and/or `chat` depending on flags.
+
+        Response shape (high level):
+            {
+                "user_id": <uuid>,
+                "is_new": <bool>,
+                "temp_id": <str|null>,
+                "profile": { ... } ,          # present when profile=true or by default
+                "chat": {                     # present when chat=true or by default
+                    "conversations": [...],
+                    "messages": [...],
+                    "message_request": [...],
+                    "message_response": [...],
+                    "message_output": [...],
+                    "attachments": [...]
+                }
+            }
+
+        Notes / implementation details:
+        - Serializers: when available the view uses `FullProfileSerializer` and `FullChatSerializer` to produce the
+          canonical output. If serializers fail the view falls back to minimal manual assembly.
+        - Attachments returned in `chat.attachments` always include a `user_id` field (derived from the related
+          message) to make ownership explicit for clients.
 
         Example Request:
             GET /api/v1/unified-sync/?user_id=123e4567-e89b-12d3-a456-426614174000&profile=true&chat=true
 
-        Example Response:
+        Example Response (simplified):
             {
                 "user_id": "123e4567-e89b-12d3-a456-426614174000",
                 "is_new": false,
                 "temp_id": null,
                 "profile": {
+                    "user_id": "123e4567-e89b-12d3-a456-426614174000",
                     "username": "john_doe",
                     "email": "john@example.com",
                     "is_visitor": false,
                     "is_active": true,
                     "is_archived": false
                 },
-                "conversations": [
-                    {
-                        "conversation_id": "c1",
-                        "title": "My Conversation",
-                        "messages": [
-                            {
-                                "message_id": "m1",
-                                "content": "Hello!"
-                            }
-                        ]
-                    }
-                ],
-                "attachments": [
-                    {
-                        "id": 1,
-                        "type": "image",
-                        "file_path": "/media/attachments/1.png"
-                    }
-                ]
+                "chat": {
+                    "conversations": [
+                        {
+                            "conversation_id": "c1",
+                            "title": "My Conversation",
+                            "messages": [ {"message_id": "m1", "content": "Hello!"} ]
+                        }
+                    ],
+                    "messages": [ {"message_id": "m1", "content": "Hello!"} ],
+                    "attachments": [
+                        {
+                            "id": 1,
+                            "type": "image",
+                            "file_path": "/media/attachments/1.png",
+                            "user_id": "123e4567-e89b-12d3-a456-426614174000"
+                        }
+                    ]
+                }
             }
         """
         user, is_new_visitor, error_response, temp_id = self.resolve_user(request)
@@ -328,111 +356,214 @@ class UnifiedSyncView(APIView):
         }
 
         if profile_flag:
-            response_data["profile"] = {
-                "username": str(user.username) if user and getattr(user, "username", None) is not None else None,
-                "email": str(user.email) if user and getattr(user, "email", None) is not None else None,
-                "is_visitor": user.is_visitor if user and getattr(user, "is_visitor", None) is not None else None,
-                "is_active": user.is_active if user and getattr(user, "is_active", None) is not None else None,
-                "is_archived": getattr(user, "is_archived", False),
-            }
+            # Use the FullProfileSerializer to return the complete profile when requested
+            try:
+                from user_mang.serializers import FullProfileSerializer
+
+                profile_serializer = FullProfileSerializer(user, context={"request": request})
+                response_data["profile"] = profile_serializer.data
+            except Exception:
+                # Fallback to minimal profile if serializer is not available or fails
+                response_data["profile"] = {
+                    "username": str(user.username) if user and getattr(user, "username", None) is not None else None,
+                    "email": str(user.email) if user and getattr(user, "email", None) is not None else None,
+                    "is_visitor": user.is_visitor if user and getattr(user, "is_visitor", None) is not None else None,
+                    "is_active": user.is_active if user and getattr(user, "is_active", None) is not None else None,
+                    "is_archived": getattr(user, "is_archived", False),
+                }
 
         if chat_flag:
+            # Include full chat data nested under 'chat'
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
             conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
-            attachments = Attachment.objects.filter(message_id__user_id=user)
-            attach_serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
-            response_data["conversations"] = conv_serializer.data
-            response_data["attachments"] = attach_serializer.data
+
+            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation")
+
+            # Collect related ids for request/response/output
+            request_ids = list(messages.exclude(request_id__isnull=True).values_list("request_id", flat=True))
+            response_ids = list(messages.exclude(response_id__isnull=True).values_list("response_id", flat=True))
+            output_ids = list(messages.exclude(output_id__isnull=True).values_list("output_id", flat=True))
+
+            message_requests = MessageRequest.objects.filter(request_id__in=request_ids) if request_ids else MessageRequest.objects.none()
+            message_responses = MessageResponse.objects.filter(response_id__in=response_ids) if response_ids else MessageResponse.objects.none()
+            message_outputs = MessageOutput.objects.filter(id__in=output_ids) if output_ids else MessageOutput.objects.none()
+
+            attachments_qs = Attachment.objects.filter(message_id__user_id=user).select_related("message_id__user_id")
+
+            # Use composite serializer to build the nested chat payload
+            try:
+                from user_mang.serializers import FullChatSerializer
+
+                chat_instance = {
+                    "conversations": conversations,
+                    "messages": messages,
+                    "message_request": message_requests,
+                    "message_response": message_responses,
+                    "message_output": message_outputs,
+                    "attachments": attachments_qs,
+                }
+                chat_serializer = FullChatSerializer(chat_instance, context={"request": request})
+                chat_data = chat_serializer.data
+            except Exception:
+                # Fallback to the previous manual assembly if serializer not available
+                conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
+                msg_serializer = MessageSerializer(messages, many=True, context={"request": request})
+                req_serializer = MessageRequestSerializer(message_requests, many=True, context={"request": request})
+                resp_serializer = MessageResponseSerializer(message_responses, many=True, context={"request": request})
+                out_serializer = MessageOutputSerializer(message_outputs, many=True, context={"request": request})
+                attach_serializer = AttachmentSerializer(attachments_qs, many=True, context={"request": request})
+                chat_data = {
+                    "conversations": conv_serializer.data,
+                    "messages": msg_serializer.data,
+                    "message_request": req_serializer.data,
+                    "message_response": resp_serializer.data,
+                    "message_output": out_serializer.data,
+                    "attachments": attach_serializer.data,
+                }
+
+            # Build attachments list separately, inject user_id from related message,
+            # then overwrite whatever attachments the chat serializer returned.
+            attach_serializer = AttachmentSerializer(attachments_qs, many=True, context={"request": request})
+            attachments_data = list(attach_serializer.data)
+            for inst, data in zip(attachments_qs, attachments_data):
+                try:
+                    data["user_id"] = str(getattr(inst.message_id.user_id, "user_id", inst.message_id.user_id))
+                except Exception:
+                    data["user_id"] = None
+
+            try:
+                if isinstance(chat_data, dict):
+                    chat_data["attachments"] = attachments_data
+                else:
+                    # best-effort: wrap into dict if serializer produced a non-dict
+                    chat_data = dict(chat_data)
+                    chat_data["attachments"] = attachments_data
+            except Exception:
+                # fallback: attach a top-level attachments key
+                chat_data = {**({} if not isinstance(chat_data, dict) else chat_data), "attachments": attachments_data}
+
+            response_data["chat"] = chat_data
 
         if not (profile_flag or chat_flag):
+            # Default behavior: return both profile and chat using serializers
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
             conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
-            attachments = Attachment.objects.filter(message_id__user_id=user)
-            attach_serializer = AttachmentSerializer(attachments, many=True, context={"request": request})
-            response_data["conversations"] = conv_serializer.data
-            response_data["attachments"] = attach_serializer.data
-            response_data["profile"] = {
-                "username": str(user.username) if user and getattr(user, "username", None) is not None else None,
-                "email": str(user.email) if user and getattr(user, "email", None) is not None else None,
-                "is_visitor": user.is_visitor if user and getattr(user, "is_visitor", None) is not None else None,
-                "is_active": user.is_active if user and getattr(user, "is_active", None) is not None else None,
-                "is_archived": getattr(user, "is_archived", False),
-            }
+
+            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation")
+
+            request_ids = list(messages.exclude(request_id__isnull=True).values_list("request_id", flat=True))
+            response_ids = list(messages.exclude(response_id__isnull=True).values_list("response_id", flat=True))
+            output_ids = list(messages.exclude(output_id__isnull=True).values_list("output_id", flat=True))
+
+            message_requests = MessageRequest.objects.filter(request_id__in=request_ids) if request_ids else MessageRequest.objects.none()
+            message_responses = MessageResponse.objects.filter(response_id__in=response_ids) if response_ids else MessageResponse.objects.none()
+            message_outputs = MessageOutput.objects.filter(id__in=output_ids) if output_ids else MessageOutput.objects.none()
+
+            attachments_qs = Attachment.objects.filter(message_id__user_id=user).select_related("message_id__user_id")
+
+            try:
+                from user_mang.serializers import FullChatSerializer
+
+                chat_instance = {
+                    "conversations": conversations,
+                    "messages": messages,
+                    "message_request": message_requests,
+                    "message_response": message_responses,
+                    "message_output": message_outputs,
+                    "attachments": attachments_qs,
+                }
+                chat_serializer = FullChatSerializer(chat_instance, context={"request": request})
+                chat_data = chat_serializer.data
+            except Exception:
+                conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
+                msg_serializer = MessageSerializer(messages, many=True, context={"request": request})
+                req_serializer = MessageRequestSerializer(message_requests, many=True, context={"request": request})
+                resp_serializer = MessageResponseSerializer(message_responses, many=True, context={"request": request})
+                out_serializer = MessageOutputSerializer(message_outputs, many=True, context={"request": request})
+                attach_serializer = AttachmentSerializer(attachments_qs, many=True, context={"request": request})
+                chat_data = {
+                    "conversations": conv_serializer.data,
+                    "messages": msg_serializer.data,
+                    "message_request": req_serializer.data,
+                    "message_response": resp_serializer.data,
+                    "message_output": out_serializer.data,
+                    "attachments": attach_serializer.data,
+                }
+
+            # Build attachments list separately, inject user_id from related message,
+            # then overwrite whatever attachments the chat serializer returned.
+            attach_serializer = AttachmentSerializer(attachments_qs, many=True, context={"request": request})
+            attachments_data = list(attach_serializer.data)
+            for inst, data in zip(attachments_qs, attachments_data):
+                try:
+                    data["user_id"] = str(getattr(inst.message_id.user_id, "user_id", inst.message_id.user_id))
+                except Exception:
+                    data["user_id"] = None
+
+            try:
+                if isinstance(chat_data, dict):
+                    chat_data["attachments"] = attachments_data
+                else:
+                    chat_data = dict(chat_data)
+                    chat_data["attachments"] = attachments_data
+            except Exception:
+                chat_data = {**({} if not isinstance(chat_data, dict) else chat_data), "attachments": attachments_data}
+
+            response_data["chat"] = chat_data
+            try:
+                from user_mang.serializers import FullProfileSerializer
+
+                profile_serializer = FullProfileSerializer(user, context={"request": request})
+                response_data["profile"] = profile_serializer.data
+            except Exception:
+                response_data["profile"] = {
+                    "username": str(user.username) if user and getattr(user, "username", None) is not None else None,
+                    "email": str(user.email) if user and getattr(user, "email", None) is not None else None,
+                    "is_visitor": user.is_visitor if user and getattr(user, "is_visitor", None) is not None else None,
+                    "is_active": user.is_active if user and getattr(user, "is_active", None) is not None else None,
+                    "is_archived": getattr(user, "is_archived", False),
+                }
 
         return Response(response_data, status=status.HTTP_200_OK)
 
     def post(self, request):
         """
-            POST
-            Upserts (creates or updates) user profile, chat data, or both.
+        POST
 
-            Example Request:
-                POST /api/v1/unified-sync/
-                {
-                    "user_id": "123e4567-e89b-12d3-a456-426614174000",
-                    "profile": {
-                        "username": "john_doe_updated",
-                        "email": "john_new@example.com"
-                    },
-                    "conversations": [
-                        {
-                            "conversation_id": "c1",
-                            "title": "Updated Conversation"
-                        }
-                    ],
-                    "messages": [
-                        {
-                            "message_id": "m1",
-                            "conversation_id": "c1",
-                            "content": "Hello again!"
-                        }
-                    ],
-                    "attachments": [
-                        {
-                            "id": 1,
-                            "type": "image",
-                            "file_path": "/media/attachments/1.png"
-                        }
-                    ],
-                    "profile": true,
-                    "chat": true
-                }
+                Upserts (creates or updates) user profile and/or chat data.
 
-            Example Response:
-                {
-                    "summary": {
-                        "profile_updated": true,
-                        "conversations_created": 0,
-                        "conversations_updated": 1,
-                        "messages_created": 0,
-                        "messages_updated": 1,
-                        "requests_created": 0,
-                        "requests_updated": 0,
-                        "responses_created": 0,
-                        "responses_updated": 0,
-                        "outputs_created": 0,
-                        "outputs_updated": 0,
-                        "attachments_created": 0,
-                        "attachments_updated": 1
-                    },
-                    "errors": {
-                        "conversations": [],
-                        "messages": [],
-                        "message_requests": [],
-                        "message_responses": [],
-                        "message_outputs": [],
-                        "attachments": []
-                    },
-                    "user_id": "123e4567-e89b-12d3-a456-426614174000",
-                    "attachments": [
+                Behavior / notes:
+                - Profile updates are validated with `FullProfileSerializer` when provided. Invalid profile data aborts the
+                    request with a 400 and validation details.
+                - Chat model lists (conversations, messages, message_requests, message_responses, message_outputs,
+                    attachments) are validated per-item via their respective serializers.
+                - The endpoint performs upserts inside a database transaction; on failure no partial changes are applied.
+
+                Example Request (upsert profile + chat):
+                        POST /api/v1/unified-sync/
                         {
-                            "id": 1,
-                            "type": "image",
-                            "file_path": "/media/attachments/1.png"
+                                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                                "profile": {"username": "john_doe_updated", "email": "john_new@example.com"},
+                                "conversations": [{"conversation_id": "c1", "title": "Updated Conversation"}],
+                                "messages": [{"message_id": "m1", "conversation_id": "c1", "content": "Hello again!"}],
+                                "attachments": [{"id": 1, "type": "image", "file_path": "/media/attachments/1.png"}],
+                                "profile": true,
+                                "chat": true
                         }
-                    ],
-                    "temp_id": null
-                }
+
+
+        Example Response (successful upsert):
+                        {
+                                "summary": { ...counts... },
+                                "errors": { ...per-model-errors-or-empty-arrays... },
+                                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                                "temp_id": null,
+                                "profile": { ...FullProfileSerializer output... },
+                                "chat": { ...FullChatSerializer output..., "attachments": [ {"id":1, ..., "user_id": "..."}, ... ] }
+                        }
+
+                The response includes the canonical `profile` and `chat` payloads (when requested or by default). Attachments
+                in the returned `chat.attachments` array include `user_id` for client convenience.
         """
         user, is_new_visitor, error_response, temp_id = self.resolve_user(request)
         if error_response:
@@ -599,19 +730,114 @@ class UnifiedSyncView(APIView):
             })
             errors = errors
 
-        return Response({
+        # Build final serialized profile/chat payload for the response
+        response_payload = {
             "summary": summary,
             "errors": errors,
             "user_id": str(user.user_id) if user else None,
-            "attachments": AttachmentSerializer(Attachment.objects.filter(message_id__user_id=user), many=True, context={"request": request}).data,
             "temp_id": temp_id,
-        }, status=status.HTTP_200_OK)
+        }
+
+        # Include profile when requested (or by default)
+        if profile_flag or not (profile_flag or chat_flag):
+            try:
+                from user_mang.serializers import FullProfileSerializer
+
+                profile_serializer = FullProfileSerializer(user, context={"request": request})
+                response_payload["profile"] = profile_serializer.data
+            except Exception:
+                response_payload["profile"] = {
+                    "username": str(user.username) if user and getattr(user, "username", None) is not None else None,
+                    "email": str(user.email) if user and getattr(user, "email", None) is not None else None,
+                    "is_visitor": user.is_visitor if user and getattr(user, "is_visitor", None) is not None else None,
+                    "is_active": user.is_active if user and getattr(user, "is_active", None) is not None else None,
+                    "is_archived": getattr(user, "is_archived", False),
+                }
+
+        # Include chat when requested (or by default)
+        if chat_flag or not (profile_flag or chat_flag):
+            conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
+            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation")
+
+            request_ids = list(messages.exclude(request_id__isnull=True).values_list("request_id", flat=True))
+            response_ids = list(messages.exclude(response_id__isnull=True).values_list("response_id", flat=True))
+            output_ids = list(messages.exclude(output_id__isnull=True).values_list("output_id", flat=True))
+
+            message_requests = MessageRequest.objects.filter(request_id__in=request_ids) if request_ids else MessageRequest.objects.none()
+            message_responses = MessageResponse.objects.filter(response_id__in=response_ids) if response_ids else MessageResponse.objects.none()
+            message_outputs = MessageOutput.objects.filter(id__in=output_ids) if output_ids else MessageOutput.objects.none()
+
+            attachments_qs = Attachment.objects.filter(message_id__user_id=user).select_related("message_id__user_id")
+
+            try:
+                from user_mang.serializers import FullChatSerializer
+
+                chat_instance = {
+                    "conversations": conversations,
+                    "messages": messages,
+                    "message_request": message_requests,
+                    "message_response": message_responses,
+                    "message_output": message_outputs,
+                    "attachments": attachments_qs,
+                }
+                chat_serializer = FullChatSerializer(chat_instance, context={"request": request})
+                chat_data = chat_serializer.data
+            except Exception:
+                conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
+                msg_serializer = MessageSerializer(messages, many=True, context={"request": request})
+                req_serializer = MessageRequestSerializer(message_requests, many=True, context={"request": request})
+                resp_serializer = MessageResponseSerializer(message_responses, many=True, context={"request": request})
+                out_serializer = MessageOutputSerializer(message_outputs, many=True, context={"request": request})
+                attach_serializer = AttachmentSerializer(attachments_qs, many=True, context={"request": request})
+                chat_data = {
+                    "conversations": conv_serializer.data,
+                    "messages": msg_serializer.data,
+                    "message_request": req_serializer.data,
+                    "message_response": resp_serializer.data,
+                    "message_output": out_serializer.data,
+                    "attachments": attach_serializer.data,
+                }
+
+            # Ensure attachments include user_id
+            attach_serializer = AttachmentSerializer(attachments_qs, many=True, context={"request": request})
+            attachments_data = list(attach_serializer.data)
+            for inst, data in zip(attachments_qs, attachments_data):
+                try:
+                    data["user_id"] = str(getattr(inst.message_id.user_id, "user_id", inst.message_id.user_id))
+                except Exception:
+                    data["user_id"] = None
+
+            try:
+                if isinstance(chat_data, dict):
+                    chat_data["attachments"] = attachments_data
+                else:
+                    chat_data = dict(chat_data)
+                    chat_data["attachments"] = attachments_data
+            except Exception:
+                chat_data = {**({} if not isinstance(chat_data, dict) else chat_data), "attachments": attachments_data}
+
+            response_payload["chat"] = chat_data
+
+        return Response(response_payload, status=status.HTTP_200_OK)
 
     def delete(self, request):
-        """
-        DELETE
-        Deletes or archives user profile, chat data, or both, depending on the 'action' parameter.
-        Also exports user data as CSV and emails it before deletion/archive.
+        """DELETE
+
+        Deletes or archives user profile and/or chat data according to the `action` parameter. Exports user data
+        to a temporary CSV and emails it to the user's verified email before deletion/archive.
+
+        Parameters (body or query):
+            - action: "delete" | "archive"  (required)
+            - profile: true/false
+            - chat: true/false
+
+        Behavior notes:
+        - `delete` attempts a soft-delete where the model supports it (sets `is_deleted` or `is_archived`), and
+          removes provider tokens.
+        - `archive` sets `is_archived` and disables provider flags; tokens are also removed where appropriate.
+        - The endpoint will attach the canonical serialized `profile` and `chat` payloads to the response when
+          possible (using `FullProfileSerializer` and `FullChatSerializer`). Serialization errors are non-fatal and
+          will be ignored in order to complete the delete/archive operation.
 
         Example Request (delete all):
             DELETE /api/v1/unified-sync/
@@ -625,34 +851,9 @@ class UnifiedSyncView(APIView):
         Example Response (delete):
             {
                 "message": "User and all related data deleted successfully",
-                "deleted": {
-                    "attachments": 2,
-                    "messages": 5,
-                    "conversations": 1,
-                    "tokens": 1,
-                    "user": 1
-                }
-            }
-            
-            Example Request (delete all):
-            DELETE /api/v1/unified-sync/
-            {
-                "user_id": "123e4567-e89b-12d3-a456-426614174000",
-                "action": "delete",
-                "profile": true,
-                "chat": true
-            }
-
-        Example Response (delete):
-            {
-                "message": "User and all related data deleted successfully",
-                "deleted": {
-                    "attachments": 2,
-                    "messages": 5,
-                    "conversations": 1,
-                    "tokens": 1,
-                    "user": 1
-                }
+                "deleted": {"attachments": 2, "messages": 5, "conversations": 1, "tokens": 1, "user": 1},
+                "profile": { ...FullProfileSerializer output or minimal fallback... },
+                "chat": { ...FullChatSerializer output or minimal fallback... }
             }
 
         Example Request (archive profile only):
@@ -666,9 +867,9 @@ class UnifiedSyncView(APIView):
         Example Response (archive):
             {
                 "message": "User archived successfully",
-                "archived": {
-                    "user": 1
-                }
+                "archived": {"user": 1},
+                "profile": { ...FullProfileSerializer output ... },
+                "chat": { ...FullChatSerializer output ... }
             }
         """
         user, _, error_response, temp_id = self.resolve_user(request)
@@ -729,7 +930,31 @@ class UnifiedSyncView(APIView):
                     logger.info(f"UnifiedSyncView: User {user.pk} and all related data deleted.")
                 else:
                     logger.warning("UnifiedSyncView: Attempted to delete a None user object.")
-                return Response({"message": "User and all related data deleted successfully", "deleted": stats})
+                # Include final serialized profile/chat in the response for convenience
+                payload = {"message": "User and all related data deleted successfully", "deleted": stats}
+                try:
+                    from user_mang.serializers import FullProfileSerializer, FullChatSerializer
+                    payload["profile"] = FullProfileSerializer(user, context={"request": request}).data
+                    # minimal chat assembly
+                    conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
+                    messages = Message.objects.filter(user_id=user)
+                    message_requests = MessageRequest.objects.filter(request_id__in=messages.values_list("request_id", flat=True))
+                    message_responses = MessageResponse.objects.filter(response_id__in=messages.values_list("response_id", flat=True))
+                    message_outputs = MessageOutput.objects.filter(id__in=messages.values_list("output_id", flat=True))
+                    attachments_qs = Attachment.objects.filter(message_id__user_id=user)
+                    chat_instance = {
+                        "conversations": conversations,
+                        "messages": messages,
+                        "message_request": message_requests,
+                        "message_response": message_responses,
+                        "message_output": message_outputs,
+                        "attachments": attachments_qs,
+                    }
+                    payload["chat"] = FullChatSerializer(chat_instance, context={"request": request}).data
+                except Exception:
+                    # ignore serialization errors and return minimal payload
+                    pass
+                return Response(payload)
             elif action == 'archive':
                 if user is not None:
                     user.is_archived, user.is_active = True, False
@@ -739,7 +964,29 @@ class UnifiedSyncView(APIView):
                             setattr(user, flag, False)
                     user.save(update_fields=["is_archived", "is_active"] + flags)
                     logger.info(f"UnifiedSyncView: User {user.pk} archived; tokens purged.")
-                    return Response({"message": "User archived successfully", "archived": stats})
+                    # Include serialized profile (archived) and minimal chat summary
+                    payload = {"message": "User archived successfully", "archived": stats}
+                    try:
+                        from user_mang.serializers import FullProfileSerializer, FullChatSerializer
+                        payload["profile"] = FullProfileSerializer(user, context={"request": request}).data
+                        conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
+                        messages = Message.objects.filter(user_id=user)
+                        message_requests = MessageRequest.objects.filter(request_id__in=messages.values_list("request_id", flat=True))
+                        message_responses = MessageResponse.objects.filter(response_id__in=messages.values_list("response_id", flat=True))
+                        message_outputs = MessageOutput.objects.filter(id__in=messages.values_list("output_id", flat=True))
+                        attachments_qs = Attachment.objects.filter(message_id__user_id=user)
+                        chat_instance = {
+                            "conversations": conversations,
+                            "messages": messages,
+                            "message_request": message_requests,
+                            "message_response": message_responses,
+                            "message_output": message_outputs,
+                            "attachments": attachments_qs,
+                        }
+                        payload["chat"] = FullChatSerializer(chat_instance, context={"request": request}).data
+                    except Exception:
+                        pass
+                    return Response(payload)
                 else:
                     logger.warning("UnifiedSyncView: Attempted to archive a None user object.")
                     return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)

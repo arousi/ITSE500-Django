@@ -971,8 +971,12 @@ class OAuthResultView(APIView):
             oauth_state = OAuthState.objects.get(state=state_value)
         except OAuthState.DoesNotExist:
             return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        # If no payload has been stored yet, treat this as "not ready" so SPA can continue polling.
+        # Some deployed rows were observed with is_used=True but empty payload (race/partial write).
+        # Returning 404 here signals the client to keep polling rather than aborting with a Conflict.
         if not oauth_state.result_payload:
-            return Response({'detail': 'Result not ready'}, status=status.HTTP_409_CONFLICT)
+            logger.warning(f"[OAuthResultView] Result not ready for state={state_value} (used={oauth_state.used}, result_retrieved={oauth_state.result_retrieved})")
+            return Response({'detail': 'Result not ready'}, status=status.HTTP_404_NOT_FOUND)
         if oauth_state.result_retrieved:
             return Response({'detail': 'Result already retrieved'}, status=status.HTTP_410_GONE)
         data = json.loads(oauth_state.result_payload)

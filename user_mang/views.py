@@ -438,7 +438,7 @@ class UnifiedSyncView(APIView):
 
             message_requests = MessageRequest.objects.filter(request_id__in=request_ids) if request_ids else MessageRequest.objects.none()
             message_responses = MessageResponse.objects.filter(response_id__in=response_ids) if response_ids else MessageResponse.objects.none()
-            message_outputs = MessageOutput.objects.filter(id__in=output_ids) if output_ids else MessageOutput.objects.none()
+            message_outputs = MessageOutput.objects.filter(output_id__in=output_ids) if output_ids else MessageOutput.objects.none()
 
             attachments_qs = Attachment.objects.filter(message_id__user_id=user).select_related("message_id__user_id")
 
@@ -509,7 +509,7 @@ class UnifiedSyncView(APIView):
 
             message_requests = MessageRequest.objects.filter(request_id__in=request_ids) if request_ids else MessageRequest.objects.none()
             message_responses = MessageResponse.objects.filter(response_id__in=response_ids) if response_ids else MessageResponse.objects.none()
-            message_outputs = MessageOutput.objects.filter(id__in=output_ids) if output_ids else MessageOutput.objects.none()
+            message_outputs = MessageOutput.objects.filter(output_id__in=output_ids) if output_ids else MessageOutput.objects.none()
 
             attachments_qs = Attachment.objects.filter(message_id__user_id=user).select_related("message_id__user_id")
 
@@ -688,7 +688,7 @@ class UnifiedSyncView(APIView):
                         if not req_id:
                             errors["message_requests"].append({"data": req, "error": "Missing id"})
                             continue
-                        instance = MessageRequest.objects.filter(id=req_id).first()
+                        instance = MessageRequest.objects.filter(request_id=req_id).first()
                         serializer = MessageRequestSerializer(instance, data=req, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -702,7 +702,7 @@ class UnifiedSyncView(APIView):
                         if not resp_id:
                             errors["message_responses"].append({"data": resp, "error": "Missing id"})
                             continue
-                        instance = MessageResponse.objects.filter(id=resp_id).first()
+                        instance = MessageResponse.objects.filter(response_id=resp_id).first()
                         serializer = MessageResponseSerializer(instance, data=resp, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -716,7 +716,7 @@ class UnifiedSyncView(APIView):
                         if not out_id:
                             errors["message_outputs"].append({"data": out, "error": "Missing id"})
                             continue
-                        instance = MessageOutput.objects.filter(id=out_id).first()
+                        instance = MessageOutput.objects.filter(output_id=out_id).first()
                         serializer = MessageOutputSerializer(instance, data=out, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -753,7 +753,7 @@ class UnifiedSyncView(APIView):
                         else:
                             errors["attachments"].append({"data": att, "error": "User is None"})
                             continue
-                        instance = Attachment.objects.filter(id=att_id).first()
+                        instance = Attachment.objects.filter(pk=att_id).first()
                         serializer = AttachmentSerializer(instance, data=att, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -817,7 +817,7 @@ class UnifiedSyncView(APIView):
 
             message_requests = MessageRequest.objects.filter(request_id__in=request_ids) if request_ids else MessageRequest.objects.none()
             message_responses = MessageResponse.objects.filter(response_id__in=response_ids) if response_ids else MessageResponse.objects.none()
-            message_outputs = MessageOutput.objects.filter(id__in=output_ids) if output_ids else MessageOutput.objects.none()
+            message_outputs = MessageOutput.objects.filter(output_id__in=output_ids) if output_ids else MessageOutput.objects.none()
 
             attachments_qs = Attachment.objects.filter(message_id__user_id=user).select_related("message_id__user_id")
 
@@ -1147,7 +1147,7 @@ class UnifiedSyncView(APIView):
                     messages = Message.objects.filter(user_id=user)
                     message_requests = MessageRequest.objects.filter(request_id__in=messages.values_list("request_id", flat=True))
                     message_responses = MessageResponse.objects.filter(response_id__in=messages.values_list("response_id", flat=True))
-                    message_outputs = MessageOutput.objects.filter(id__in=messages.values_list("output_id", flat=True))
+                    message_outputs = MessageOutput.objects.filter(output_id__in=messages.values_list("output_id", flat=True))
                     attachments_qs = Attachment.objects.filter(message_id__user_id=user)
                     chat_instance = {
                         "conversations": conversations,
@@ -1180,7 +1180,7 @@ class UnifiedSyncView(APIView):
                         messages = Message.objects.filter(user_id=user)
                         message_requests = MessageRequest.objects.filter(request_id__in=messages.values_list("request_id", flat=True))
                         message_responses = MessageResponse.objects.filter(request_id__in=messages.values_list("response_id", flat=True))
-                        message_outputs = MessageOutput.objects.filter(id__in=messages.values_list("output_id", flat=True))
+                        message_outputs = MessageOutput.objects.filter(output_id__in=messages.values_list("output_id", flat=True))
                         attachments_qs = Attachment.objects.filter(message_id__user_id=user)
 
                     except Exception:

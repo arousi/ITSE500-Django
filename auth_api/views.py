@@ -157,44 +157,16 @@ class RegisterView(APIView):
         if user:
             logger.info(f"[RegisterView] Registration attempted for existing account: email={email} identifier={user_id or username or temp_id}")
             try:
+                # Previously we sent verification PINs; this project phase auto-verifies emails.
                 if not getattr(user, 'email_verified', False):
-                    # Ensure a PIN exists and send it (best-effort, non-fatal)
-                    pin = getattr(user, 'profile_email_pin', None)
-                    if not pin:
-                        pin = f"{random.randint(10000, 99999)}"
-                        user.email_pin = pin
-                        user.email_pin_created = timezone.now()
-                        try:
-                            user.save(update_fields=['email_pin', 'email_pin_created'])
-                        except Exception:
-                            user.save()
+                    user.email_verified = True
                     try:
-                        # Use send_verified_email (Zeruh + Maileroo) then fallback to send_mail if not sent
-                        result = send_verified_email(
-                            subject="Your Email Verification PIN",
-                            message=f"Your verification PIN is: {pin}",
-                            recipient_list=[user.email],
-                            html_message=f"<b>Your verification PIN is: {pin}</b>",
-                            verify_with_zeruh=True,
-                        )
-                        logger.info(f"[RegisterView] Resend PIN result: {result}")
-                        recipient_result = result.get(user.email) if isinstance(result, dict) else None
-                        if not recipient_result or not recipient_result.get('sent'):
-                            try:
-                                send_mail(
-                                    subject="Your Email Verification PIN",
-                                    message=f"Your verification PIN is: {pin}",
-                                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@example.com'),
-                                    recipient_list=[user.email],
-                                    fail_silently=False,
-                                )
-                                logger.info(f"[RegisterView] Fallback direct send_mail succeeded for {user.email}")
-                            except Exception as e:
-                                logger.warning(f"[RegisterView] Fallback direct send_mail failed for {user.email}: {e}")
+                        user.save(update_fields=['email_verified'])
+                        logger.info(f"[RegisterView] Auto-verified existing user email: {user.email}")
                     except Exception:
-                        logger.warning("[RegisterView] Failed to resend verification PIN to existing user (non-fatal)")
-                    # Inform client to check email — do NOT issue tokens or return user data
-                    return Response({'detail': 'Email already registered. Check your email for verification PIN.'}, status=status.HTTP_200_OK)
+                        user.save()
+                # Inform client that the email is already registered. Do NOT issue tokens here.
+                return Response({'detail': 'Email already registered.'}, status=status.HTTP_200_OK)
             except Exception:
                 logger.exception("[RegisterView] Error while handling existing user during registration attempt")
             # Generic response to avoid leaking any info for verified accounts
@@ -210,42 +182,13 @@ class RegisterView(APIView):
                 salted = (raw_pw + BACKEND_SALT).encode('utf-8')
                 backend_hash = hashlib.sha256(salted).hexdigest()
                 user.user_password = backend_hash
-                # Generate 5-digit PIN for email verification
-                pin = f"{random.randint(10000, 99999)}"
-                user.profile_email_pin = pin
-                user.profile_email_pin_created = timezone.now()
-                user.email_verified = False
+                # Email verification via PIN is disabled for this phase — auto-verify
+                user.email_verified = True
                 if temp_id:
                     user.temp_id = temp_id
                     user.is_visitor = True
                 user.save()
-                # Send PIN email (best effort)
-                try:
-                    result = send_verified_email(
-                        subject="Your Email Verification PIN",
-                        message=f"Your verification PIN is: {pin}",
-                        recipient_list=[user.email],
-                        html_message=f"<b>Your verification PIN is: {pin}</b>",
-                        verify_with_zeruh=True,
-                    )
-                    logger.info(f"[RegisterView] PIN email send result: {result}")
-                    # fallback: if Zeruh prevented send, try direct send_mail (best-effort)
-                    recipient_result = result.get(user.email) if isinstance(result, dict) else None
-                    if not recipient_result or not recipient_result.get('sent'):
-                        try:
-                            send_mail(
-                                subject="Your Email Verification PIN",
-                                message=f"Your verification PIN is: {pin}",
-                                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-                                recipient_list=[user.email],
-                                html_message=f"<b>Your verification PIN is: {pin}</b>",
-                                fail_silently=False,
-                            )
-                            logger.info(f"[RegisterView] Fallback direct send_mail succeeded for {user.email}")
-                        except Exception as e:
-                            logger.warning(f"[RegisterView] Fallback direct send_mail failed for {user.email}: {e}")
-                except Exception as e:
-                    logger.warning(f"[RegisterView] PIN email send failed (non-fatal): {e}")
+                # OTP/email PIN sending is disabled in this phase. User is auto-verified.
                 created = True
             except serializers.ValidationError as e:
                 logger.warning(f"[RegisterView] Registration failed: status=400, errors={e.detail}, req={request.data}")
@@ -1375,6 +1318,9 @@ class SendLoginOTPView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """
+        Deprecated endpoint: OTP login is disabled in this release.
+        
         ser = SendOTPSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         email = cast(Dict[str, Any], ser.validated_data).get('email')
@@ -1410,38 +1356,19 @@ class SendLoginOTPView(APIView):
         logger.info(f"[SendLoginOTPView] OTP sent email={email} count={user.login_otp_sent_count}")
         return Response({'message': 'OTP sent'}, status=status.HTTP_200_OK)
 
+        """
+        return Response({'detail': 'OTP endpoints are deprecated in this release.'}, status=status.HTTP_410_GONE)
+
 class VerifyLoginOTPView(APIView):
     """Verifies OTP and returns JWT tokens."""
     permission_classes = [AllowAny]
 
     def post(self, request):
-        ser = VerifyOTPSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        validated = cast(Dict[str, Any], ser.validated_data)
-        email = validated.get('email')
-        otp = validated.get('otp')
-        if not email or not otp:
-            return Response({'detail': 'Invalid data'}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            user = Custom_User.objects.get(email=email)
-        except Custom_User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        if not user.login_otp or user.login_otp != otp:
-            return Response({'detail': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
-        if not user.login_otp_created or (timezone.now() - user.login_otp_created).total_seconds() > OTP_EXPIRY_SECONDS:
-            return Response({'detail': 'OTP expired'}, status=status.HTTP_400_BAD_REQUEST)
-        # Clear OTP
-        user.login_otp = None
-        user.login_otp_created = None
-        user.save(update_fields=['login_otp','login_otp_created'])
-        refresh = RefreshToken.for_user(user)
-        logger.info(f"[VerifyLoginOTPView] OTP verified user={user.pk}")
-        return Response({
-            'message': 'Login successful',
-            'user_id': str(user.pk),
-            'access_token': str(refresh.access_token),
-            'refresh_token': str(refresh),
-        }, status=status.HTTP_200_OK)
+        """
+        Deprecated endpoint: OTP verification is disabled in this release.
+        
+        """
+        return Response({'detail': 'OTP endpoints are deprecated in this release.'}, status=status.HTTP_410_GONE)
 
 
 class LoginWithOTPView(APIView):
@@ -1461,18 +1388,8 @@ class LoginWithOTPView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        logger.info(f"[LoginWithOTPView] Incoming OTP login request: data={request.data}")
-        serializer = LoginSerializer(data=request.data, context={'request': request})
-        try:
-            serializer.is_valid(raise_exception=True)
-            user = serializer.validated_data['user']
-            # Here you would generate and send the OTP
-            resp_data = {"message": "OTP sent successfully."}
-            logger.info(f"[LoginWithOTPView] OTP sent: status=200, user_id={user.pk}, resp={resp_data}")
-            return Response(resp_data, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.exception(f"[LoginWithOTPView] Login with OTP failed: {str(e)}, req={request.data}")
-            return Response({"detail": "Login with OTP failed."}, status=status.HTTP_400_BAD_REQUEST)
+        """Deprecated endpoint: Login-with-OTP is disabled in this release."""
+        return Response({'detail': 'OTP endpoints are deprecated in this release.'}, status=status.HTTP_410_GONE)
         
 
 class EnableTOTPView(APIView):

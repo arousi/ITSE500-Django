@@ -296,9 +296,11 @@ class FullProfileSerializer(serializers.ModelSerializer):
         fields = [
             "user_id",
             "username",
-            "firstname",
-            "lastname",
+            # use AbstractUser's names
+            "first_name",
+            "last_name",
             "email",
+            "user_password",
             "phone_number",
             "last_modified",
             "devices_id",
@@ -315,6 +317,45 @@ class FullProfileSerializer(serializers.ModelSerializer):
             "is_staff",
         ]
         read_only_fields = ["user_id", "last_modified"]
+
+    def validate(self, attrs):
+        """
+        Allow missing/blank passwords for OAuth accounts and visitors.
+        Enforce password presence/length only for non-OAuth, non-visitor accounts
+        when email_verified is True or a password is explicitly provided.
+        """
+        # Extract incoming password if present (may be blank string)
+        pwd = attrs.get("user_password", None)
+
+        # Determine target flags: prefer incoming attrs then existing instance
+        is_visitor = attrs.get("is_visitor") if "is_visitor" in attrs else getattr(self.instance, "is_visitor", False)
+        is_oauth = any(
+            attrs.get(flag) if flag in attrs else getattr(self.instance, flag, False)
+            for flag in ("is_google_user", "is_openrouter_user", "is_microsoft_user", "is_github_user")
+        )
+
+        email_verified = attrs.get("email_verified") if "email_verified" in attrs else getattr(self.instance, "email_verified", False)
+
+        # Normalize blank password -> None for decision logic
+        if isinstance(pwd, str) and pwd.strip() == "":
+            pwd = None
+            # remove from attrs so update() won't attempt to hash an empty string
+            if "user_password" in attrs:
+                attrs.pop("user_password")
+
+        # If account is not oauth and not visitor and email_verified, require a password
+        if not is_visitor and not is_oauth and email_verified:
+            if pwd is None and self.instance is None:
+                raise serializers.ValidationError({"user_password": "Password is required for verified accounts."})
+            if pwd is not None and len(str(pwd)) < 6:
+                raise serializers.ValidationError({"user_password": "Password must be at least 6 characters long."})
+
+        # If password is provided for non-oauth accounts, enforce min length
+        if pwd is not None and not (is_visitor or is_oauth):
+            if len(str(pwd)) < 6:
+                raise serializers.ValidationError({"user_password": "Password must be at least 6 characters long."})
+
+        return attrs
 
     def validate_email(self, value: str):
         if not value:
@@ -356,6 +397,9 @@ class FullProfileSerializer(serializers.ModelSerializer):
             "email",
             "phone_number",
             "biometric_enabled",
+            # name fields from AbstractUser
+            "first_name",
+            "last_name",
             "devices_id",
             "temp_id",
             "related_devices",

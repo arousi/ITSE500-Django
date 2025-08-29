@@ -820,6 +820,44 @@ class UnifiedSyncView(APIView):
 
         return Response(response_payload, status=status.HTTP_200_OK)
 
+    def patch(self, request):
+        """
+        PATCH
+
+        Allow field-by-field, authenticated partial updates to the user's profile. This is intended for the
+        single-user "me" endpoint used by the SPA. The view accepts either a top-level set of profile fields
+        (e.g. {"username":"x"}) or a nested `profile` dict (e.g. {"profile": {"username":"x"}}).
+
+        Behavior:
+        - Requires authentication for writes unless a valid `temp_id` visitor flow is used (handled by resolve_user).
+        - Uses the safe `ProfileSerializer` which whitelists writable fields to avoid accidental exposure of
+          sensitive fields.
+        - Returns 200 with the updated profile on success, or 400 with validation errors.
+        """
+        user, _, error_response, temp_id = self.resolve_user(request)
+        if error_response:
+            return error_response
+
+        # Accept either { profile: {...} } or direct field keys
+        profile_data = request.data.get("profile") if isinstance(request.data.get("profile"), dict) else request.data
+
+        if not profile_data:
+            return Response({"error": "No profile data provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Use the safe, whitelisted serializer for partial updates
+        try:
+            from user_mang.serializers import ProfileSerializer
+        except Exception:
+            logger.exception("Failed to import ProfileSerializer")
+            return Response({"error": "Server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        serializer = ProfileSerializer(user, data=profile_data, partial=True, context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"profile": serializer.data}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Invalid profile data", "details": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
     def delete(self, request):
         """DELETE
 

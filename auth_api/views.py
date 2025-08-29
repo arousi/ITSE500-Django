@@ -379,7 +379,8 @@ class LoginView(APIView):
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
             conv_serializer = ConversationSerializer(conversations, many=True)
 
-            attachments = Attachment.objects.filter(user_id=user)
+            # Attachment model links to Message via message_id; filter by messages owned by user
+            attachments = Attachment.objects.filter(message_id__user_id=user)
             attach_serializer = AttachmentSerializer(attachments, many=True)
 
             resp_data = {

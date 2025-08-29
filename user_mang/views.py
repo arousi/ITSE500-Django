@@ -677,7 +677,8 @@ class UnifiedSyncView(APIView):
                         instance = Conversation.objects.filter(conversation_id=conv_id).first()
                         serializer = ConversationSerializer(instance, data=conv, partial=True, context={"request": request})
                         if serializer.is_valid():
-                            serializer.save()
+                            # Conversation.user_id is read-only on the serializer; ensure the FK is set via save(kwargs)
+                            serializer.save(user_id=user)
                             (created if instance is None else updated)["conv"] += 1
                         else:
                             errors["conversations"].append(serializer.errors)
@@ -737,7 +738,8 @@ class UnifiedSyncView(APIView):
                         instance = Message.objects.filter(message_id=msg_id).first()
                         serializer = MessageSerializer(instance, data=msg, partial=True, context={"request": request})
                         if serializer.is_valid():
-                            serializer.save()
+                            # Message.user_id is read-only on the serializer; pass the user instance to save()
+                            serializer.save(user_id=user)
                             (created if instance is None else updated)["msg"] += 1
                         else:
                             errors["messages"].append(serializer.errors)
@@ -749,14 +751,16 @@ class UnifiedSyncView(APIView):
                             errors["attachments"].append({"data": att, "error": "Missing id"})
                             continue
                         if user is not None:
-                            att["user"] = user.pk
+                            # ensure the incoming payload uses 'user_id' key for clarity, but pass the user to save()
+                            att["user_id"] = user.pk
                         else:
                             errors["attachments"].append({"data": att, "error": "User is None"})
                             continue
                         instance = Attachment.objects.filter(pk=att_id).first()
                         serializer = AttachmentSerializer(instance, data=att, partial=True, context={"request": request})
                         if serializer.is_valid():
-                            serializer.save()
+                            # Attachment.user_id is read-only; set FK on save
+                            serializer.save(user_id=user)
                             (created if instance is None else updated)["att"] += 1
                         else:
                             errors["attachments"].append(serializer.errors)

@@ -11,4 +11,4 @@ class MessageOutput(models.Model):
     output_content_annotations = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return f"MessageOutput {self.id}"
+        return f"MessageOutput {self.output_id}"

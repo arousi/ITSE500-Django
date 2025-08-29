@@ -28,4 +28,4 @@ class MessageRequest(models.Model):
     repeat_penalty = models.FloatField(blank=True, null=True)
     
     def __str__(self):
-        return f"MessageRequest {self.id}"
+        return f"MessageRequest {self.request_id}"

@@ -35,4 +35,4 @@ class MessageResponse(models.Model):
     metadata = models.JSONField(blank=True, null=True)
 
     def __str__(self):
-        return f"MessageResponse {self.id}"
+        return f"MessageResponse {self.response_id}"

@@ -239,7 +239,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     Sensitive fields (email_verified, is_staff, is_superuser, user_password, related_devices, etc.)
     are intentionally excluded.
     """
-    user_id = serializers.UUIDField(source="user_id", read_only=True)
+    user_id = serializers.UUIDField(read_only=True)
 
     class Meta:
         model = Custom_User
@@ -288,7 +288,7 @@ class FullProfileSerializer(serializers.ModelSerializer):
     This allows the UnifiedSyncView to upsert the complete user object.
     Sensitive fields like `is_superuser`, `groups`, and `user_permissions` are intentionally omitted.
     """
-    user_id = serializers.UUIDField(source="user_id", read_only=True)
+    user_id = serializers.UUIDField(read_only=True)
     user_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:

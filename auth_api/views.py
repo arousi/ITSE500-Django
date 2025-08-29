@@ -137,8 +137,9 @@ class RegisterView(APIView):
         email = request.data.get('email')
         user_id = request.data.get('user_id') or request.data.get('uuid')
         username = request.data.get('username')
-        user: Optional[Custom_User] = None
-        #! Errors here for static casting by PYLANCE!
+    # user may be a Custom_User instance or None
+        user = None  # type: Optional[Custom_User]
+    #! Errors here for static casting by PYLANCE!
         # Try to find existing user by email, uuid, username, or temp_id
         if email:
             user = Custom_User.objects.filter(email=email).first()

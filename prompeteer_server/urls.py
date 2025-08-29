@@ -20,6 +20,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
+from django.urls import re_path
+from core.views import index
 
 urlpatterns = [
     # Root landing page
@@ -30,6 +32,11 @@ urlpatterns = [
     path('api/v1/user_mang/', include('user_mang.urls')),
     #path('api/v1/chat_api/', include('chat_api.urls')),
     path('api/v1/crypto_api/', include('crypto_api.urls')),
+]
+
+# Catch-all: serve React app for any non-API path (must be last)
+urlpatterns += [
+    re_path(r'^(?:.*)/?$', index),
 ]
 
 if settings.DEBUG:

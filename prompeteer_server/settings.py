@@ -315,6 +315,7 @@ ASGI_APPLICATION = "prompeteer_server.asgi.application"
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -339,6 +340,7 @@ TEMPLATES = [
         'DIRS': [
             BASE_DIR / 'templates',
             BASE_DIR / 'staticfiles' / 'templates',
+            BASE_DIR / 'frontend_build',
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -421,7 +423,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
-    BASE_DIR / 'prompeteer_server' / 'static',
+    BASE_DIR / 'frontend_build' / 'static',
 ]
 # Media (uploaded encrypted blobs)
 MEDIA_URL = '/media/'

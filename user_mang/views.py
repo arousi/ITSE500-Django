@@ -18,10 +18,18 @@ from chat_api.models.message_output import MessageOutput
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+import os
+import shutil
+import tempfile
+import csv
+import json
+import logging
+import zipfile
 from user_mang.models.custom_user import Custom_User
 from django.db import transaction
 from django.utils import timezone
 from django.core.mail import EmailMessage
+from django.http import FileResponse
 import logging
 import json
 from auth_api.models import ProviderOAuthToken  
@@ -30,7 +38,8 @@ import tempfile
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from datetime import datetime, timedelta
-
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 from prompeteer_server.utils.emailer import send_verified_email
 
@@ -93,6 +102,49 @@ class UnifiedSyncView(APIView):
     - CSV exports are handled in ephemeral temp files and not stored permanently.
     - All deletions are soft deletes where possible.
     """
+
+
+    def export_user_data_pdf(self, user):
+        tmp = tempfile.NamedTemporaryFile(mode="w+b", suffix=".pdf", delete=False)
+        c = canvas.Canvas(tmp.name, pagesize=letter)
+        width, height = letter
+        y = height - 40
+
+        def draw_line(label, value):
+            nonlocal y
+            text = f"{label}: {value}"
+            c.drawString(40, y, text)
+            y -= 14
+            if y < 60:
+                c.showPage()
+                y = height - 40
+
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(40, y, f"User export for {user.username} ({user.user_id})")
+        y -= 24
+        c.setFont("Helvetica", 10)
+
+        draw_line("Exported at", timezone.now().isoformat())
+        draw_line("Username", user.username)
+        draw_line("Email", user.email)
+        draw_line("Phone", getattr(user, "phone_number", ""))
+        draw_line("Is visitor", user.is_visitor)
+        draw_line("Is archived", getattr(user, "is_archived", False))
+        y -= 8
+
+        # Conversations header
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, y, "Conversations")
+        y -= 18
+        c.setFont("Helvetica", 9)
+        for conv in Conversation.objects.filter(user_id=user).order_by("created_at"):
+            draw_line("Conversation", f"{getattr(conv,'conversation_id', conv.pk)} - {conv.title}")
+            # optionally list a few messages
+            for msg in Message.objects.filter(conversation_id=conv).order_by("created_at")[:5]:
+                draw_line("  Msg", (getattr(msg, "content", "") or "")[:120])
+        c.save()
+        tmp.seek(0)
+        return tmp
 
     def _create_visitor(self, temp_id: str):
         user = Custom_User(
@@ -861,72 +913,189 @@ class UnifiedSyncView(APIView):
     def delete(self, request):
         """DELETE
 
-        Deletes or archives user profile and/or chat data according to the `action` parameter. Exports user data
-        to a temporary CSV and emails it to the user's verified email before deletion/archive.
+        Delete or archive a user's profile and/or chat data.
+
+        Important behavior changes:
+            - The ``action`` parameter is now restricted to "delete" or "archive". Other values are rejected.
+            - On any successful delete or archive operation this endpoint will always generate BOTH a CSV and a
+              PDF export of the user's data.
+            - Exports are saved under MEDIA_ROOT/exports/<user_id> and emailed to the user's verified address when
+              available.
+            - If the caller provides ``download_now`` (truthy: 1/true/yes) the view will zip the CSV+PDF and
+              immediately return the zip file as a FileResponse. If ``download_now`` is falsy the files are kept on
+              disk and the response will include URLs the client can use to download them.
 
         Parameters (body or query):
             - action: "delete" | "archive"  (required)
             - profile: true/false
             - chat: true/false
+            - download_now: true/false or 1/0 — when true return a zip (csv+pdf) immediately; when false save and
+              return URLs instead
+            - reason: optional string for audit logs
 
-        Behavior notes:
-        - `delete` attempts a soft-delete where the model supports it (sets `is_deleted` or `is_archived`), and
-          removes provider tokens.
-        - `archive` sets `is_archived` and disables provider flags; tokens are also removed where appropriate.
-        - The endpoint will attach the canonical serialized `profile` and `chat` payloads to the response when
-          possible (using `FullProfileSerializer` and `FullChatSerializer`). Serialization errors are non-fatal and
-          will be ignored in order to complete the delete/archive operation.
+        Returns (examples):
 
-        Example Request (delete all):
+        Example Request (delete + return URLs):
             DELETE /api/v1/unified-sync/
             {
                 "user_id": "123e4567-e89b-12d3-a456-426614174000",
                 "action": "delete",
                 "profile": true,
-                "chat": true
+                "chat": true,
+                "download_now": false
             }
 
-        Example Response (delete):
+        Example Response (delete, saved exports):
+            HTTP 200
             {
                 "message": "User and all related data deleted successfully",
-                "deleted": {"attachments": 2, "messages": 5, "conversations": 1, "tokens": 1, "user": 1},
-                "profile": { ...FullProfileSerializer output or minimal fallback... },
-                "chat": { ...FullChatSerializer output or minimal fallback... }
+                "deleted": { "attachments": 2, "messages": 5, "conversations": 1, "tokens": 1, "user": 1 },
+                "export_urls": {
+                    "csv": "https://example.com/media/exports/<user_id>/user_export_20250829123000.csv",
+                    "pdf": "https://example.com/media/exports/<user_id>/user_export_20250829123000.pdf"
+                },
+                "profile": { /* FullProfileSerializer output or minimal fallback */ },
+                "chat": { /* FullChatSerializer output or minimal fallback */ }
             }
 
-        Example Request (archive profile only):
+        Example Request (archive + immediate download):
             DELETE /api/v1/unified-sync/
             {
                 "user_id": "123e4567-e89b-12d3-a456-426614174000",
                 "action": "archive",
-                "profile": true
+                "profile": true,
+                "download_now": true
             }
 
-        Example Response (archive):
-            {
-                "message": "User archived successfully",
-                "archived": {"user": 1},
-                "profile": { ...FullProfileSerializer output ... },
-                "chat": { ...FullChatSerializer output ... }
-            }
+        Example Response (archive, immediate zip):
+            HTTP 200
+            (A FileResponse serving an attachment named "user_export_<user_id>.zip" containing both CSV and PDF)
+
+        Notes:
+            - Exporting and emailing are best-effort. Failures while creating or sending exports are logged and do
+              not prevent the delete/archive from completing.
+            - The response will include ``export_urls`` when files are saved and not directly returned.
         """
         user, _, error_response, temp_id = self.resolve_user(request)
         if error_response:
             return error_response
 
         profile_flag, chat_flag = resolve_flags(request)
-        action = request.data.get('action', '').lower() or request.query_params.get('action', '').lower()
+        action = (request.data.get('action') or request.query_params.get('action') or '').lower()
         reason = request.data.get('reason') if hasattr(request, 'data') else None
         reason = reason or request.query_params.get('reason')
 
+        # export options
+        # Note: action is reserved to 'delete' or 'archive'. Exports (both CSV and PDF) are always created for
+        # successful delete/archive operations. The request may include `download_now` to request immediate return
+        # of the files (as a zip); otherwise the files are saved and URLs are returned in the final response.
+        export_format = (request.data.get('export') or request.query_params.get('export') or 'csv').lower()
+        # New: support explicit `download_now` flag (body or query). Fall back to existing `download` param for
+        # backward compatibility. Truthy values: 1, true, yes
+        raw_download_now = None
+        try:
+            raw_download_now = request.data.get('download_now') if hasattr(request, 'data') else None
+        except Exception:
+            raw_download_now = None
+        if raw_download_now is None:
+            raw_download_now = request.query_params.get('download_now') or request.query_params.get('download') or (request.data.get('download') if hasattr(request, 'data') else None)
+        download_now = (str(raw_download_now).lower() in ['1', 'true', 'yes']) if raw_download_now is not None else False
+
+        # export_urls will hold saved file URLs when download_now is False
+        export_urls = None
+
+        # Validate action: only 'delete' or 'archive' allowed
+        if action not in ['delete', 'archive']:
+            return Response({"error": "Invalid action. Use 'delete' or 'archive'."}, status=status.HTTP_400_BAD_REQUEST)
+
         stats = {}
 
-        # Export and email user data before deletion/archive (only to verified emails)
+        # Export and save user data before deletion/archive (only when profile/chat requested)
         if (profile_flag or chat_flag) and (action in ['delete', 'archive']):
-            if user and user.email:
-                csv_path = self.export_user_data_csv(user)
-                self.email_user_data_csv(user, csv_path)
-                # Ephemeral temp file, not stored permanently
+            if user:
+                try:
+                    # create export directory under MEDIA_ROOT/exports/<user_id>/
+                    export_subdir = os.path.join(getattr(settings, 'MEDIA_ROOT', 'media'), 'exports', str(user.user_id))
+                    os.makedirs(export_subdir, exist_ok=True)
+
+                    # Always generate CSV and PDF exports
+                    csv_src = None
+                    pdf_tmp = None
+                    try:
+                        csv_src = self.export_user_data_csv(user)
+                    except Exception:
+                        csv_src = None
+                        logger.exception('Failed to generate CSV export')
+
+                    try:
+                        pdf_tmp = self.export_user_data_pdf(user)
+                        pdf_src = pdf_tmp.name
+                    except Exception:
+                        pdf_src = None
+                        logger.exception('Failed to generate PDF export')
+
+                    dst_name_csv = f"user_export_{user.user_id}_{timezone.now().strftime('%Y%m%d%H%M%S')}.csv"
+                    dst_path_csv = os.path.join(export_subdir, dst_name_csv)
+                    if csv_src:
+                        try:
+                            shutil.move(csv_src, dst_path_csv)
+                        except Exception:
+                            logger.exception('Failed to move CSV export')
+
+                    dst_name_pdf = f"user_export_{user.user_id}_{timezone.now().strftime('%Y%m%d%H%M%S')}.pdf"
+                    dst_path_pdf = os.path.join(export_subdir, dst_name_pdf)
+                    if pdf_src:
+                        try:
+                            shutil.move(pdf_src, dst_path_pdf)
+                        except Exception:
+                            logger.exception('Failed to move PDF export')
+
+                    # Optionally email both files right away
+                    try:
+                        attachments = []
+                        if pdf_src and os.path.exists(dst_path_pdf):
+                            attachments.append((dst_path_pdf, dst_name_pdf, 'application/pdf'))
+                        if csv_src and os.path.exists(dst_path_csv):
+                            attachments.append((dst_path_csv, dst_name_csv, 'text/csv'))
+                        if attachments:
+                            send_verified_email(
+                                subject="Your Data Export",
+                                message="Attached are your requested data exports.",
+                                recipient_list=[user.email] if getattr(user, 'email', None) else [],
+                                from_email=None,
+                                html_message=None,
+                                verify_with_zeruh=True,
+                                zeruh_min_score=70,
+                                fail_silently=True,
+                                attachments=attachments
+                            )
+                    except Exception:
+                        logger.exception("Failed to send export email; continuing")
+
+                    # If frontend requested immediate download (download_now), return a zip containing both files
+                    if download_now:
+                        try:
+                            zip_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+                            with zipfile.ZipFile(zip_tmp.name, 'w') as zf:
+                                if os.path.exists(dst_path_pdf):
+                                    zf.write(dst_path_pdf, dst_name_pdf)
+                                if os.path.exists(dst_path_csv):
+                                    zf.write(dst_path_csv, dst_name_csv)
+                            return FileResponse(open(zip_tmp.name, 'rb'), as_attachment=True, filename=f"user_export_{user.user_id}.zip", content_type='application/zip')
+                        except Exception:
+                            logger.exception('Failed to create/send zip export')
+
+                    # Otherwise build URLs the frontend can use to fetch the saved exports
+                    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+                    urls = {}
+                    if os.path.exists(dst_path_csv):
+                        urls['csv'] = request.build_absolute_uri(os.path.join(media_url, 'exports', str(user.user_id), dst_name_csv))
+                    if os.path.exists(dst_path_pdf):
+                        urls['pdf'] = request.build_absolute_uri(os.path.join(media_url, 'exports', str(user.user_id), dst_name_pdf))
+                    if urls:
+                        export_urls = urls
+                except Exception:
+                    logger.exception("Failed to create/save export; proceeding without it")
 
         # Chat delete/archive (soft delete if possible)
         if chat_flag or not (profile_flag or chat_flag):
@@ -1010,25 +1179,17 @@ class UnifiedSyncView(APIView):
                         conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
                         messages = Message.objects.filter(user_id=user)
                         message_requests = MessageRequest.objects.filter(request_id__in=messages.values_list("request_id", flat=True))
-                        message_responses = MessageResponse.objects.filter(response_id__in=messages.values_list("response_id", flat=True))
+                        message_responses = MessageResponse.objects.filter(request_id__in=messages.values_list("response_id", flat=True))
                         message_outputs = MessageOutput.objects.filter(id__in=messages.values_list("output_id", flat=True))
                         attachments_qs = Attachment.objects.filter(message_id__user_id=user)
-                        chat_instance = {
-                            "conversations": conversations,
-                            "messages": messages,
-                            "message_request": message_requests,
-                            "message_response": message_responses,
-                            "message_output": message_outputs,
-                            "attachments": attachments_qs,
-                        }
-                        payload["chat"] = FullChatSerializer(chat_instance, context={"request": request}).data
+
                     except Exception:
-                        pass
+                        logger.exception('Failed to serialize archived profile/chat')
                     return Response(payload)
                 else:
                     logger.warning("UnifiedSyncView: Attempted to archive a None user object.")
                     return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response({"error": "Specify action=delete or action=archive in query or body."},
-                        status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Specify action=delete, archive or export in query or body."},
+            status=status.HTTP_400_BAD_REQUEST)
     

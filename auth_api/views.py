@@ -364,7 +364,12 @@ class LoginView(APIView):
 
     def post(self, request):
         logger.info(f"[LoginView] Incoming login request: data={request.data}")
-        serializer = LoginSerializer(data=request.data, context={'request': request})
+    # Normalize incoming keys: allow clients to send 'password' or 'user_password',
+    # and 'username' or 'email' or 'identifier' for the credential field.
+        raw = request.data or {}
+        identifier = raw.get('identifier') or raw.get('email') or raw.get   ('username')
+        pwd = raw.get('user_password') if 'user_password' in raw else raw.get('password')
+        serializer = LoginSerializer(data={'identifier': identifier, 'user_password': pwd}, context={'request': request})
         try:
             serializer.is_valid(raise_exception=True)
             data = serializer.validated_data

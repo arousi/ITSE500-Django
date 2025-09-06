@@ -19,13 +19,16 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, RedirectView
 from django.urls import re_path
 from core.views import index
 
 urlpatterns = [
     # Root landing page
     path('', TemplateView.as_view(template_name='base.html'), name='landing'),
+    # Serve favicon from static to avoid catch-all SPA renderer attempting to render templates for it
+    # (prevents TemplateDoesNotExist errors when favicon.ico is requested)
+    path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'favicon.ico')),
     path('admin/', admin.site.urls),
 
     path('api/v1/auth_api/', include('auth_api.urls')),

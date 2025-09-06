@@ -923,10 +923,10 @@ class OAuthResultView(APIView):
             return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
         # If no payload has been stored yet, treat this as "not ready" so SPA can continue polling.
         # Some deployed rows were observed with is_used=True but empty payload (race/partial write).
-        # Returning 404 here signals the client to keep polling rather than aborting with a Conflict.
+        # Return 202 Accepted so clients treat this as a pending result rather than a permanent 404.
         if not oauth_state.result_payload:
             logger.warning(f"[OAuthResultView] Result not ready for state={state_value} (used={oauth_state.used}, result_retrieved={oauth_state.result_retrieved})")
-            return Response({'detail': 'Result not ready'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': 'Result not ready'}, status=status.HTTP_202_ACCEPTED)
         if oauth_state.result_retrieved:
             return Response({'detail': 'Result already retrieved'}, status=status.HTTP_410_GONE)
         data = json.loads(oauth_state.result_payload)

@@ -1,9 +1,9 @@
 from django.db import models
 
 class MessageOutput(models.Model):
-    output_type = models.CharField(max_length=50, blank=True, null=True, default="message")
     output_id = models.CharField(max_length=255, blank=True, null=True)
     #from provider response
+    output_type = models.CharField(max_length=50, blank=True, null=True, default="message")
     output_status = models.CharField(max_length=50, blank=True, null=True)
     output_role = models.CharField(max_length=50, blank=True, null=True)
     output_content_type = models.CharField(max_length=50, blank=True, null=True)

@@ -5,10 +5,10 @@ from rest_framework import status, permissions
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import Custom_User
 from user_mang.serializers import (ConversationSerializer,                                    AttachmentSerializer,
-                                    MessageSerializer,
-                                    MessageRequestSerializer,
-                                    MessageResponseSerializer,
-                                    MessageOutputSerializer)
+    MessageSerializer,
+    MessageRequestSerializer,
+    MessageResponseSerializer,
+    MessageOutputSerializer)
 from chat_api.models.attachment import Attachment
 from chat_api.models.message import Message
 from chat_api.models.conversation import Conversation
@@ -1197,4 +1197,3 @@ class UnifiedSyncView(APIView):
 
         return Response({"error": "Specify action=delete, archive or export in query or body."},
             status=status.HTTP_400_BAD_REQUEST)
-    

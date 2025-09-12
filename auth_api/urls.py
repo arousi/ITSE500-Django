@@ -26,11 +26,12 @@ from .views import (
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
-    path("login/", LoginView.as_view(), name="Login"),
-    path("register/", RegisterView.as_view(), name="Register"),
-    path("verify-email-pin/", EmailPinVerifyView.as_view(), name="verify-email-pin"),
-    path("set-password-after-email-verify/", SetPasswordAfterEmailVerifyView.as_view(), name="set-password-after-email-verify"),
-    path("logout/", LogoutView.as_view(), name="Logout"),
+    # Canonical names
+    path("login/", LoginView.as_view(), name="login"),
+    path("register/", RegisterView.as_view(), name="register"),
+    path("verify-email-pin/", EmailPinVerifyView.as_view(), name="email-pin-verify"),
+    path("set-password-after-email-verify/", SetPasswordAfterEmailVerifyView.as_view(), name="set-password"),
+    path("logout/", LogoutView.as_view(), name="logout"),
     path('health/', HealthCheckView.as_view(), name='health-check'),
     
     path("otp-login/", LoginWithOTPView.as_view(), name="otp-login"),
@@ -64,3 +65,9 @@ urlpatterns = [
 
 ]
 """path("visitor-login/", VisitorLoginView.as_view(), name="visitor-login"),"""
+
+# Backward-compatibility alias routes (names used in older tests/clients)
+urlpatterns += [
+    path("google/oauth/", GoogleAuthorizeView.as_view(), name="google-oauth"),
+    path("openrouter/oauth/", OpenRouterAuthorizeView.as_view(), name="openrouter-oauth"),
+]

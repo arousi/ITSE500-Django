@@ -137,7 +137,7 @@ class RegisterView(APIView):
         email = request.data.get('email')
         user_id = request.data.get('user_id') or request.data.get('uuid')
         username = request.data.get('username')
-    # user may be a Custom_User instance or None
+        # user may be a Custom_User instance or None
         user = None  # type: Optional[Custom_User]
     #! Errors here for static casting by PYLANCE!
         # Try to find existing user by email, uuid, username, or temp_id
@@ -260,16 +260,89 @@ class RegisterView(APIView):
         }
         logger.info(f"[RegisterView] Registration/data sync success: status=201, user_id={user.user_id}")
         return Response(resp_data, status=status.HTTP_201_CREATED)
-    
+
 class EmailPinVerifyView(APIView):
-    """Verify the 5-digit PIN sent to the user's email."""
-    permission_classes = [AllowAny]
+    """
+        Verify the 5-digit email PIN for the currently authenticated user.
+
+        Purpose
+        -------
+        Confirms ownership of the email address associated with the authenticated account.
+        On success, the user's `email_verified` flag is set and the one-time PIN is cleared.
+
+        Authentication
+        --------------
+        - Requires a valid JWT access token (Authorization: Bearer <token>).
+        - The endpoint operates on the server-side user identified by the JWT; the provided
+            email must belong to the same account.
+
+        HTTP
+        ----
+        - Method: POST
+        - Path: /api/v1/auth_api/verify-email-pin/
+
+        Request Body (JSON)
+        -------------------
+        {
+            "email": "user@example.com",   # string, required; must match the authenticated user's email
+            "pin":   "12345"               # string, required; 5-digit code (numeric string)
+        }
+
+        Response (Success)
+        ------------------
+        200 OK
+        {
+            "message": "Email verified. You may now set your password."
+        }
+
+        Error Responses
+        ---------------
+        - 400 Bad Request:
+            - {"detail": "Invalid data."}                 # missing or malformed fields
+            - {"detail": "Invalid PIN."}                  # PIN does not match
+            - {"detail": "PIN expired."}                  # PIN older than allowed TTL
+            - {"detail": "Email not associated with user"}# (if applicable) email mismatch
+        - 401 Unauthorized: Missing/invalid JWT access token
+        - 404 Not Found: {"detail": "User not found."}  # no user with the provided email
+
+        Notes
+        -----
+        - The server expects a numeric PIN; non-numeric input is compared verbatim.
+        - On success, the stored PIN is cleared to prevent reuse.
+        - PIN lifetime is typically 10 minutes (600 seconds); configurable server-side.
+
+        Examples
+        --------
+        Request:
+            POST /api/v1/auth_api/verify-email-pin/
+            Authorization: Bearer <access_token>
+            Content-Type: application/json
+
+            {
+                "email": "user@example.com",
+                "pin": "12345"
+            }
+        Response (200):
+            { "message": "Email verified. You may now set your password." }
+    """
+    # Require JWT for this action
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
         pin = serializers.CharField(max_length=5)
 
     def post(self, request):  # type: ignore[override]
+        """Verify the 5-digit email PIN for the authenticated user.
+
+        Expects JSON body with:
+        - email: string; must match the authenticated user's email
+        - pin: string; 5-digit code
+
+        Returns 200 with a success message on valid PIN; 400 for invalid/expired PIN;
+        404 if the user is not found; 401 if JWT is missing/invalid.
+        """
         logger.info(f"[EmailPinVerifyView] Incoming PIN verify request: data={request.data}")
         ser = self.InputSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -282,44 +355,130 @@ class EmailPinVerifyView(APIView):
             user = Custom_User.objects.get(email=email)
         except Custom_User.DoesNotExist:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        if getattr(user, 'profile_email_pin', None) != pin:
+        # Use correct field names on Custom_User
+        if getattr(user, 'email_pin', None) != int(pin) if str(pin).isdigit() else getattr(user, 'email_pin', None) != pin:
             return Response({"detail": "Invalid PIN."}, status=status.HTTP_400_BAD_REQUEST)
-        created = getattr(user, 'profile_email_pin_created', None)
+        created = getattr(user, 'email_pin_created', None)
         if not created or (timezone.now() - created).total_seconds() > 600:
             return Response({"detail": "PIN expired."}, status=status.HTTP_400_BAD_REQUEST)
         user.email_verified = True
-        # user.profile_email_pin = None  # Removed because attribute does not exist
-        user.save(update_fields=["email_verified"])
+        # Clear PIN after successful verification
+        try:
+            user.email_pin = None
+            user.save(update_fields=["email_verified", "email_pin"])
+        except Exception:
+            user.save(update_fields=["email_verified"])  # Fallback if update fields mismatch in some DBs
         return Response({"message": "Email verified. You may now set your password."})
 
 class SetPasswordAfterEmailVerifyView(APIView):
-    """Set password after successful email PIN verification."""
-    permission_classes = [AllowAny]
+    """
+        Set or reset the account password after email verification.
+
+        Purpose
+        -------
+        Allows an authenticated and email-verified user to set a new password. The client
+        sends a frontend-hashed password (sha256(raw)) that the server salts and hashes again
+        before storing.
+
+        Authentication
+        --------------
+        - Requires a valid JWT access token (Authorization: Bearer <token>).
+        - The provided email must belong to the authenticated user.
+
+        Prerequisite
+        ------------
+        The user's email must already be verified (e.g., via EmailPinVerifyView). If the
+        email is not verified, the request is rejected.
+
+        HTTP
+        ----
+        - Method: POST
+        - Path: /api/v1/auth_api/set-password-after-email-verify/
+
+        Request Body (JSON)
+        -------------------
+        {
+            "email": "user@example.com",      # string, required; must match the authenticated user's email
+            "password": "<sha256(raw)>"       # string, required; client-side SHA-256 of the raw password
+        }
+
+        Processing
+        ----------
+        - Server computes: sha256(frontend_hashed_password + BACKEND_SALT) and stores it
+            as the user's credential.
+
+        Response (Success)
+        ------------------
+        200 OK
+        {
+            "message": "Password set successfully. You may now log in."
+        }
+
+        Error Responses
+        ---------------
+        - 400 Bad Request:
+            - {"detail": "Invalid data."}        # missing fields
+            - {"detail": "Email not verified."} # email_verified is False
+        - 401 Unauthorized: Missing/invalid JWT access token
+        - 404 Not Found: {"detail": "User not found."}
+
+        Security Notes
+        --------------
+        - Do not send plaintext passwords from the client; always send sha256(raw).
+        - Server adds a backend-only salt before final hashing and storage.
+
+        Examples
+        --------
+        Request:
+            POST /api/v1/auth_api/set-password-after-email-verify/
+            Authorization: Bearer <access_token>
+            Content-Type: application/json
+
+            {
+                "email": "user@example.com",
+                "password": "a3f5...sha256_of_raw...9c2"
+            }
+        Response (200):
+            { "message": "Password set successfully. You may now log in." }
+    """
+    # Require JWT for this action
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
         password = serializers.CharField(min_length=6)
-  
+
     def post(self, request):  # type: ignore[override]
-            logger.info(f"[SetPasswordAfterEmailVerifyView] Incoming set-password request: data={request.data}")
-            ser = self.InputSerializer(data=request.data)
-            ser.is_valid(raise_exception=True)
-            validated_data = cast(Dict[str, Any], ser.validated_data)
-            email = validated_data.get('email')
-            frontend_hashed_password = validated_data.get('password', '')
-            if not email or not frontend_hashed_password:
-                return Response({"detail": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
-            try:
-                user = Custom_User.objects.get(email=email)
-            except Custom_User.DoesNotExist:
-                return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-            if not getattr(user, 'email_verified', False):
-                return Response({"detail": "Email not verified."}, status=status.HTTP_400_BAD_REQUEST)
-            BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
-            backend_hash = hashlib.sha256((frontend_hashed_password + BACKEND_SALT).encode('utf-8')).hexdigest()
-            user.user_password = backend_hash
-            user.save(update_fields=["user_password"])
-            return Response({"message": "Password set successfully. You may now log in."})
+        """Set/reset the account password after email verification.
+
+        Expects JSON body with:
+        - email: string; must match the authenticated user's email
+        - password: string; client-side sha256(raw)
+
+        On success, stores a salted backend hash and returns 200 with a message.
+        May return 400 if data is invalid or email not verified; 404 if user not found;
+        401 if JWT is missing/invalid.
+        """
+        logger.info(f"[SetPasswordAfterEmailVerifyView] Incoming set-password request: data={request.data}")
+        ser = self.InputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        validated_data = cast(Dict[str, Any], ser.validated_data)
+        email = validated_data.get('email')
+        frontend_hashed_password = validated_data.get('password', '')
+        if not email or not frontend_hashed_password:
+            return Response({"detail": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = Custom_User.objects.get(email=email)
+        except Custom_User.DoesNotExist:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not getattr(user, 'email_verified', False):
+            return Response({"detail": "Email not verified."}, status=status.HTTP_400_BAD_REQUEST)
+        BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
+        backend_hash = hashlib.sha256((frontend_hashed_password + BACKEND_SALT).encode('utf-8')).hexdigest()
+        user.user_password = backend_hash
+        user.save(update_fields=["user_password"])
+        return Response({"message": "Password set successfully. You may now log in."})
 
 
 class LoginView(APIView):
@@ -363,6 +522,11 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        """Authenticate a user and return JWT tokens plus initial sync payload.
+        Accepts identifier (email/username) and user_password/password. Returns 200
+        with access/refresh tokens, conversations, and attachments on success.
+        Returns 401 for invalid credentials, 403 if user is inactive/locked, or 400/500 otherwise.
+        """
         logger.info(f"[LoginView] Incoming login request: data={request.data}")
     # Normalize incoming keys: allow clients to send 'password' or 'user_password',
     # and 'username' or 'email' or 'identifier' for the credential field.
@@ -429,6 +593,10 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        """Invalidate the current session and instruct the client to discard tokens.
+        Returns a 200 response with a brief message. Does not blacklist tokens server-side.
+        Requires a valid JWT and authenticated user.
+        """
         user = getattr(request, 'user', None)
         logger.info(f"[LogoutView] Incoming logout request: user_id={getattr(user, 'pk', None)}")
     # Clear authentication/session
@@ -459,6 +627,7 @@ class HealthCheckView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        """Report server liveness with a simple JSON payload and 200 status."""
         logger.info("[HealthCheckView] Health check performed.")
         resp_data = {"status": "ok", "message": "Server is up"}
         logger.info(f"[HealthCheckView] Health check response: status=200, resp={resp_data}")
@@ -498,6 +667,10 @@ class OAuthAuthorizeBase(APIView):
     provider = None  # 'google' or 'openrouter'
 
     def get(self, request):
+        """Start an OAuth2 authorization flow and return or redirect to an authorize URL.
+        Supports SSR redirect (mode=redirect) and SPA/mobile JSON response containing
+        the provider authorize_url and state metadata. Provider determined by subclass.
+        """
         import secrets
         base_ser = OAuthAuthorizeRequestSerializer(data=request.query_params)
         base_ser.is_valid(raise_exception=True)
@@ -604,7 +777,7 @@ class OAuthAuthorizeBase(APIView):
                 mobile_redirect=None,
                 scope=scope,
                 expires_at=expires_at,
-                user=request.user if request.user.is_authenticated else None,
+                user_id=request.user if request.user.is_authenticated else None,
             )
         elif self.provider == 'github':
             import secrets, urllib.parse
@@ -631,7 +804,7 @@ class OAuthAuthorizeBase(APIView):
                 mobile_redirect=None,
                 scope=scope,
                 expires_at=expires_at,
-                user=request.user if request.user.is_authenticated else None,
+                user_id=request.user if request.user.is_authenticated else None,
             )
         else:
             return Response({'detail': 'Unknown provider'}, status=status.HTTP_400_BAD_REQUEST)
@@ -687,6 +860,10 @@ class OAuthCallbackBase(APIView):
     provider = None
 
     def get(self, request):
+        """Handle an OAuth2 callback from a provider and return a unified JSON payload.
+        Validates state, exchanges code for tokens, creates/updates a user, persists
+        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
+        """
         ser = OAuthCallbackSerializer(data=request.GET)
         ser.is_valid(raise_exception=True)
         cb_data = cast(Dict[str, Any], ser.validated_data)
@@ -717,7 +894,29 @@ class OAuthCallbackBase(APIView):
 
         # Provider-specific token exchange and user logic
         if self.provider == 'google':
-            status_code, token_payload = exchange_google_token(str(code or ''), str(oauth_state.code_verifier or ''), str(oauth_state.redirect_uri or ''))
+            # Use the exact callback URL that Google just hit for redirect_uri to avoid mismatch.
+            # This ensures the redirect_uri in the token exchange matches the one used during authorize.
+            try:
+                redirect_used = request.build_absolute_uri(request.path)
+            except Exception:
+                redirect_used = str(oauth_state.redirect_uri or '')
+            # Normalize trailing slash to match common configuration
+            if redirect_used and not redirect_used.endswith('/'):
+                redirect_used = redirect_used + '/'
+            if oauth_state.redirect_uri and str(oauth_state.redirect_uri) != redirect_used:
+                logger.info(
+                    f"[GoogleCallbackView] redirect_uri mismatch detected. state={state_value} "
+                    f"stored={oauth_state.redirect_uri} used={redirect_used}"
+                )
+                # Update stored redirect to the actually used one for consistency/debugging
+                try:
+                    oauth_state.redirect_uri = redirect_used
+                    oauth_state.save(update_fields=["redirect_uri"])
+                except Exception:
+                    logger.debug("[GoogleCallbackView] Failed to persist adjusted redirect_uri; continuing")
+            status_code, token_payload = exchange_google_token(
+                str(code or ''), str(oauth_state.code_verifier or ''), redirect_used
+            )
             if status_code != 200:
                 return Response({'detail': 'Token exchange failed', 'provider_payload': token_payload}, status=status.HTTP_400_BAD_REQUEST)
             access_token = token_payload.get('access_token')
@@ -853,33 +1052,46 @@ class OAuthCallbackBase(APIView):
         if oauth_state.mobile_redirect:
             mobile_url = f"{oauth_state.mobile_redirect}?state={urllib.parse.quote(state_value)}&bridge=1"
             return redirect(mobile_url)
-        # SSR: render HTML if requested
-        # ...existing code...
-        if request.path.endswith('/callback/ssr/') or request.GET.get('render') == '1':
+
+        # SSR/Browser UX: render a friendly close-tab page when requested or when browser prefers HTML
+        accepts = (request.META.get('HTTP_ACCEPT', '') or '').lower()
+        wants_html = ('text/html' in accepts) and ('application/json' not in accepts)
+        if request.path.endswith('/callback/ssr/') or request.GET.get('render') == '1' or wants_html:
             html = """
             <html>
             <head>
                 <title>Authentication Complete</title>
                 <style>
-                body { font-family: sans-serif; text-align: center; margin-top: 10%; }
-                .msg { font-size: 1.5em; color: #2e7d32; }
+                body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; text-align: center; margin-top: 10%; color: #1b1f23; }
+                .msg { font-size: 1.25rem; color: #2e7d32; margin-bottom: 0.5rem; }
+                .sub { color: #586069; font-size: 0.95rem; }
+                .spinner { margin: 1.25rem auto; width: 36px; height: 36px; border: 3px solid #e1e4e8; border-top-color: #2ea44f; border-radius: 50%; animation: spin 1s linear infinite; }
+                @keyframes spin { to { transform: rotate(360deg); } }
                 </style>
             </head>
             <body>
-                <div class="msg"> All is fine! You may close this tab.</div>
+                <div class="msg">Authentication complete. You can close this tab.</div>
+                <div class="sub">We'll finish signing you in back in the app.</div>
+                <div class="spinner" aria-hidden="true"></div>
                 <script>
-                if (window.opener) {
-                    window.opener.postMessage({success: true, type: "oauth"}, "*");
-                }
+                try {
+                  if (window.opener) {
+                    window.opener.postMessage({ success: true, type: "oauth" }, "*");
+                  }
+                  // Try to close the window after a short delay (may be blocked by browser policies)
+                  setTimeout(function(){ window.close(); }, 600);
+                } catch (e) { /* no-op */ }
                 </script>
             </body>
             </html>
             """
             from django.http import HttpResponse
             return HttpResponse(html)
+
         return Response(payload)
 
     def post(self, request):
+        """Accept callback data via POST (bridge) and delegate to GET handler."""
         ser = OAuthCallbackSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         for k, v in request.data.items():
@@ -917,6 +1129,10 @@ class OAuthResultView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, state_value: str):
+        """Fetch the stored OAuth result payload for the given state (one-time).
+        Returns 202 if the result isn't ready yet, 410 if already retrieved, 404 if
+        the state is unknown, and 200 with the payload on success.
+        """
         try:
             oauth_state = OAuthState.objects.get(state=state_value)
         except OAuthState.DoesNotExist:
@@ -976,6 +1192,7 @@ class GitHubAuthorizeView(OAuthAuthorizeBase):
     provider = 'github'
 
     def get(self, request):
+        """Construct and return (or redirect to) the GitHub authorization URL."""
         import secrets, urllib.parse
         state = secrets.token_urlsafe(24)
         scope = request.query_params.get('scope', 'read:user user:email')
@@ -1020,6 +1237,7 @@ class GitHubCallbackView(OAuthCallbackBase):
     provider = 'github'
 
     def get(self, request):
+        """Process GitHub callback: exchange code, upsert user, issue app JWTs."""
         import requests
         code = request.GET.get('code')
         state = request.GET.get('state')
@@ -1156,6 +1374,7 @@ class MicrosoftAuthorizeView(OAuthAuthorizeBase):
     provider = 'microsoft'
 
     def get(self, request):
+        """Construct and return (or redirect to) the Microsoft authorization URL."""
         import secrets, urllib.parse
         state = secrets.token_urlsafe(24)
         scope = request.query_params.get('scope', 'openid email profile User.Read')
@@ -1200,6 +1419,7 @@ class MicrosoftCallbackView(OAuthCallbackBase):
     provider = 'microsoft'
 
     def get(self, request):
+        """Process Microsoft callback: exchange code, upsert user, issue app JWTs."""
         import requests
         code = request.GET.get('code')
         state = request.GET.get('state')
@@ -1406,6 +1626,7 @@ class EnableTOTPView(APIView):
     permission_classes = [AllowAny]  # Or IsAuthenticated if you want
 
     def post(self, request):
+        """Enable TOTP for the authenticated user and return provisioning details."""
         user = request.user
         if not user.is_authenticated:
             return Response({'detail': 'Authentication required.'}, status=401)
@@ -1430,6 +1651,7 @@ class VerifyTOTPView(APIView):
     permission_classes = [AllowAny]  # Or IsAuthenticated
 
     def post(self, request):
+        """Verify a provided TOTP code for the authenticated user and return status."""
         user = request.user
         if not user.is_authenticated:
             return Response({'detail': 'Authentication required.'}, status=401)

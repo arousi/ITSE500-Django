@@ -39,16 +39,20 @@ urlpatterns = [
     # Google OAuth (unified)
     path("google/authorize/", GoogleAuthorizeView.as_view(), name="google-authorize"), #* Start OAuth flow
     path("google/callback/", GoogleCallbackView.as_view(), name="google-callback"), #* Finish OAuth flow
+    path("google/callback", GoogleCallbackView.as_view()),  # alias without trailing slash
 
     # OpenRouter OAuth (unified)
     path("openrouter/authorize/", OpenRouterAuthorizeView.as_view(), name="openrouter-authorize"),
     path("openrouter/callback/", OpenRouterCallbackView.as_view(), name="openrouter-callback"),
+    path("openrouter/callback", OpenRouterCallbackView.as_view()),  # alias without trailing slash
 
     path('github/authorize/', GitHubAuthorizeView.as_view(), name='github-authorize'),
     path('github/callback/', GitHubCallbackView.as_view(), name='github-callback'),
+    path('github/callback', GitHubCallbackView.as_view()),
     
     path('microsoft/authorize/', MicrosoftAuthorizeView.as_view(), name='ms-authorize'),
     path('microsoft/callback/', MicrosoftCallbackView.as_view(), name='ms-callback'),
+    path('microsoft/callback', MicrosoftCallbackView.as_view()),
     
     path("google/authorize/ssr/", GoogleAuthorizeView.as_view(), name="google-authorize-ssr"),
     path("openrouter/authorize/ssr/", OpenRouterAuthorizeView.as_view(), name="openrouter-authorize-ssr"),

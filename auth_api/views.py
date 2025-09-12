@@ -680,7 +680,7 @@ class OAuthAuthorizeBase(APIView):
         callback_host = request.query_params.get('callback_host')
         mobile_redirect: Optional[str] = None
 
-        # Provider-specific logic
+    # Provider-specific logic
         if self.provider == 'google':
             # Remove any accidental offline_access to avoid invalid_scope errors
             scope_parts = [s for s in scope.split() if s and s != 'offline_access']
@@ -703,6 +703,16 @@ class OAuthAuthorizeBase(APIView):
             if redirect_uri and (redirect_uri.startswith('prompeteer://') or redirect_uri.startswith('app://')):
                 mobile_redirect = redirect_uri.rstrip('/')
                 redirect_uri = getattr(settings, 'GOOGLE_OAUTH_REDIRECT_URI', '')
+            # If redirect_uri is missing or points to a local host, build the absolute production callback from this request
+            try:
+                built_callback = request.build_absolute_uri(reverse('google-callback'))
+            except Exception:
+                built_callback = ''
+            def _looks_local(u: str) -> bool:
+                return any(h in u for h in ('127.0.0.1', 'localhost', '10.0.2.2'))
+            if not redirect_uri or _looks_local(redirect_uri):
+                if built_callback:
+                    redirect_uri = built_callback
             if redirect_uri and not redirect_uri.endswith('/'):
                 redirect_uri += '/'
             if not redirect_uri:
@@ -722,6 +732,7 @@ class OAuthAuthorizeBase(APIView):
                 expires_at=expires_at,
                 user_id=request.user if request.user.is_authenticated else None,
             )
+            logger.info(f"[GoogleAuthorize] created state={state} redirect_uri={redirect_uri} mobile_redirect={mobile_redirect} host={request.get_host()}")
             authorize_url = build_google_authorize_url(state, code_challenge, scope, redirect_uri)
         elif self.provider == 'openrouter':
             if 'offline_access' not in scope.split():

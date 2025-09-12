@@ -1050,8 +1050,41 @@ class OAuthCallbackBase(APIView):
 
         # Bridge deep link
         if oauth_state.mobile_redirect:
-            mobile_url = f"{oauth_state.mobile_redirect}?state={urllib.parse.quote(state_value)}&bridge=1"
-            return redirect(mobile_url)
+            target = f"{oauth_state.mobile_redirect.rstrip('/')}?state={urllib.parse.quote(state_value)}&bridge=1"
+            # Only perform server redirect for http(s) URLs. For custom schemes (e.g., prompeteer://),
+            # return an HTML bridge page that attempts navigation via JS without triggering DisallowedRedirect.
+            if target.startswith('http://') or target.startswith('https://'):
+                return redirect(target)
+            else:
+                html = f"""
+                <html>
+                <head>
+                    <title>Continue in App</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1" />
+                    <style>
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; text-align: center; margin-top: 12%; color: #1b1f23; }}
+                    .msg {{ font-size: 1.15rem; margin-bottom: 0.75rem; }}
+                    .sub {{ color: #586069; font-size: 0.95rem; margin-bottom: 1rem; }}
+                    .btn {{ display: inline-block; background: #2ea44f; color: #fff; padding: 0.65rem 1rem; border-radius: 6px; text-decoration: none; }}
+                    .hint {{ margin-top: 0.75rem; font-size: 0.9rem; color: #6a737d; }}
+                    </style>
+                    <script>
+                      function openApp() {{
+                        try {{ window.location.href = {json.dumps(target)}; }} catch (e) {{ }}
+                      }}
+                      window.addEventListener('load', function() {{ setTimeout(openApp, 150); }});
+                    </script>
+                </head>
+                <body>
+                    <div class="msg">Authentication complete. Returning to the app…</div>
+                    <div class="sub">If nothing happens, tap the button below.</div>
+                    <p><a class="btn" href="{target}">Open the app</a></p>
+                    <div class="hint">You can close this tab after the app opens.</div>
+                </body>
+                </html>
+                """
+                from django.http import HttpResponse
+                return HttpResponse(html)
 
         # SSR/Browser UX: render a friendly close-tab page when requested or when browser prefers HTML
         accepts = (request.META.get('HTTP_ACCEPT', '') or '').lower()

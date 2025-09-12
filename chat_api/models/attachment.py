@@ -6,7 +6,7 @@ from .message import Message
 def encrypted_upload_path(instance, filename):
     # Store under encrypted/<conversation_id>/<uuid>.bin
     return f"encrypted/{instance.conversation.conversation_id}/{instance.id}.bin"
-ئ
+
 class Attachment(models.Model):
     """Represents an artifact (image, embedding, document, etc.) optionally encrypted client-side.
     The server stores only ciphertext for encrypted artifacts plus metadata necessary for clients

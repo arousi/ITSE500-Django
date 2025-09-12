@@ -62,7 +62,6 @@ urlpatterns = [
     # Bridge result endpoint (for mobile/SPA)
     path("oauth/result/<str:state_value>/", OAuthResultView.as_view(), name="oauth-result"),
 
-    
     # JWT token refresh (SimpleJWT standard endpoint)
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     

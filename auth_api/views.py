@@ -22,6 +22,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from .authentication import JWTOrRefreshAuthentication
 from user_mang.models.custom_user import Custom_User
 from .models import OAuthState, ProviderOAuthToken
 from .serializers import (
@@ -325,9 +326,9 @@ class EmailPinVerifyView(APIView):
         Response (200):
             { "message": "Email verified. You may now set your password." }
     """
-    # Require JWT for this action
+    # AllowAny + inline auth (access or refresh) to avoid hard dependency on a custom auth class
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
@@ -351,6 +352,35 @@ class EmailPinVerifyView(APIView):
         pin = validated_data.get('pin')
         if not email or not pin:
             return Response({"detail": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Determine acting user via existing JWT or refresh token
+        acting_user = request.user if getattr(request.user, 'is_authenticated', False) else None
+        minted_access: Optional[str] = None
+        minted_refresh: Optional[str] = None
+        if acting_user is None:
+            refresh_raw = (
+                request.META.get('HTTP_X_REFRESH_TOKEN') or
+                request.META.get('HTTP_REFRESH_TOKEN') or
+                (request.META.get('HTTP_AUTHORIZATION','').split(' ',1)[1] if request.META.get('HTTP_AUTHORIZATION','').lower().startswith('refresh ') else None) or
+                (request.data.get('refresh_token') if isinstance(request.data, dict) else None) or
+                request.COOKIES.get('refresh_token')
+            )
+            if not refresh_raw:
+                return Response({'detail': 'Authentication required (access or refresh token).'}, status=status.HTTP_401_UNAUTHORIZED)
+            try:
+                r = RefreshToken(refresh_raw)
+                user_id = r.get('user_id')
+                acting_user = Custom_User.objects.filter(pk=user_id).first()
+                if not acting_user:
+                    return Response({'detail': 'Invalid refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
+                minted_access = str(r.access_token)
+                minted_refresh = str(r)  # may or may not rotate depending on settings
+            except Exception:
+                return Response({'detail': 'Invalid refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Ensure the provided email belongs to the acting user (defense-in-depth)
+        if getattr(acting_user, 'email', None) and str(acting_user.email).lower() != str(email).lower():
+            return Response({'detail': 'Email does not belong to the authenticated user.'}, status=status.HTTP_403_FORBIDDEN)
         try:
             user = Custom_User.objects.get(email=email)
         except Custom_User.DoesNotExist:
@@ -368,7 +398,12 @@ class EmailPinVerifyView(APIView):
             user.save(update_fields=["email_verified", "email_pin"])
         except Exception:
             user.save(update_fields=["email_verified"])  # Fallback if update fields mismatch in some DBs
-        return Response({"message": "Email verified. You may now set your password."})
+        resp = Response({"message": "Email verified. You may now set your password."})
+        if minted_access:
+            resp["X-New-Access-Token"] = minted_access
+        if minted_refresh:
+            resp["X-New-Refresh-Token"] = minted_refresh
+        return resp
 
 class SetPasswordAfterEmailVerifyView(APIView):
     """
@@ -441,9 +476,9 @@ class SetPasswordAfterEmailVerifyView(APIView):
         Response (200):
             { "message": "Password set successfully. You may now log in." }
     """
-    # Require JWT for this action
+    # AllowAny + inline auth (access or refresh)
     authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
@@ -468,17 +503,50 @@ class SetPasswordAfterEmailVerifyView(APIView):
         frontend_hashed_password = validated_data.get('password', '')
         if not email or not frontend_hashed_password:
             return Response({"detail": "Invalid data."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Determine acting user: accept access or refresh
+        acting_user = request.user if getattr(request.user, 'is_authenticated', False) else None
+        minted_access: Optional[str] = None
+        minted_refresh: Optional[str] = None
+        if acting_user is None:
+            refresh_raw = (
+                request.META.get('HTTP_X_REFRESH_TOKEN') or
+                request.META.get('HTTP_REFRESH_TOKEN') or
+                (request.META.get('HTTP_AUTHORIZATION','').split(' ',1)[1] if request.META.get('HTTP_AUTHORIZATION','').lower().startswith('refresh ') else None) or
+                (request.data.get('refresh_token') if isinstance(request.data, dict) else None) or
+                request.COOKIES.get('refresh_token')
+            )
+            if not refresh_raw:
+                return Response({'detail': 'Authentication required (access or refresh token).'}, status=status.HTTP_401_UNAUTHORIZED)
+            try:
+                r = RefreshToken(refresh_raw)
+                user_id = r.get('user_id')
+                acting_user = Custom_User.objects.filter(pk=user_id).first()
+                if not acting_user:
+                    return Response({'detail': 'Invalid refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
+                minted_access = str(r.access_token)
+                minted_refresh = str(r)
+            except Exception:
+                return Response({'detail': 'Invalid refresh token.'}, status=status.HTTP_401_UNAUTHORIZED)
         try:
             user = Custom_User.objects.get(email=email)
         except Custom_User.DoesNotExist:
             return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        # Ensure email matches acting user when we have one
+        if getattr(acting_user, 'email', None) and str(acting_user.email).lower() != str(email).lower():
+            return Response({'detail': 'Email does not belong to the authenticated user.'}, status=status.HTTP_403_FORBIDDEN)
         if not getattr(user, 'email_verified', False):
             return Response({"detail": "Email not verified."}, status=status.HTTP_400_BAD_REQUEST)
         BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
         backend_hash = hashlib.sha256((frontend_hashed_password + BACKEND_SALT).encode('utf-8')).hexdigest()
         user.user_password = backend_hash
         user.save(update_fields=["user_password"])
-        return Response({"message": "Password set successfully. You may now log in."})
+        resp = Response({"message": "Password set successfully. You may now log in."})
+        if minted_access:
+            resp["X-New-Access-Token"] = minted_access
+        if minted_refresh:
+            resp["X-New-Refresh-Token"] = minted_refresh
+        return resp
 
 
 class LoginView(APIView):

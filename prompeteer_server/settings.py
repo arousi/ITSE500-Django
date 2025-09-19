@@ -324,12 +324,43 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'prompeteer_server.middleware.DebugHeadersMiddleware',
 ]
+## CORS
+# Allow production site and flexible localhost during development/testing
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000", 
-    "http://127.0.0.1:3000",
-
+    # Production web origins (HTTPS)
+    "https://www.itse500-ok.ly",
+    "https://itse500-ok.ly",
 ]
 
+# Permit any localhost/127.0.0.1 with any port (for Flutter web dev servers)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+
+    r"^http://localhost(:\d+)?$",
+    r"^http://127\.0\.0\.1(:\d+)?$",
+]
+
+# In debug, you may allow all origins; keep strict in production
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+
+    # Allow common headers used by the SPA, including Authorization for JWT
+from corsheaders.defaults import default_headers, default_methods
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'authorization',
+    'content-type',
+]
+
+# Standard methods (includes OPTIONS automatically)
+CORS_ALLOW_METHODS = list(default_methods)
+
+# Expose token refresh headers to the browser if set by the API
+CORS_EXPOSE_HEADERS = [
+    'X-New-Access-Token',
+    'X-New-Refresh-Token',
+]
+
+# Cache preflight results to reduce OPTIONS traffic
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 ROOT_URLCONF = 'prompeteer_server.urls'
 

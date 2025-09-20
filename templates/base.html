@@ -19,6 +19,9 @@
         .footer { text-align: center; color: #7b849b; margin-top: 40px; font-size: 0.95em; }
         a { color: var(--primary); text-decoration: none; }
         a:hover { text-decoration: underline; }
+    .qr { display:block; padding:16px; background:#0f1220; border:1px solid var(--ring); border-radius:10px; margin:16px 0 24px; overflow: visible; }
+    .qr .svg { width: clamp(240px, 60vw, 480px); margin: 0 auto; }
+    .qr svg { display:block; width: 100%; height: auto; max-width: 100%; image-rendering: pixelated; }
     </style>
 </head>
 <body>
@@ -30,6 +33,12 @@
     <p style="margin: 12px 0 24px;">
         <a href="/team/">Meet the Team page →</a>
     </p>
+
+    {% if qr_svg %}
+    <div class="qr">
+        <div class="svg" aria-label="QR code">{{ qr_svg|safe }}</div>
+    </div>
+    {% endif %}
 
     <div class="api-section">
         <div class="api-title"><a href="/admin/">Admin Panel</a></div>
@@ -109,4 +118,4 @@
     </div>
 </div>
 </body>
-</html> 
+</html>

@@ -21,11 +21,11 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView, RedirectView
 from django.urls import re_path
-from core.views import index
+from core.views import index, landing
 
 urlpatterns = [
-    # Root landing page
-    path('', TemplateView.as_view(template_name='base.html'), name='landing'),
+    # Root landing page (renders base.html with inline QR)
+    path('', landing, name='landing'),
     # Team page with inline context (replace links/images as needed)
     path('team/', TemplateView.as_view(
         template_name='team.html',
@@ -63,6 +63,7 @@ urlpatterns = [
     # Serve favicon (point to an existing SVG under static/branding)
     path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'branding/favicon.svg')),
     path('admin/', admin.site.urls),
+    # Removed public QR generator endpoint to avoid exposing it
 
     path('api/v1/auth_api/', include('auth_api.urls')),
     path('api/v1/user_mang/', include('user_mang.urls')),

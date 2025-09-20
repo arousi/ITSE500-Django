@@ -4,17 +4,20 @@
     <meta charset="UTF-8">
     <title>O.K Team Server API Docs</title>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7fafd; margin: 0; }
-        .container { max-width: 700px; margin: 40px auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; padding: 32px; }
-        h1 { color: #2e7d32; }
+        :root{
+            --bg:#0e0f13;--surface:#12141a;--muted:#9aa4b2;--ring:#23283b;--primary:#4c5fff;
+        }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: radial-gradient(1200px 600px at 80% -10%, #1f2336, transparent 70%), var(--bg); margin: 0; color:#e6e8ee; }
+        .container { max-width: 900px; margin: 40px auto; background: var(--surface); border-radius: 12px; box-shadow: 0 2px 16px #0006; padding: 32px; border:1px solid var(--ring); }
+        h1 { color: #e6f8ff; }
         .api-section { margin-bottom: 32px; }
-        .api-title { font-size: 1.2em; margin-bottom: 8px; color: #1976d2; }
-        .endpoint-list { background: #f1f5f9; border-radius: 8px; padding: 12px 20px; margin-bottom: 12px; }
+        .api-title { font-size: 1.2em; margin-bottom: 8px; color: #cfe0ff; }
+        .endpoint-list { background: #0f1220; border:1px solid var(--ring); border-radius: 8px; padding: 12px 20px; margin-bottom: 12px; }
         .endpoint { margin-bottom: 6px; }
-        .endpoint span { font-family: monospace; color: #333; }
-        .desc { color: #555; font-size: 0.98em; margin-bottom: 8px; }
-        .footer { text-align: center; color: #aaa; margin-top: 40px; font-size: 0.95em; }
-        a { color: #1976d2; text-decoration: none; }
+        .endpoint span { font-family: monospace; color: #e6e8ee; }
+        .desc { color: var(--muted); font-size: 0.98em; margin-bottom: 8px; }
+        .footer { text-align: center; color: #7b849b; margin-top: 40px; font-size: 0.95em; }
+        a { color: var(--primary); text-decoration: none; }
         a:hover { text-decoration: underline; }
     </style>
 </head>
@@ -23,6 +26,10 @@
     <h1>Welcome to O.K Team Server :)</h1>
     <p>This is the backend for <b>O.K Team Server</b>. Below are the available API endpoints and their main routes.<br>
     For more details, see the documentation or contact the project maintainers.</p>
+
+    <p style="margin: 12px 0 24px;">
+        <a href="/team/">Meet the Team page →</a>
+    </p>
 
     <div class="api-section">
         <div class="api-title"><a href="/admin/">Admin Panel</a></div>

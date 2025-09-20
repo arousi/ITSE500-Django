@@ -26,9 +26,42 @@ from core.views import index
 urlpatterns = [
     # Root landing page
     path('', TemplateView.as_view(template_name='base.html'), name='landing'),
-    # Serve favicon from static to avoid catch-all SPA renderer attempting to render templates for it
-    # (prevents TemplateDoesNotExist errors when favicon.ico is requested)
-    path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'favicon.ico')),
+    # Team page with inline context (replace links/images as needed)
+    path('team/', TemplateView.as_view(
+        template_name='team.html',
+        extra_context={
+            'team': [
+                {
+                    'name': 'Sanad AlArousi',
+                    'role': 'Full stack Software Engineer',
+                    'image': 'img/team/sanad-solo.jpg',  # e.g. '/media/mustafa.jpg'
+                    'cv': 'cv/Sanad_AlArousi-CV.pdf',  # place under static/cv/
+                    'email': 'sanad.arousi@outlook.com',
+                    'phone': '+218911662096',
+                    'socials': {
+                        'linkedin': 'https://www.linkedin.com/in/sanadalarousi/?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base%3B4pkEHpOuRqWHHDGra7x4jg%3D%3D',
+                        'github': 'https://github.com/arousi',
+                    },
+                    'skills': ['django','flutter','git','jira']
+                },
+                {
+                    'name': 'Mohanned Shotshati',
+                    'role': 'Web Frontend Software Engineer',
+                    'image': 'img/team/mohaned-solo.jpeg',
+                    'cv': 'cv/mohanned-shotshati-cv.pdf',  # place under static/cv/
+                    'email': 'abdelwahab@example.com',
+                    'phone': '+218926784552',
+                    'socials': {
+                        'linkedin': 'https://www.linkedin.com/in/example-abdelwahab/',
+                        'github': 'https://github.com/mohaned2001',
+                    },
+                    'skills': ['react','javascript','git','jira']
+                },
+            ]
+        }
+    ), name='team'),
+    # Serve favicon (point to an existing SVG under static/branding)
+    path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'branding/favicon.svg')),
     path('admin/', admin.site.urls),
 
     path('api/v1/auth_api/', include('auth_api.urls')),
@@ -37,9 +70,9 @@ urlpatterns = [
     path('api/v1/crypto_api/', include('crypto_api.urls')),
 ]
 
-# Catch-all: serve React app for any non-API path (must be last)
+# Catch-all: serve landing for any non-API path excluding static/media (must be last)
 urlpatterns += [
-    re_path(r'^(?:.*)/?$', index),
+    re_path(r'^(?!static/|media/).*$' , index),
 ]
 
 if settings.DEBUG:

@@ -82,6 +82,14 @@
         .skill { width: 52px; height: 52px; border-radius: 12px; background: #0f1220; border: 1px solid var(--ring); display: grid; place-items: center; overflow: hidden; }
         .skill img { width: 32px; height: 32px; display: block; filter: brightness(1.2); }
     /* removed duplicate smaller skills rules */
+
+        /* Mobile tweaks: smaller tech icons and taller cards */
+        @media (max-width: 640px) {
+            .skills { top: 10px; right: 12px; grid-template-columns: repeat(2, 40px); grid-auto-rows: 40px; gap: 8px; }
+            .skill { width: 40px; height: 40px; border-radius: 10px; }
+            .skill img { width: 24px; height: 24px; }
+            .card { min-height: 280px; }
+        }
     </style>
 </head>
 <body>
@@ -212,12 +220,20 @@
         {% endfor %}
     </section>
 
-    <!-- Interfaces demo video card -->
+    <!-- Interfaces demo videos -->
     <section class="card" style="margin-top:24px;">
-        <div class="title" style="margin-bottom:8px;">Product Interfaces Demo</div>
-        <video controls style="width:100%; border-radius:12px; border:1px solid var(--ring); background:#0f1220;" src="/static/videos/demo.mp4">
+        <div class="title" style="margin-bottom:8px;">React Interfaces Demo</div>
+        <video controls style="width:100%; border-radius:12px; border:1px solid var(--ring); background:#0f1220;" src="/static/videos/react-demo.mp4">
             Sorry, your browser doesn’t support embedded videos. You can
-            <a href="/static/videos/demo.mp4">download the demo video</a> instead.
+            <a href="/static/videos/react-demo.mp4">download the React demo video</a> instead.
+        </video>
+    </section>
+
+    <section class="card" style="margin-top:16px;">
+        <div class="title" style="margin-bottom:8px;">Flutter Interfaces Demo</div>
+        <video controls style="width:100%; border-radius:12px; border:1px solid var(--ring); background:#0f1220;" src="/static/videos/flutter-demo.mp4">
+            Sorry, your browser doesn’t support embedded videos. You can
+            <a href="/static/videos/flutter-demo.mp4">download the Flutter demo video</a> instead.
         </video>
     </section>
 

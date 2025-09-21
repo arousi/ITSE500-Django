@@ -429,7 +429,7 @@ class UnifiedSyncView(APIView):
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
             conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
 
-            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation")
+            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation_id")
 
             # Collect related ids for request/response/output
             request_ids = list(messages.exclude(request_id__isnull=True).values_list("request_id", flat=True))
@@ -501,7 +501,7 @@ class UnifiedSyncView(APIView):
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
             conv_serializer = ConversationSerializer(conversations, many=True, context={"request": request})
 
-            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation")
+            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation_id")
 
             request_ids = list(messages.exclude(request_id__isnull=True).values_list("request_id", flat=True))
             response_ids = list(messages.exclude(response_id__isnull=True).values_list("response_id", flat=True))
@@ -813,7 +813,7 @@ class UnifiedSyncView(APIView):
         # Include chat when requested (or by default)
         if chat_flag or not (profile_flag or chat_flag):
             conversations = Conversation.objects.filter(user_id=user).prefetch_related("messages")
-            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation")
+            messages = Message.objects.filter(user_id=user).select_related("request_id", "response_id", "output_id", "conversation_id")
 
             request_ids = list(messages.exclude(request_id__isnull=True).values_list("request_id", flat=True))
             response_ids = list(messages.exclude(response_id__isnull=True).values_list("response_id", flat=True))

@@ -1,3 +1,15 @@
+"""auth_api views: authentication, OAuth, and security-related endpoints.
+
+English
+- Contains: Register/Login/Logout, Email PIN verify, Set password, OAuth (Google, OpenRouter, GitHub, Microsoft),
+    health checks, and optional TOTP helpers. Returns JWT tokens for API access.
+- Usage: All protected endpoints expect Authorization: Bearer <access>. Some allow refresh-only bridging.
+
+العربية
+- يحتوي على: التسجيل/الدخول/الخروج، تحقق كود البريد الإلكتروني، تعيين كلمة المرور، OAuth (جوجل، OpenRouter، GitHub، Microsoft)،
+    وفحص الصحة، وخيارات TOTP الاختيارية. يرجع رموز JWT للوصول لواجهات API.
+"""
+
 import logging
 import random
 import hashlib
@@ -117,20 +129,27 @@ def fetch_google_userinfo(access_token: str):
 logger = logging.getLogger('auth_api')
 
 class RegisterView(APIView):
-    """
-    API endpoint to handle user registration.
-    Accepts temp_id and device_id for visitor migration/upgrade.
-    If the user already exists (by email, uuid, username, or temp_id), returns their JWT tokens and all their conversations/messages.
-    Otherwise, creates a new user, sends a verification PIN, and returns onboarding tokens and data.
+    """Register a new account or reconcile an existing identifier to avoid duplicates.
+
+    Summary
+    - Accepts temp_id and device_id for visitor migration/upgrade paths.
+    - If an account already exists (email/uuid/username/temp_id), do NOT issue new tokens; a neutral
+      response is returned to avoid leaking state. New accounts are created with email auto-verified in
+      this release.
+    - Returns onboarding details and a first sync payload when applicable.
     """
     permission_classes = [AllowAny]
 
     def post(self, request):
-        """
-        Handle POST request for user registration.
-        If user exists (by email, uuid, username, or temp_id), returns JWT tokens and all their data.
-        If new, creates user, sends PIN, and returns onboarding tokens and data.
-        Always persists device_id in related_devices.
+        """Handle registration: auto-verify in this phase; do not leak existing account details.
+
+        Inputs (JSON)
+        - email | username | uuid | temp_id
+        - device_id (optional)
+
+        Returns
+        - 201 with tokens + initial data for new users.
+        - 200/409 with neutral detail when account already exists.
         """
         logger.info(f"[RegisterView] Incoming registration request: data={request.data}")
         temp_id = (request.data.get("temp_id") or "").strip()
@@ -139,8 +158,7 @@ class RegisterView(APIView):
         user_id = request.data.get('user_id') or request.data.get('uuid')
         username = request.data.get('username')
         # user may be a Custom_User instance or None
-        user = None  # type: Optional[Custom_User]
-    #! Errors here for static casting by PYLANCE!
+        user: Optional[Custom_User] = None
         # Try to find existing user by email, uuid, username, or temp_id
         if email:
             user = Custom_User.objects.filter(email=email).first()
@@ -152,12 +170,15 @@ class RegisterView(APIView):
             user = Custom_User.objects.filter(temp_id=temp_id).first()
 
         created = False
-        
+
         # SECURITY: If the identifier already exists, do NOT issue tokens or return user data.
         # - If the account is unverified, (re)send the verification PIN and instruct the client to check email.
         # - If the account is already verified, return a generic "invalid credentials." response.
         if user:
-            logger.info(f"[RegisterView] Registration attempted for existing account: email={email} identifier={user_id or username or temp_id}")
+            logger.info(
+                f"[RegisterView] Registration attempted for existing account: email={email} "
+                f"identifier={user_id or username or temp_id}"
+            )
             try:
                 # Previously we sent verification PINs; this project phase auto-verifies emails.
                 if not getattr(user, 'email_verified', False):
@@ -173,12 +194,12 @@ class RegisterView(APIView):
                 logger.exception("[RegisterView] Error while handling existing user during registration attempt")
             # Generic response to avoid leaking any info for verified accounts
             return Response({'detail': 'invalid credentials.'}, status=status.HTTP_409_CONFLICT)
-        
+
         if not user:
             serializer = RegisterSerializer(data=request.data)
             try:
                 serializer.is_valid(raise_exception=True)
-                user: Custom_User = cast(Custom_User, serializer.save())  # type: ignore[assignment]
+                user = cast(Custom_User, serializer.save())  # type: ignore[assignment]
                 raw_pw: str = str(request.data.get('user_password') or '')
                 BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
                 salted = (raw_pw + BACKEND_SALT).encode('utf-8')
@@ -193,10 +214,14 @@ class RegisterView(APIView):
                 # OTP/email PIN sending is disabled in this phase. User is auto-verified.
                 created = True
             except serializers.ValidationError as e:
-                logger.warning(f"[RegisterView] Registration failed: status=400, errors={e.detail}, req={request.data}")
+                logger.warning(
+                    f"[RegisterView] Registration failed: status=400, errors={e.detail}, req={request.data}"
+                )
                 return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
-                logger.exception(f"[RegisterView] Unexpected registration error: {str(e)}, req={request.data}")
+                logger.exception(
+                    f"[RegisterView] Unexpected registration error: {str(e)}, req={request.data}"
+                )
                 return Response({"detail": "Registration failed due to a server error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         # Always persist device_id in related_devices
         devices = user.get_related_devices() if user else []
@@ -225,7 +250,7 @@ class RegisterView(APIView):
                 "local_only": conv.local_only,
             }
             conv_messages = []
-            for msg in conv.messages.all():
+            for msg in conv.messages.all():  # type: ignore[attr-defined]
                 msg_data = {
                     "message_id": str(msg.message_id),
                     "conversation_id": str(conv.conversation_id),
@@ -550,42 +575,16 @@ class SetPasswordAfterEmailVerifyView(APIView):
 
 
 class LoginView(APIView):
-    """
-    Handles user login and JWT token issuance.
+    """Authenticate a user and return JWTs plus initial sync payload.
 
-    Example API Request (POST /api/v1/auth_api/login/):
-        {
-            "email": "john@example.com",
-            "password": "hashedpassword123"
-        }
+    Example Request (POST /api/v1/auth_api/login/)
+    {
+        "email": "john@example.com",
+        "password": "<sha256(raw)>"
+    }
 
-    Example API Response (200):
-        {
-            "message": "Login successful",
-            "user_id": 42,
-            "access_token": "jwt-access-token",
-            "refresh_token": "jwt-refresh-token",
-            "email_verified": true,
-            "conversations": [
-                {
-                    "conversation_id": "c1",
-                    "title": "My Conversation",
-                    "messages": [
-                        {
-                            "message_id": "m1",
-                            "content": "Hello!"
-                        }
-                    ]
-                }
-            ],
-            "attachments": [
-                {
-                    "id": 1,
-                    "type": "image",
-                    "file_path": "/media/attachments/1.png"
-                }
-            ]
-        }
+    Example Response (200)
+    { "message": "Login successful", "access_token": "...", "refresh_token": "...", "conversations": [...], "attachments": [...] }
     """
     permission_classes = [AllowAny]
 
@@ -605,7 +604,7 @@ class LoginView(APIView):
         try:
             serializer.is_valid(raise_exception=True)
             data = serializer.validated_data
-            user: Custom_User = cast(Custom_User, data.get('user', None))  # type: ignore[assignment]
+            user = cast(Custom_User, data.get('user', None))  # type: ignore[assignment]
             refresh = RefreshToken.for_user(user)
 
             # Fetch conversations and messages

@@ -1,3 +1,16 @@
+"""Core app: simple site views (landing + SPA fallback) and QR embed.
+
+English
+- index(request): Render React SPA if built (templates/index.html), otherwise fall back to templates/base.html.
+- landing(request): Render base.html and inject a QR SVG that points users to the public Team page.
+- Configuration: Set settings.PUBLIC_BASE_URL (e.g., https://itse500-ok.ly) to control the domain encoded in the QR.
+
+العربية
+- index(request): يعرض صفحة React إن وُجدت؛ وإلا يعرض صفحة base.html الافتراضية.
+- landing(request): يعرض base.html ويُضمّن كود QR يشير إلى صفحة الفريق العامة.
+- الإعداد: عيّن PUBLIC_BASE_URL في الإعدادات (مثل https://itse500-ok.ly) لتحديد النطاق في QR.
+"""
+
 from django.shortcuts import render
 from django.template.loader import get_template
 from django.template import TemplateDoesNotExist
@@ -12,10 +25,13 @@ except Exception:  # If not installed, we'll handle gracefully at runtime
 
 
 def index(request):
-    """Render the React single-page app entry point.
+    """Serve the SPA if present; otherwise show the project landing page.
 
-    The React build's index.html is placed in `frontend_build` and
-    added to TEMPLATE DIRS in settings.py so Django can render it.
+    Behavior
+    - Try to render templates/index.html (React build output) when available.
+    - If not found, fall back to templates/base.html (project landing).
+
+    Returns: HttpResponse
     """
     try:
         # Try SPA build first if present
@@ -27,9 +43,14 @@ def index(request):
 
 
 def landing(request):
-    """Render the landing page and embed a QR SVG that points to this server.
+    """Render the landing page and embed a QR code that opens the Team page.
 
-    This avoids exposing a separate public QR endpoint.
+    What it does
+    - Builds a high-contrast SVG QR (black on white) using segno when installed.
+    - Encodes: f"{PUBLIC_BASE_URL}/team/"; defaults to https://itse500-ok.ly/team/ if unset.
+    - Passes the SVG as qr_svg to base.html for in-page rendering (no public QR endpoint).
+
+    Returns: HttpResponse
     """
     qr_svg = None
     qr_target = None

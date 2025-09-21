@@ -1,3 +1,15 @@
+"""chat_api views: endpoints and scaffolding for chat/conversation features.
+
+English
+- Purpose: Provide REST views for conversations, messages, attachments, and sync helpers.
+- Notes: This module primarily defines APIView classes in other files; here we keep
+	logging setup and architectural notes for syncing across devices.
+
+العربية
+- الهدف: واجهات REST لإدارة المحادثات والرسائل والمرفقات والمزامنة بين الأجهزة.
+- ملاحظة: هذا الملف يحتوي أساسًا على تهيئة السجل وملاحظات تصميم.
+"""
+
 from django.shortcuts import render
 
 import logging
@@ -17,7 +29,9 @@ from django.utils import timezone
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
-# Create your views here.
+# Create your views here (see app-specific submodules where applicable).
 
-# how would we connect a 'visitor' 2 devices together so we can sync his conversations and messages?
-#* Answer, provide a UUID to any visitor who registers, making it possible to get his data by inputting his UUID from flutter into REACT, this would solve the problem of privacy + sync
+# Design note:
+# How do we connect a visitor across two devices to sync conversations/messages?
+# Answer: assign each visitor a stable UUID on first contact; the Flutter app can
+# provide this UUID to the React app to fetch/sync data without exposing PII.

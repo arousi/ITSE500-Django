@@ -20,13 +20,19 @@ $indexPath = Join-Path $dst 'index.html'
 if (Test-Path $indexPath) {
   $html = Get-Content -Raw -Encoding UTF8 $indexPath
   if ($SetBaseHref) {
-    if ($html -notmatch '<base ') {
+    # Ensure a base tag exists and points to /static/flutter-web/
+    $hasBase = $html -match '<base[^>]*>'
+    if ($hasBase) {
+      # Replace entire base tag
+      $html = [regex]::Replace($html, '<base[^>]*>', '<base href="/static/flutter-web/">', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    } else {
+      # Insert base after <head>
       $pattern = '(<head[^>]*>)'
       $replacement = "$1`n    <base href='/static/flutter-web/'>"
       $html = [regex]::Replace($html, $pattern, $replacement, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
-      Set-Content -Path $indexPath -Value $html -Encoding UTF8
-      Write-Host "Injected <base href='/static/flutter-web/'> into index.html"
     }
+    Set-Content -Path $indexPath -Value $html -Encoding UTF8
+    Write-Host "Set <base href='/static/flutter-web/'> in index.html"
   }
 }
 

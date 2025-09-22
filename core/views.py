@@ -18,6 +18,7 @@ from django.http import HttpResponse
 from django.conf import settings
 import io
 from pathlib import Path
+import re
 
 try:
     import segno  # pure-Python QR generator (SVG/PNG)
@@ -83,4 +84,15 @@ def flutter_index(request):
         content = index_path.read_text(encoding='utf-8')
     except FileNotFoundError:
         return render(request, 'base.html')
+
+    # Ensure correct base href so relative assets resolve to /static/flutter-web/
+    content = re.sub(r"<base[^>]*>", "<base href='/static/flutter-web/'>", content, flags=re.IGNORECASE)
+    if '<base' not in content.lower():
+        content = re.sub(r"(<head[^>]*>)", r"\1\n  <base href='/static/flutter-web/'>", content, flags=re.IGNORECASE)
+
+    # Harden key asset URLs in case some browsers ignore base during early fetch
+    content = content.replace('src="flutter_bootstrap.js"', 'src="/static/flutter-web/flutter_bootstrap.js"')
+    content = content.replace('href="manifest.json"', 'href="/static/flutter-web/manifest.json"')
+    content = content.replace('href="favicon.png"', 'href="/static/flutter-web/favicon.png"')
+
     return HttpResponse(content, content_type='text/html; charset=utf-8')

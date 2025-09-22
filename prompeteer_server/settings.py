@@ -102,6 +102,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
 DEBUG = False
 
 ALLOWED_HOSTS = [
+    'react.itse500-ok.ly',
     '127.0.0.1',
     'itse500-ok.ly',
     'www.itse500-ok.ly',
@@ -330,6 +331,7 @@ CORS_ALLOWED_ORIGINS = [
     # Production web origins (HTTPS)
     "https://www.itse500-ok.ly",
     "https://itse500-ok.ly",
+    "https://react.itse500-ok.ly",
 ]
 
 # Permit any localhost/127.0.0.1 with any port (for Flutter web dev servers)

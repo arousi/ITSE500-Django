@@ -108,7 +108,8 @@ ALLOWED_HOSTS = [
     'www.itse500-ok.ly',
     '157.230.29.188',
     'localhost',
-    'grad-project-server-tq36w.ondigitalocean.app'
+    'grad-project-server-tq36w.ondigitalocean.app',
+    'flutter.itse500-ok.ly',
 ]
 
 
@@ -332,6 +333,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://www.itse500-ok.ly",
     "https://itse500-ok.ly",
     "https://react.itse500-ok.ly",
+    "https://flutter.itse500-ok.ly",
 ]
 
 # Permit any localhost/127.0.0.1 with any port (for Flutter web dev servers)
@@ -366,6 +368,14 @@ CORS_PREFLIGHT_MAX_AGE = 86400
 
 ROOT_URLCONF = 'prompeteer_server.urls'
 
+# If using cookie auth or CSRF-protected endpoints from the SPA, trust these origins
+CSRF_TRUSTED_ORIGINS = [
+    'https://itse500-ok.ly',
+    'https://www.itse500-ok.ly',
+    'https://react.itse500-ok.ly',
+    'https://flutter.itse500-ok.ly',
+]
+
 
 TEMPLATES = [
     {
@@ -374,6 +384,7 @@ TEMPLATES = [
             BASE_DIR / 'templates',
             BASE_DIR / 'staticfiles' / 'templates',
             BASE_DIR / 'frontend_build',
+            BASE_DIR / 'flutter_build',
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -457,6 +468,7 @@ STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / 'frontend_build' / 'static',
+    ('flutter-web', BASE_DIR / 'flutter_build'),
 ]
 # Media (uploaded encrypted blobs)
 MEDIA_URL = '/media/'

@@ -21,11 +21,24 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView, RedirectView
 from django.urls import re_path
-from core.views import index, landing
+from core.views import index, landing, flutter_index
+from django.http import HttpRequest
+
+from django.template.loader import get_template
+from django.template import TemplateDoesNotExist
+
+# Serve SPA at root when using the React or Flutter subdomains; otherwise keep landing
+def root_router(request: HttpRequest):
+    host = request.get_host().split(':')[0].lower()
+    if host == 'react.itse500-ok.ly':
+        return index(request)
+    if host == 'flutter.itse500-ok.ly':
+        return flutter_index(request)
+    return landing(request)
 
 urlpatterns = [
-    # Root landing page (renders base.html with inline QR)
-    path('', landing, name='landing'),
+    # Root: SPA on react subdomain, landing elsewhere
+    path('', root_router, name='root'),
     # Team page with inline context (replace links/images as needed)
     path('team/', TemplateView.as_view(
         template_name='team.html',

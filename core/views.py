@@ -17,6 +17,7 @@ from django.template import TemplateDoesNotExist
 from django.http import HttpResponse
 from django.conf import settings
 import io
+from pathlib import Path
 
 try:
     import segno  # pure-Python QR generator (SVG/PNG)
@@ -68,3 +69,18 @@ def landing(request):
         'qr_target': qr_target,
     }
     return render(request, 'base.html', context)
+
+
+def flutter_index(request):
+    """Serve Flutter web build index.html from flutter_build directory.
+
+    Expects files from `flutter build web` to be copied into `BASE_DIR/flutter_build`.
+    For correct asset URLs, build Flutter with `--base-href /static/flutter-web/` (recommended),
+    or post-process index.html to set `<base href="/static/flutter-web/">`.
+    """
+    index_path = Path(settings.BASE_DIR) / 'flutter_build' / 'index.html'
+    try:
+        content = index_path.read_text(encoding='utf-8')
+    except FileNotFoundError:
+        return render(request, 'base.html')
+    return HttpResponse(content, content_type='text/html; charset=utf-8')

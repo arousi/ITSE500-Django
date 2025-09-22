@@ -1,6 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
 import os
+import importlib.util as _imp
 
 # --- Early .env loader (supports lines starting with `set `) ---
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -99,7 +100,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = [
     'react.itse500-ok.ly',
@@ -114,7 +115,6 @@ ALLOWED_HOSTS = [
 
 
 # Application definition
-
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -122,19 +122,26 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'USER_ID_FIELD': 'user_id',  # Match the primary key field in Custom_User
-    'USER_ID_CLAIM': 'user_id',  # Ensure the claim in the token matches the field
+    'USER_ID_FIELD': 'user_id',
+    'USER_ID_CLAIM': 'user_id',
 }
 
 AUTH_USER_MODEL = 'user_mang.Custom_User'
 
 
+_HAS_JAZZMIN = _imp.find_spec('jazzmin') is not None
+_HAS_SILK = _imp.find_spec('silk') is not None
+_HAS_DEBUG_TOOLBAR = _imp.find_spec('debug_toolbar') is not None
+_HAS_SPECTACULAR = _imp.find_spec('drf_spectacular') is not None
+
 INSTALLED_APPS = [
+    *(['jazzmin'] if _HAS_JAZZMIN else []),
     'prompeteer_server',
     'corsheaders',
     'django.contrib.admin',
@@ -149,6 +156,7 @@ INSTALLED_APPS = [
     "chat_api",
     "crypto_api",
     "rest_framework",
+    *(['drf_spectacular'] if _HAS_SPECTACULAR else []),
     
 ]
 
@@ -326,6 +334,21 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'prompeteer_server.middleware.DebugHeadersMiddleware',
 ]
+
+# Insert Silk first when DEBUG for full coverage, and Debug Toolbar after common middleware
+if DEBUG:
+    if _HAS_SILK:
+        INSTALLED_APPS += ['silk']
+        MIDDLEWARE = ['silk.middleware.SilkyMiddleware'] + MIDDLEWARE
+    if _HAS_DEBUG_TOOLBAR:
+        INSTALLED_APPS += ['debug_toolbar']
+        insert_after = 'django.middleware.common.CommonMiddleware'
+        try:
+            idx = MIDDLEWARE.index(insert_after) + 1
+            MIDDLEWARE = MIDDLEWARE[:idx] + ['debug_toolbar.middleware.DebugToolbarMiddleware'] + MIDDLEWARE[idx:]
+        except ValueError:
+            MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
+
 ## CORS
 # Allow production site and flexible localhost during development/testing
 CORS_ALLOWED_ORIGINS = [
@@ -367,6 +390,41 @@ CORS_EXPOSE_HEADERS = [
 CORS_PREFLIGHT_MAX_AGE = 86400
 
 ROOT_URLCONF = 'prompeteer_server.urls'
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'ITSE500 APIs Documentation',
+    'DESCRIPTION': 'Authentication, Chat, and User Management API',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'COMPONENT_SECURITY_SCHEMES': {
+        'BearerAuth': {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT',
+        }
+    },
+    'SECURITY': [
+        {'BearerAuth': []}
+    ],
+    'SWAGGER_UI_SETTINGS': {
+        'persistAuthorization': True,
+        'displayOperationId': True,
+    },
+}
+
+if DEBUG:
+    INTERNAL_IPS = [
+        '127.0.0.1', 'localhost',
+    ]
+    # Let WhiteNoise use staticfiles finders in development
+    WHITENOISE_USE_FINDERS = True
+
+JAZZMIN_SETTINGS = {
+    "site_title": "ITSE500 Admin",
+    "site_header": "ITSE500 Admin",
+    "welcome_sign": "Welcome to ITSE500 Admin",
+}
 
 # If using cookie auth or CSRF-protected endpoints from the SPA, trust these origins
 CSRF_TRUSTED_ORIGINS = [
@@ -426,9 +484,8 @@ DATABASES = {
             'sslmode': 'require' if os.environ.get('DB_SSL', 'False') == 'True' else None,
         },
 """
-import secrets
-# Backend password salt for custom authentication
-BACKEND_PASSWORD_SALT = os.environ.get('BACKEND_PASSWORD_SALT', secrets.token_urlsafe(32))
+# BACKEND_PASSWORD_SALT is already defined above from environment with a safe default.
+# Keep it stable across restarts; do not override it here.
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -464,7 +521,7 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / 'frontend_build' / 'static',
@@ -480,14 +537,3 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # *django doesn't accept uuid as it is not a subclass of AutoField
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-}
-
-SIMPLE_JWT = {
-    "USER_ID_FIELD":"user_id",
-    "USER_ID_CLAIM": "user_id",
-}

@@ -26,6 +26,8 @@ from django.http import HttpRequest
 
 from django.template.loader import get_template
 from django.template import TemplateDoesNotExist
+import importlib.util as _imp
+import importlib
 
 # Serve SPA at root when using the React or Flutter subdomains; otherwise keep landing
 def root_router(request: HttpRequest):
@@ -82,7 +84,19 @@ urlpatterns = [
     path('api/v1/user_mang/', include('user_mang.urls')),
     #path('api/v1/chat_api/', include('chat_api.urls')),
     path('api/v1/crypto_api/', include('crypto_api.urls')),
+    # API schema and docs (served when package is available)
 ]
+
+# Optional Spectacular schema & UIs
+if _imp.find_spec('drf_spectacular') is not None:
+    SpectacularAPIView = importlib.import_module('drf_spectacular.views').SpectacularAPIView
+    SpectacularSwaggerView = importlib.import_module('drf_spectacular.views').SpectacularSwaggerView
+    SpectacularRedocView = importlib.import_module('drf_spectacular.views').SpectacularRedocView
+    urlpatterns += [
+        path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+        path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+        path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    ]
 
 # Catch-all: serve landing for any non-API path excluding static/media (must be last)
 urlpatterns += [
@@ -91,3 +105,12 @@ urlpatterns += [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    try:
+        import debug_toolbar  # type: ignore
+        urlpatterns = [path('__debug__/', include('debug_toolbar.urls'))] + urlpatterns
+    except Exception:
+        pass
+    try:
+        urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
+    except Exception:
+        pass

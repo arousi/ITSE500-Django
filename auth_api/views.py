@@ -44,8 +44,47 @@ from .serializers import (
     OAuthAuthorizeRequestSerializer,
     SendOTPSerializer,
     VerifyOTPSerializer,
+    RegisterResponseSerializer,
+    LoginResponseSerializer,
+    LogoutResponseSerializer,
+    HealthCheckResponseSerializer,
+    OAuthAuthorizeResponseSerializer,
+    OAuthCallbackResponseSerializer,
+    EmailPinVerifyRequestSerializer,
+    EmailPinVerifyResponseSerializer,
+    SetPasswordAfterEmailVerifyRequestSerializer,
+    SetPasswordAfterEmailVerifyResponseSerializer,
 )
 from prompeteer_server.utils.emailer import send_verified_email
+try:
+    from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiResponse, OpenApiParameter
+    from drf_spectacular.types import OpenApiTypes
+except Exception:
+    extend_schema = None  # type: ignore
+    OpenApiExample = None  # type: ignore
+    OpenApiResponse = None  # type: ignore
+    OpenApiParameter = None  # type: ignore
+    OpenApiTypes = None  # type: ignore
+
+# Predefined OpenAPI parameter sequences for Spectacular (when available)
+OAUTH_AUTHORIZE_PARAMS = []
+OAUTH_CALLBACK_PARAMS = []
+OAUTH_RESULT_PARAMS = []
+if extend_schema and OpenApiParameter and OpenApiTypes:  # type: ignore[truthy-bool]
+    OAUTH_AUTHORIZE_PARAMS = [
+        OpenApiParameter('scope', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description='OAuth scopes (space-separated)'),
+        OpenApiParameter('redirect_uri', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description='Custom redirect for mobile/SPA'),
+        OpenApiParameter('callback_host', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description='Mobile emulator host swap'),
+        OpenApiParameter('mode', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description="Use 'redirect' for SSR redirect"),
+    ]
+    OAUTH_CALLBACK_PARAMS = [
+        OpenApiParameter('state', OpenApiTypes.STR, OpenApiParameter.QUERY, description='Opaque state string'),
+        OpenApiParameter('code', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description='Authorization code'),
+        OpenApiParameter('error', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description='Error message from provider'),
+    ]
+    OAUTH_RESULT_PARAMS = [
+        OpenApiParameter('state_value', OpenApiTypes.STR, OpenApiParameter.PATH, description='State value used in OAuth'),
+    ]
 
 OAUTH_STATE_TTL_SECONDS = 600  # 10 minutes
 OTP_EXPIRY_SECONDS = 300  # 5 minutes
@@ -140,6 +179,15 @@ class RegisterView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @(
+        extend_schema(
+            tags=['auth'],
+            summary='Register account',
+            description='Create a new account or reconcile existing identity; returns JWTs and initial sync.',
+            request=RegisterSerializer,
+            responses={201: RegisterResponseSerializer, 200: RegisterResponseSerializer, 409: OpenApiResponse(description='invalid credentials.') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):
         """Handle registration: auto-verify in this phase; do not leak existing account details.
 
@@ -359,6 +407,14 @@ class EmailPinVerifyView(APIView):
         email = serializers.EmailField()
         pin = serializers.CharField(max_length=5)
 
+    @(
+        extend_schema(
+            tags=['auth'],
+            summary='Verify email PIN',
+            request=EmailPinVerifyRequestSerializer,
+            responses={200: EmailPinVerifyResponseSerializer, 400: OpenApiResponse(description='Invalid PIN or expired') if OpenApiResponse else None, 401: OpenApiResponse(description='Auth required') if OpenApiResponse else None, 404: OpenApiResponse(description='User not found') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):  # type: ignore[override]
         """Verify the 5-digit email PIN for the authenticated user.
 
@@ -509,6 +565,14 @@ class SetPasswordAfterEmailVerifyView(APIView):
         email = serializers.EmailField()
         password = serializers.CharField(min_length=6)
 
+    @(
+        extend_schema(
+            tags=['auth'],
+            summary='Set password after email verify',
+            request=SetPasswordAfterEmailVerifyRequestSerializer,
+            responses={200: SetPasswordAfterEmailVerifyResponseSerializer, 400: OpenApiResponse(description='Invalid data or email not verified') if OpenApiResponse else None, 401: OpenApiResponse(description='Auth required') if OpenApiResponse else None, 404: OpenApiResponse(description='User not found') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):  # type: ignore[override]
         """Set/reset the account password after email verification.
 
@@ -588,6 +652,14 @@ class LoginView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @(
+        extend_schema(
+            tags=['auth'],
+            summary='Login with identifier + password',
+            request=LoginSerializer,
+            responses={200: LoginResponseSerializer, 401: OpenApiResponse(description='Invalid credentials') if OpenApiResponse else None, 403: OpenApiResponse(description='User locked') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):
         """Authenticate a user and return JWT tokens plus initial sync payload.
         Accepts identifier (email/username) and user_password/password. Returns 200
@@ -659,6 +731,13 @@ class LogoutView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
+    @(
+        extend_schema(
+            tags=['auth'],
+            summary='Logout (client discards tokens)',
+            responses={200: LogoutResponseSerializer},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):
         """Invalidate the current session and instruct the client to discard tokens.
         Returns a 200 response with a brief message. Does not blacklist tokens server-side.
@@ -693,6 +772,13 @@ class HealthCheckView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @(
+        extend_schema(
+            tags=['ops'],
+            summary='Health check',
+            responses={200: HealthCheckResponseSerializer},
+        ) if extend_schema else (lambda f: f)
+    )
     def get(self, request):
         """Report server liveness with a simple JSON payload and 200 status."""
         logger.info("[HealthCheckView] Health check performed.")
@@ -733,6 +819,15 @@ class OAuthAuthorizeBase(APIView):
     permission_classes = [AllowAny]
     provider = None  # 'google' or 'openrouter'
 
+    @(
+        extend_schema(
+            tags=['oauth'],
+            summary='Start OAuth authorization',
+            description='Returns provider authorize URL and state for SSR or SPA/mobile flows.',
+            parameters=OAUTH_AUTHORIZE_PARAMS,
+            responses={200: OAuthAuthorizeResponseSerializer, 302: OpenApiResponse(description='Redirect to provider') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def get(self, request):
         """Start an OAuth2 authorization flow and return or redirect to an authorize URL.
         Supports SSR redirect (mode=redirect) and SPA/mobile JSON response containing
@@ -937,6 +1032,14 @@ class OAuthCallbackBase(APIView):
     permission_classes = [AllowAny]
     provider = None
 
+    @(
+        extend_schema(
+            tags=['oauth'],
+            summary='OAuth callback handler',
+            parameters=OAUTH_CALLBACK_PARAMS,
+            responses={200: OAuthCallbackResponseSerializer, 400: OpenApiResponse(description='Invalid state or token exchange failed') if OpenApiResponse else None, 409: OpenApiResponse(description='State already used') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def get(self, request):
         """Handle an OAuth2 callback from a provider and return a unified JSON payload.
         Validates state, exchanges code for tokens, creates/updates a user, persists
@@ -1201,6 +1304,14 @@ class OAuthCallbackBase(APIView):
 
         return Response(payload)
 
+    @(
+        extend_schema(
+            tags=['oauth'],
+            summary='OAuth callback (POST bridge)',
+            request=OAuthCallbackSerializer,
+            responses={200: OAuthCallbackResponseSerializer},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):
         """Accept callback data via POST (bridge) and delegate to GET handler."""
         ser = OAuthCallbackSerializer(data=request.data)
@@ -1239,6 +1350,14 @@ class OAuthResultView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @(
+        extend_schema(
+            tags=['oauth'],
+            summary='Fetch OAuth result by state',
+            parameters=OAUTH_RESULT_PARAMS,
+            responses={200: OAuthCallbackResponseSerializer, 202: OpenApiResponse(description='Result not ready') if OpenApiResponse else None, 404: OpenApiResponse(description='Not found') if OpenApiResponse else None, 410: OpenApiResponse(description='Already retrieved') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def get(self, request, state_value: str):
         """Fetch the stored OAuth result payload for the given state (one-time).
         Returns 202 if the result isn't ready yet, 410 if already retrieved, 404 if

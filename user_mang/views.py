@@ -43,6 +43,33 @@ from reportlab.pdfgen import canvas
 
 from prompeteer_server.utils.emailer import send_verified_email
 
+try:
+    from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
+    from drf_spectacular.types import OpenApiTypes
+except Exception:
+    extend_schema = None  # type: ignore
+    OpenApiResponse = None  # type: ignore
+    OpenApiParameter = None  # type: ignore
+    OpenApiTypes = None  # type: ignore
+
+SYNC_GET_PARAMS = []
+SYNC_DELETE_PARAMS = []
+if extend_schema and OpenApiParameter and OpenApiTypes:  # type: ignore[truthy-bool]
+    SYNC_GET_PARAMS = [
+        OpenApiParameter('user_id', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description='User UUID (GET only, when allow_public_uuid=true)'),
+        OpenApiParameter('profile', OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False, description='Include profile section'),
+        OpenApiParameter('chat', OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False, description='Include chat section'),
+        OpenApiParameter('temp_id', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description='Visitor temp identifier (issues short-lived tokens)'),
+        OpenApiParameter('device_id', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description='Associate device with user/visitor'),
+        OpenApiParameter('allow_public_uuid', OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False, description='Allow unauthenticated read by UUID for GET'),
+    ]
+    SYNC_DELETE_PARAMS = [
+        OpenApiParameter('action', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description="'delete' or 'archive'"),
+        OpenApiParameter('profile', OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False),
+        OpenApiParameter('chat', OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False),
+        OpenApiParameter('download_now', OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False, description='If true, returns a zip of CSV+PDF'),
+    ]
+
 logger = logging.getLogger('user_mang')
 
 def resolve_flags(request):
@@ -303,6 +330,14 @@ class UnifiedSyncView(APIView):
             else:
                 obj.delete()
 
+    @(
+        extend_schema(
+            tags=['sync'],
+            summary='Unified sync (fetch profile/chat)',
+            parameters=SYNC_GET_PARAMS,
+            responses={200: OpenApiResponse(description='Nested profile/chat payload with optional visitor tokens') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def get(self, request):
         """GET
 
@@ -578,6 +613,14 @@ class UnifiedSyncView(APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
+    @(
+        extend_schema(
+            tags=['sync'],
+            summary='Unified upsert (profile/chat)',
+            description='Upsert profile and chat model lists atomically; returns summary/errors and canonical payload.',
+            responses={200: OpenApiResponse(description='Upsert result with summary/errors and canonical payload') if OpenApiResponse else None, 400: OpenApiResponse(description='Validation error') if OpenApiResponse else None, 500: OpenApiResponse(description='Transaction failed') if OpenApiResponse else None},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):
         """
         POST
@@ -876,6 +919,14 @@ class UnifiedSyncView(APIView):
 
         return Response(response_payload, status=status.HTTP_200_OK)
 
+    @(
+        extend_schema(
+            tags=['sync'],
+            summary='Partial profile update',
+            description='Authenticated partial update for profile fields (me endpoint style).',
+            responses={200: OpenApiResponse(description='Updated profile'), 400: OpenApiResponse(description='Validation error'), 401: OpenApiResponse(description='Auth required')} if OpenApiResponse else None,
+        ) if extend_schema else (lambda f: f)
+    )
     def patch(self, request):
         """
         PATCH
@@ -914,6 +965,14 @@ class UnifiedSyncView(APIView):
         else:
             return Response({"error": "Invalid profile data", "details": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
+    @(
+        extend_schema(
+            tags=['sync'],
+            summary='Delete or archive user data',
+            parameters=SYNC_DELETE_PARAMS,
+            responses={200: OpenApiResponse(description='Deletion/archive result with optional export URLs or zip'), 400: OpenApiResponse(description='Invalid action or request'), 401: OpenApiResponse(description='Auth required')} if OpenApiResponse else None,
+        ) if extend_schema else (lambda f: f)
+    )
     def delete(self, request):
         """DELETE
 

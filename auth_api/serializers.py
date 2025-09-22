@@ -84,3 +84,102 @@ class SendOTPSerializer(serializers.Serializer):
 class VerifyOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
     otp = serializers.CharField(max_length=6)
+
+# ------------------------- Documentation Serializers -------------------------
+
+class MessageDoc(serializers.Serializer):
+    message_id = serializers.CharField()
+    timestamp = serializers.DateTimeField()
+    has_image = serializers.BooleanField(required=False)
+    has_document = serializers.BooleanField(required=False)
+
+
+class ConversationDoc(serializers.Serializer):
+    conversation_id = serializers.CharField()
+    title = serializers.CharField(required=False, allow_null=True)
+    updated_at = serializers.DateTimeField(required=False)
+    messages = MessageDoc(many=True)
+
+
+class RegisterResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.CharField()
+    access_token = serializers.CharField()
+    refresh_token = serializers.CharField()
+    email = serializers.EmailField()
+    onboarding = serializers.BooleanField()
+    conversations = ConversationDoc(many=True)
+    temp_id = serializers.CharField(required=False, allow_null=True)
+    device_id = serializers.CharField(required=False, allow_null=True)
+    related_devices = serializers.ListField(child=serializers.CharField(), required=False)
+
+
+class AttachmentDoc(serializers.Serializer):
+    attachment_id = serializers.CharField(required=False)
+    message_id = serializers.CharField(required=False)
+    url = serializers.CharField(required=False)
+
+
+class LoginResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.CharField()
+    access_token = serializers.CharField()
+    refresh_token = serializers.CharField()
+    email_verified = serializers.BooleanField()
+    conversations = ConversationDoc(many=True)
+    attachments = AttachmentDoc(many=True)
+
+
+class LogoutResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+
+
+class HealthCheckResponseSerializer(serializers.Serializer):
+    status = serializers.CharField()
+    message = serializers.CharField()
+
+
+class OAuthAuthorizeResponseSerializer(serializers.Serializer):
+    authorize_url = serializers.CharField()
+    state = serializers.CharField()
+    state_id = serializers.CharField()
+    expires_at = serializers.CharField()
+    bridge = serializers.BooleanField()
+
+
+class OAuthCallbackResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.CharField()
+    username = serializers.CharField(required=False, allow_null=True)
+    access_token = serializers.CharField()
+    refresh_token = serializers.CharField()
+    provider_scope = serializers.CharField(required=False, allow_null=True)
+    provider_expires_at = serializers.CharField(required=False, allow_null=True)
+    provider_access_token = serializers.CharField(required=False, allow_null=True)
+    provider_refresh_token = serializers.CharField(required=False, allow_null=True)
+    provider_token_type = serializers.CharField(required=False, allow_null=True)
+    id_token = serializers.CharField(required=False, allow_null=True)
+    email = serializers.EmailField(required=False, allow_null=True)
+    email_verified = serializers.BooleanField(required=False)
+    is_google_user = serializers.BooleanField(required=False)
+    is_openrouter_user = serializers.BooleanField(required=False)
+    is_github_user = serializers.BooleanField(required=False)
+    is_ms_user = serializers.BooleanField(required=False)
+
+
+class EmailPinVerifyRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    pin = serializers.CharField(max_length=5)
+
+
+class EmailPinVerifyResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+
+class SetPasswordAfterEmailVerifyRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(min_length=6)
+
+
+class SetPasswordAfterEmailVerifyResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()

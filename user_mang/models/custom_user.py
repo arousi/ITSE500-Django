@@ -79,12 +79,30 @@ class Custom_User(AbstractUser):
         # Fallback for older Django versions lacking JSONField on SQLite
         related_devices = models.TextField(blank=True, null=True, help_text="JSON-encoded list of device IDs")
     def set_password(self, raw_password):
-        # Set the user_password field instead of password
-        self.user_password = raw_password
+        if not raw_password:
+            self.user_password = None
+            self._password = None
+            return
+        backend_salt = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
+        client_hash = hashlib.sha256(raw_password.encode('utf-8')).hexdigest()
+        backend_hash = hashlib.sha256((client_hash + backend_salt).encode('utf-8')).hexdigest()
+        self.user_password = backend_hash
         self._password = raw_password
 
     def check_password(self, raw_password):
-        # Check the user_password field instead of password
+        if not self.user_password:
+            return False
+        backend_salt = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
+        # Preferred: server stores sha256(sha256(raw) + salt)
+        client_hash = hashlib.sha256(raw_password.encode('utf-8')).hexdigest()
+        double_hash = hashlib.sha256((client_hash + backend_salt).encode('utf-8')).hexdigest()
+        if self.user_password == double_hash:
+            return True
+        # Backward compatibility: some paths may store sha256(raw + salt)
+        single_hash = hashlib.sha256((raw_password + backend_salt).encode('utf-8')).hexdigest()
+        if self.user_password == single_hash:
+            return True
+        # Legacy plaintext fallback (should not be used, but tolerate existing data)
         return self.user_password == raw_password
 
     def get_related_devices(self):

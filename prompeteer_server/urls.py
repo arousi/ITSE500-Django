@@ -63,11 +63,11 @@ urlpatterns = [
                     'name': 'Mohanned Shotshati',
                     'role': 'Web Frontend Software Engineer',
                     'image': 'img/team/mohaned-solo.jpeg',
-                    'cv': 'cv/mohanned-shotshati-cv.pdf',  # place under static/cv/
-                    'email': 'abdelwahab@example.com',
+                    'cv': 'cv/mohanned-cv.pdf',  # place under static/cv/
+                    'email': 'mhndalshtshaty93@gmail.com',
                     'phone': '+218926784552',
                     'socials': {
-                        'linkedin': 'https://www.linkedin.com/in/example-abdelwahab/',
+                        'linkedin': 'https://www.linkedin.com/in/%D9%85%D9%87%D9%86%D8%AF-%D8%A7%D9%84%D8%B4%D8%B7%D8%B4%D8%A7%D8%B7%D9%8A-900b17385/overlay/about-this-profile/?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base%3Ban4yFvhXSy2b9wVrYQhNWg%3D%3D',
                         'github': 'https://github.com/mohaned2001',
                     },
                     'skills': ['react','javascript','git','jira']

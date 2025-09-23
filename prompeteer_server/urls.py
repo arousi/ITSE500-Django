@@ -98,9 +98,9 @@ if _imp.find_spec('drf_spectacular') is not None:
         path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     ]
 
-# Catch-all: serve landing for any non-API path excluding static/media (must be last)
+# Catch-all: serve SPA or landing for any non-API path excluding static/media (must be last)
 urlpatterns += [
-    re_path(r'^(?!static/|media/).*$' , index),
+    re_path(r'^(?!static/|media/|api/).*$' , root_router),
 ]
 
 if settings.DEBUG:

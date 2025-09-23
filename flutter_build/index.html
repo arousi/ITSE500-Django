@@ -33,6 +33,42 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+  (function(){
+    try {
+      var h = window.location.hash || '';
+      var needsNormalize = h && h.indexOf('#/') === 0;
+      if (needsNormalize) {
+        var newUrl = window.location.pathname + h.substring(1) + window.location.search;
+        var doReload = function(){
+          try { window.history.replaceState(null, '', newUrl); } catch (e) {}
+          if (!sessionStorage.getItem('swNormalized')) {
+            sessionStorage.setItem('swNormalized', '1');
+            window.location.reload();
+          }
+        };
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          navigator.serviceWorker.getRegistrations().then(function(regs){
+            regs.forEach(function(r){ r.unregister().catch(function(){}); });
+            doReload();
+          }).catch(function(){ doReload(); });
+        } else {
+          doReload();
+        }
+      }
+      // Also normalize future accidental hash routing without reload
+      window.addEventListener('hashchange', function(){
+        try {
+          var hh = window.location.hash || '';
+          if (hh && hh.indexOf('#/') === 0) {
+            var nu = hh.substring(1) + window.location.search;
+            window.history.replaceState(null, '', nu);
+          }
+        } catch (e) {}
+      });
+    } catch (e) { /* ignore */ }
+  })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

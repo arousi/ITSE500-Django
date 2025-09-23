@@ -39,7 +39,7 @@
       var h = window.location.hash || '';
       var needsNormalize = h && h.indexOf('#/') === 0;
       if (needsNormalize) {
-        var newUrl = window.location.pathname + h.substring(1) + window.location.search;
+        var newUrl = h.substring(1) + window.location.search;
         var doReload = function(){
           try { window.history.replaceState(null, '', newUrl); } catch (e) {}
           if (!sessionStorage.getItem('swNormalized')) {

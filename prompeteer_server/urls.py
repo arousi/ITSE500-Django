@@ -63,7 +63,7 @@ urlpatterns = [
                     'name': 'Mohanned Shotshati',
                     'role': 'Web Frontend Software Engineer',
                     'image': 'img/team/mohaned-solo.jpeg',
-                    'cv': 'cv/mohanned-cv.pdf',  # place under static/cv/
+                    'cv': 'cv/mohaned-cv.pdf',  # place under static/cv/
                     'email': 'mhndalshtshaty93@gmail.com',
                     'phone': '+218926784552',
                     'socials': {

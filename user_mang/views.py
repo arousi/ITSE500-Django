@@ -30,6 +30,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.core.mail import EmailMessage
 from django.http import FileResponse
+from django.core.wsgi import get_wsgi_application
 import logging
 import json
 from auth_api.models import ProviderOAuthToken  
@@ -205,7 +206,7 @@ class UnifiedSyncView(APIView):
             user.last_login = timezone.now()
             user.save()
 
-    def resolve_user(self, request):
+    def resolve_user(self, request):   
         """Resolve the user for this request.
 
         Behavior summary:

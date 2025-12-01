@@ -2,6 +2,7 @@ from datetime import timedelta
 from pathlib import Path
 import os
 import importlib.util as _imp
+import mimetypes
 
 # --- Early .env loader (supports lines starting with `set `) ---
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -537,3 +538,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # *django doesn't accept uuid as it is not a subclass of AutoField
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Ensure correct MIME for WASM (CanvasKit)
+mimetypes.add_type('application/wasm', '.wasm', True)

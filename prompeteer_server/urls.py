@@ -98,10 +98,18 @@ if _imp.find_spec('drf_spectacular') is not None:
         path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     ]
 
-# Catch-all: serve landing for any non-API path excluding static/media (must be last)
+# Catch-all: serve SPA or landing for any non-API path excluding static/media (must be last)
 urlpatterns += [
-    re_path(r'^(?!static/|media/).*$' , index),
+    re_path(r'^(?!static/|media/|api/).*$' , root_router),
 ]
+
+# In DEBUG, prefer serving the Flutter SPA for any non-API/static/media paths to simplify local testing
+from django.conf import settings as _settings
+if _settings.DEBUG:
+    # Place this earlier so it takes precedence in development
+    urlpatterns = [
+        re_path(r'^(?!static/|media/|api/|admin/|team/|__debug__/|silk/).*$' , flutter_index),
+    ] + urlpatterns
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

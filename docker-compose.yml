@@ -1,0 +1,18 @@
+version: "3.8"
+services:
+  web:
+    build: .
+    entrypoint: ["/app/entrypoint.sh"]
+    command: ["gunicorn", "prompeteer_server.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+    env_file:
+      - .env
+    volumes:
+      - .:/app:cached
+      - static_volume:/app/staticfiles
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=prompeteer_server.settings
+
+volumes:
+  static_volume:

@@ -1,0 +1,173 @@
+<diagram program="umletino" version="15.1"><zoom_level>7</zoom_level><help_text>Space for diagram notes</help_text><element><id>UMLGeneric</id><coordinates><x>1386</x><y>441</y><w>77</w><h>21</h></coordinates><panel_attributes>Server DB
+bg=black
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Text</id><coordinates><x>1386</x><y>378</y><w>70</w><h>56</h></coordinates><panel_attributes>// Text Element
+// DB Symbol
+_umletcode=
+fg='white';
+bg='black';
+drawArc(0,0,width,height*2/5,0,180,true) //Parameters (x, y, width, height, start, extent, open)
+bg='bg';
+drawArc(0,0,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+fg='#929292';
+bg='#';
+drawRectangle(0,(height+0.5)/5,width,(height)*3/5-1)  //Parameters (x, y, width, height)
+fg='white'
+drawLine(0,height/5,0,height*4/5) //Parameters (x1, y1, x2, y2)
+drawLine(width,height/5,width,height*4/5) //Parameters (x1, y1, x2, y2)
+bg='bg';
+drawArc(0,height*1/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,height*2/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+bg='black'
+drawArc(0,height*3/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+layer=2</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>1155</x><y>399</y><w>21</w><h>273</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;370</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1099</x><y>385</y><w>126</w><h>21</h></coordinates><panel_attributes>OAuthCallbackSerializer()
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>1414</x><y>455</y><w>21</w><h>287</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;390</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>490</x><y>385</y><w>196</w><h>21</h></coordinates><panel_attributes>&lt;Provider&gt;AuthorizeView(OAuthAuthorizeBase)
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>574</x><y>399</y><w>21</w><h>84</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>196</x><y>392</y><w>70</w><h>21</h></coordinates><panel_attributes>Web/Mobile
+bg=black
+fg=white
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>224</x><y>406</y><w>21</w><h>42</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;40</additional_attributes></element><element><id>Relation</id><coordinates><x>21</x><y>392</y><w>21</w><h>49</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;50</additional_attributes></element><element><id>UMLActor</id><coordinates><x>0</x><y>315</y><w>49</w><h>84</h></coordinates><panel_attributes>Actor
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>980</x><y>693</y><w>189</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(14) No Exception</panel_attributes><additional_attributes>10;20;250;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>413</x><y>441</y><w>14</w><h>42</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>882</x><y>385</y><w>196</w><h>21</h></coordinates><panel_attributes>&lt;Provider&gt;CallbackView(OAuthCallbackBase)
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>973</x><y>399</y><w>21</w><h>259</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;350</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>21</x><y>427</y><w>14</w><h>28</h></coordinates><panel_attributes>bg=black
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>28</x><y>427</y><w>210</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(1) Clicks 'Authorize via OAuth Provider'</panel_attributes><additional_attributes>280;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>224</x><y>434</y><w>14</w><h>28</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLFrame</id><coordinates><x>469</x><y>357</y><w>1001</w><h>714</h></coordinates><panel_attributes>Django Server
+bg=#808080
+layer=0
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>574</x><y>469</y><w>14</w><h>35</h></coordinates><panel_attributes>bg=black
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>231</x><y>441</y><w>196</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(2) www.itse500-ok.ly/
+api/v1/auth_api/&lt;provider&gt;/authorize</panel_attributes><additional_attributes>260;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>378</x><y>392</y><w>77</w><h>21</h></coordinates><panel_attributes>Pop up/Broweser
+bg=black
+fg=white
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>413</x><y>406</y><w>21</w><h>49</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;50</additional_attributes></element><element><id>Relation</id><coordinates><x>420</x><y>462</y><w>168</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(3) Calls link</panel_attributes><additional_attributes>220;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1484</x><y>385</y><w>77</w><h>21</h></coordinates><panel_attributes>OAuth Provider
+bg=black
+fg=white
+
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>420</x><y>581</y><w>1113</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(9) Redirects user to the OAuth Provider
+Login/Signup to Authroize our system
+cbase=l</panel_attributes><additional_attributes>1570;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>1519</x><y>399</y><w>21</w><h>189</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;250</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1519</x><y>574</y><w>14</w><h>56</h></coordinates><panel_attributes>bg=black
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>574</x><y>497</y><w>21</w><h>35</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;30</additional_attributes></element><element><id>Relation</id><coordinates><x>420</x><y>609</y><w>1113</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(10) Authorization
+Callback URL code + state
+cbase=l</panel_attributes><additional_attributes>10;30;1570;20</additional_attributes></element><element><id>Relation</id><coordinates><x>420</x><y>637</y><w>567</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(11) GET /callback?code=...&amp;state=...</panel_attributes><additional_attributes>790;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>973</x><y>644</y><w>14</w><h>35</h></coordinates><panel_attributes>bg=black
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>21</x><y>910</y><w>14</w><h>21</h></coordinates><panel_attributes>bg=black
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>707</x><y>385</y><w>154</w><h>21</h></coordinates><panel_attributes>OAuthAuthorizeRequestSerializer()
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>777</x><y>399</y><w>21</w><h>98</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;120</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>777</x><y>483</y><w>14</w><h>63</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>581</x><y>483</y><w>210</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(4) Request Data</panel_attributes><additional_attributes>280;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1155</x><y>658</y><w>14</w><h>56</h></coordinates><panel_attributes>bg=black
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>784</x><y>497</y><w>91</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(5) ser.is_valid</panel_attributes><additional_attributes>10;30;30;30;30;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>581</x><y>539</y><w>98</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(7) Build payload</panel_attributes><additional_attributes>10;30;30;30;30;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>777</x><y>539</y><w>21</w><h>455</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;630</additional_attributes></element><element><id>Relation</id><coordinates><x>581</x><y>518</y><w>210</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(6) No Exception</panel_attributes><additional_attributes>10;20;280;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>574</x><y>518</y><w>14</w><h>63</h></coordinates><panel_attributes>bg=black
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>420</x><y>560</y><w>168</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(8) 302 Redirect Callback
+to OAuth Provider w/ data</panel_attributes><additional_attributes>10;20;220;20</additional_attributes></element><element><id>Relation</id><coordinates><x>980</x><y>658</y><w>189</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(12) request data</panel_attributes><additional_attributes>250;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>1162</x><y>672</y><w>91</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(13) ser.is_valid</panel_attributes><additional_attributes>10;30;30;30;30;10;10;10</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>973</x><y>700</y><w>14</w><h>98</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>980</x><y>735</y><w>448</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(16) Insert into DB</panel_attributes><additional_attributes>620;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1414</x><y>728</y><w>14</w><h>42</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>980</x><y>749</y><w>448</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(17) Success</panel_attributes><additional_attributes>10;20;620;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>413</x><y>784</y><w>14</w><h>28</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>420</x><y>777</y><w>567</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(18) 200 you may close the window</panel_attributes><additional_attributes>10;20;790;20</additional_attributes></element><element><id>Relation</id><coordinates><x>413</x><y>651</y><w>21</w><h>147</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;190</additional_attributes></element><element><id>Relation</id><coordinates><x>973</x><y>672</y><w>21</w><h>42</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;40</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>224</x><y>798</y><w>14</w><h>42</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>224</x><y>455</y><w>21</w><h>357</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;490</additional_attributes></element><element><id>Relation</id><coordinates><x>231</x><y>791</y><w>196</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+</panel_attributes><additional_attributes>10;20;260;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1246</x><y>385</y><w>126</w><h>21</h></coordinates><panel_attributes>OAuthResultView()
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>1302</x><y>399</y><w>21</w><h>434</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;600</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1302</x><y>819</y><w>14</w><h>91</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>231</x><y>819</y><w>1085</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(19) GET /api/v1/auth_api/oauth/result/&lt;state&gt;
+</panel_attributes><additional_attributes>1530;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>1414</x><y>763</y><w>21</w><h>84</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1414</x><y>833</y><w>14</w><h>56</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>1309</x><y>847</y><w>119</w><h>21</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-</panel_attributes><additional_attributes>150;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>1309</x><y>875</y><w>119</w><h>21</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-</panel_attributes><additional_attributes>10;10;150;10</additional_attributes></element><element><id>Relation</id><coordinates><x>231</x><y>889</y><w>1085</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+200 {user_info, tokens}
+</panel_attributes><additional_attributes>10;20;1530;20</additional_attributes></element><element><id>Relation</id><coordinates><x>224</x><y>833</y><w>21</w><h>70</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;80</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>224</x><y>889</y><w>14</w><h>42</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>21</x><y>448</y><w>21</w><h>476</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;660</additional_attributes></element><element><id>Relation</id><coordinates><x>28</x><y>910</y><w>210</w><h>28</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+Authorize</panel_attributes><additional_attributes>10;20;280;20</additional_attributes></element><element><id>Relation</id><coordinates><x>980</x><y>714</y><w>105</w><h>35</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(15) Build payload</panel_attributes><additional_attributes>10;30;30;30;30;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>574</x><y>574</y><w>21</w><h>420</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;580</additional_attributes></element><element><id>Relation</id><coordinates><x>973</x><y>791</y><w>21</w><h>203</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;270</additional_attributes></element><element><id>Relation</id><coordinates><x>1155</x><y>707</y><w>21</w><h>287</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;390</additional_attributes></element><element><id>Relation</id><coordinates><x>1302</x><y>903</y><w>21</w><h>91</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;110</additional_attributes></element><element><id>Relation</id><coordinates><x>1414</x><y>882</y><w>21</w><h>84</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1379</x><y>952</y><w>77</w><h>21</h></coordinates><panel_attributes>Server DB
+bg=black
+fg=white
+
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Text</id><coordinates><x>1386</x><y>980</y><w>70</w><h>56</h></coordinates><panel_attributes>// Text Element
+// DB Symbol
+_umletcode=
+fg='white';
+bg='black';
+drawArc(0,0,width,height*2/5,0,180,true) //Parameters (x, y, width, height, start, extent, open)
+bg='bg';
+drawArc(0,0,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+fg='#929292';
+bg='#';
+drawRectangle(0,(height+0.5)/5,width,(height)*3/5-1)  //Parameters (x, y, width, height)
+fg='white'
+drawLine(0,height/5,0,height*4/5) //Parameters (x1, y1, x2, y2)
+drawLine(width,height/5,width,height*4/5) //Parameters (x1, y1, x2, y2)
+bg='bg';
+drawArc(0,height*1/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,height*2/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+bg='black'
+drawArc(0,height*3/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+layer=2</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1246</x><y>980</y><w>126</w><h>21</h></coordinates><panel_attributes>OAuthResultView()
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1099</x><y>980</y><w>126</w><h>21</h></coordinates><panel_attributes>OAuthCallbackSerializer()
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>889</x><y>980</y><w>196</w><h>21</h></coordinates><panel_attributes>&lt;Provider&gt;CallbackView(OAuthCallbackBase)
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>714</x><y>980</y><w>154</w><h>21</h></coordinates><panel_attributes>OAuthAuthorizeRequestSerializer()
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>490</x><y>980</y><w>196</w><h>21</h></coordinates><panel_attributes>&lt;Provider&gt;AuthorizeView(OAuthAuthorizeBase)
+style=wordwrap
+bg=black
+fg=white
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>385</x><y>980</y><w>77</w><h>21</h></coordinates><panel_attributes>Pop up/Broweser
+bg=black
+fg=white
+
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>196</x><y>987</y><w>70</w><h>21</h></coordinates><panel_attributes>Web/Mobile
+bg=black
+fg=white
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>413</x><y>805</y><w>21</w><h>189</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;250</additional_attributes></element><element><id>Relation</id><coordinates><x>224</x><y>924</y><w>21</w><h>77</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;90</additional_attributes></element><element><id>UMLActor</id><coordinates><x>0</x><y>959</y><w>49</w><h>84</h></coordinates><panel_attributes>Actor
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>21</x><y>924</y><w>21</w><h>49</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;50</additional_attributes></element><element><id>UMLFrame</id><coordinates><x>168</x><y>777</y><w>1316</w><h>161</h></coordinates><panel_attributes>Correct Data
+fg=#29B828
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>413</x><y>560</y><w>14</w><h>98</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>413</x><y>476</y><w>21</w><h>98</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;120</additional_attributes></element></diagram>

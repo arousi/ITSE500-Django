@@ -1,0 +1,97 @@
+<diagram program="umletino" version="15.1"><zoom_level>8</zoom_level><help_text>Space for diagram notes</help_text><element><id>UMLGeneric</id><coordinates><x>216</x><y>216</y><w>80</w><h>24</h></coordinates><panel_attributes>Web/Mobile
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLActor</id><coordinates><x>72</x><y>136</y><w>48</w><h>88</h></coordinates><panel_attributes>Actor
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>96</x><y>232</y><w>24</w><h>24</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>96</x><y>240</y><w>136</w><h>48</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(1) Fills out 
+Registration form</panel_attributes><additional_attributes>10;40;50;40;50;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>248</x><y>232</y><w>24</w><h>64</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;60</additional_attributes></element><element><id>Relation</id><coordinates><x>96</x><y>280</y><w>168</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(2) Clicks 'Register' Button</panel_attributes><additional_attributes>190;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>336</y><w>168</w><h>48</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(4) create 
+SerializerObjecT(req.data)</panel_attributes><additional_attributes>10;40;40;40;40;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>448</x><y>232</y><w>24</w><h>96</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>384</x><y>208</y><w>144</w><h>32</h></coordinates><panel_attributes>RegisterView(API Endpoint)
+style=autoresize
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>584</x><y>208</y><w>96</w><h>32</h></coordinates><panel_attributes>RegisterSerilizer
+style=autoresize
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>624</x><y>232</y><w>24</w><h>168</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;190</additional_attributes></element><element><id>Relation</id><coordinates><x>256</x><y>312</y><w>208</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(3) POST /api/auth_api/reg(data)/</panel_attributes><additional_attributes>240;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>624</x><y>384</y><w>16</w><h>152</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>416</y><w>184</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(6) true: validated data</panel_attributes><additional_attributes>10;20;210;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>744</x><y>208</y><w>112</w><h>32</h></coordinates><panel_attributes>Custom_User model
+style=autoresize
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>792</x><y>232</y><w>24</w><h>248</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;290</additional_attributes></element><element><id>Relation</id><coordinates><x>632</x><y>464</y><w>176</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(8) `  user.full_clean()`</panel_attributes><additional_attributes>200;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>448</y><w>184</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(7) `  user.create()`</panel_attributes><additional_attributes>210;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>632</x><y>488</y><w>176</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(9) no Validation Error</panel_attributes><additional_attributes>10;20;200;20</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>584</y><w>352</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(11) `  user.save()`
+cbase=lu</panel_attributes><additional_attributes>420;20;10;20</additional_attributes></element><element><id>Text</id><coordinates><x>976</x><y>192</y><w>80</w><h>64</h></coordinates><panel_attributes>customelement=
+// Text Elemnt
+// DB Symbol
+drawArc(0,0,width,height*2/5,0,180,true) fg=black bg=#B0B0B0 //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,0,width,height*2/5,180,180,true) fg=black //Parameters (x, y, width, height, start, extent, open)
+drawRectangle(0,(height+0.5)/5,width,(height)*3/5-1) fg=#929292 bg=#B0B0B0  //Parameters (x, y, width, height)
+drawLine(0,height/5,0,height*4/5)fg=black //Parameters (x1, y1, x2, y2) 
+drawLine(width,height/5,width,height*4/5)fg=black //Parameters (x1, y1, x2, y2) 
+drawArc(0,height*1/5,width,height*2/5,180,180,true) fg=black //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,height*2/5,width,height*2/5,180,180,true) fg=black //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,height*3/5,width,height*2/5,180,180,true) fg=black bg=#B0B0B0  //Parameters (x, y, width, height, start, extent, open)</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>800</x><y>600</y><w>224</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(12) INSERT new Custom_User record</panel_attributes><additional_attributes>260;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>1008</x><y>280</y><w>24</w><h>328</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;390</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>1008</x><y>592</y><w>16</w><h>80</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>664</y><w>136</w><h>56</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(14) generate 
+confirmation pin</panel_attributes><additional_attributes>10;50;60;50;60;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>512</y><w>184</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(10) no Validation Error</panel_attributes><additional_attributes>10;20;210;20</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>384</y><w>184</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(5) `  `if serilizer.is_valid()`</panel_attributes><additional_attributes>210;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>632</y><w>568</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(13) Success</panel_attributes><additional_attributes>10;20;690;20</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>720</y><w>128</w><h>56</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(15) send email</panel_attributes><additional_attributes>10;50;60;50;60;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>768</y><w>144</w><h>56</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(16) generate JWT</panel_attributes><additional_attributes>10;50;60;50;60;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>256</x><y>824</y><w>208</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(17) return 201 Response(data)</panel_attributes><additional_attributes>10;20;240;20</additional_attributes></element><element><id>UMLFrame</id><coordinates><x>376</x><y>184</y><w>696</w><h>928</h></coordinates><panel_attributes>Django Server
+bg=#808080
+layer=0</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>624</x><y>528</y><w>24</w><h>368</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;440</additional_attributes></element><element><id>Relation</id><coordinates><x>456</x><y>872</y><w>184</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(19) false: validation error</panel_attributes><additional_attributes>10;20;210;20</additional_attributes></element><element><id>Relation</id><coordinates><x>256</x><y>888</y><w>208</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(20) return: 400 Bad Request</panel_attributes><additional_attributes>10;20;240;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>584</x><y>1008</y><w>96</w><h>24</h></coordinates><panel_attributes>RegisterSerilizer
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>792</x><y>616</y><w>24</w><h>408</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;490</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>744</x><y>1008</y><w>112</w><h>24</h></coordinates><panel_attributes>Custom_User mode
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Text</id><coordinates><x>976</x><y>1040</y><w>80</w><h>64</h></coordinates><panel_attributes>customelement=
+// Text Elemnt
+// DB Symbol
+drawArc(0,0,width,height*2/5,0,180,true) fg=black bg=#B0B0B0 //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,0,width,height*2/5,180,180,true) fg=black //Parameters (x, y, width, height, start, extent, open)
+drawRectangle(0,(height+0.5)/5,width,(height)*3/5-1) fg=#929292 bg=#B0B0B0  //Parameters (x, y, width, height)
+drawLine(0,height/5,0,height*4/5)fg=black //Parameters (x1, y1, x2, y2) 
+drawLine(width,height/5,width,height*4/5)fg=black //Parameters (x1, y1, x2, y2) 
+drawArc(0,height*1/5,width,height*2/5,180,180,true) fg=black //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,height*2/5,width,height*2/5,180,180,true) fg=black //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,height*3/5,width,height*2/5,180,180,true) fg=black bg=#B0B0B0  //Parameters (x, y, width, height, start, extent, open)</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>1008</x><y>664</y><w>24</w><h>360</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;430</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>392</x><y>1008</y><w>144</w><h>24</h></coordinates><panel_attributes>RegisterView(API Endpoint)
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>448</x><y>912</y><w>24</w><h>112</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;120</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>216</x><y>1008</y><w>80</w><h>24</h></coordinates><panel_attributes>Web/Mobile
+bg=black
+fg=white</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLFrame</id><coordinates><x>0</x><y>304</y><w>1088</w><h>560</h></coordinates><panel_attributes>Correct Data
+fg=#29B828
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLFrame</id><coordinates><x>0</x><y>872</y><w>1088</w><h>120</h></coordinates><panel_attributes>Incorrect Data
+fg=#A8041A</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>624</x><y>880</y><w>16</w><h>24</h></coordinates><panel_attributes>bg=black
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>624</x><y>896</y><w>24</w><h>128</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;140</additional_attributes></element><element><id>Relation</id><coordinates><x>248</x><y>920</y><w>24</w><h>104</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;110</additional_attributes></element><element><id>Relation</id><coordinates><x>96</x><y>896</y><w>168</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(21) Display Error</panel_attributes><additional_attributes>10;20;190;20</additional_attributes></element><element><id>Relation</id><coordinates><x>96</x><y>832</y><w>168</w><h>32</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(18) Authenticate User</panel_attributes><additional_attributes>10;20;190;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>248</x><y>280</y><w>16</w><h>72</h></coordinates><panel_attributes>bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>88</x><y>232</y><w>16</w><h>80</h></coordinates><panel_attributes>bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>88</x><y>824</y><w>16</w><h>32</h></coordinates><panel_attributes>bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>88</x><y>312</y><w>24</w><h>528</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;640</additional_attributes></element><element><id>UMLActor</id><coordinates><x>72</x><y>1008</y><w>48</w><h>88</h></coordinates><panel_attributes>Actor
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>976</x><y>264</y><w>80</w><h>24</h></coordinates><panel_attributes>Server DB
+bg=black
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>976</x><y>1008</y><w>80</w><h>24</h></coordinates><panel_attributes>Server DB
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>88</x><y>920</y><w>24</w><h>96</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>Relation</id><coordinates><x>248</x><y>344</y><w>24</w><h>496</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;600</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>88</x><y>896</y><w>16</w><h>32</h></coordinates><panel_attributes>bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>88</x><y>848</y><w>24</w><h>64</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;60</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>248</x><y>824</y><w>16</w><h>32</h></coordinates><panel_attributes>bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>248</x><y>896</y><w>16</w><h>32</h></coordinates><panel_attributes>bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>248</x><y>848</y><w>24</w><h>64</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;60</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>448</x><y>872</y><w>16</w><h>48</h></coordinates><panel_attributes>layer=1
+bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>448</x><y>312</y><w>16</w><h>168</h></coordinates><panel_attributes>layer=1
+bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>448</x><y>584</y><w>16</w><h>32</h></coordinates><panel_attributes>layer=1
+bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>448</x><y>640</y><w>16</w><h>208</h></coordinates><panel_attributes>layer=1
+bg=black</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>448</x><y>536</y><w>24</w><h>64</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;60</additional_attributes></element><element><id>Relation</id><coordinates><x>448</x><y>608</y><w>24</w><h>48</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;40</additional_attributes></element><element><id>Relation</id><coordinates><x>448</x><y>840</y><w>24</w><h>48</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;40</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>792</x><y>464</y><w>16</w><h>48</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>792</x><y>576</y><w>16</w><h>48</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>792</x><y>504</y><w>24</w><h>88</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;90</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>448</x><y>520</y><w>16</w><h>24</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element></diagram>

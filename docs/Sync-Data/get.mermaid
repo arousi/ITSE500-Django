@@ -1,0 +1,35 @@
+sequenceDiagram
+    participant Client
+    participant View as UnifiedSyncView.get
+    participant Resolve as resolve_user
+    participant Associate as _associate_device
+    participant DB as Database
+    participant Serializer as ConversationSerializer
+
+    Client->>View: GET /unified-sync?user_id=... or ?temp_id=...
+    View->>Resolve: resolve_user(request)
+
+    alt temp_id provided & no existing user
+        Resolve->>DB: SELECT Custom_User WHERE temp_id=...
+        Resolve->>CreateV: _create_visitor(temp_id)
+        CreateV->>DB: INSERT Custom_User (visitor)
+        CreateV-->>Resolve: new visitor user
+    else user exists
+        Resolve->>DB: SELECT Custom_User by id/anon/temp
+    end
+
+    Resolve-->>View: (user, is_new_visitor, error_response)
+    alt error_response
+        View-->>Client: 404 {"error":"User not found"}
+    else continue
+        opt device_id present
+            View->>Associate: _associate_device(user, device_id)
+            Associate->>DB: update related_devices, device_id, last_login
+            Associate-->>View: done
+        end
+
+        View->>DB: Conversation.objects.filter(user_id=user).prefetch_related("messages")
+        DB-->>Serializer: queryset (conversations + messages prefetched)
+        Serializer-->>View: serialized conversations
+        View-->>Client: 200 {"user_id": "...", "is_new": bool, "conversations": [...]}
+    end

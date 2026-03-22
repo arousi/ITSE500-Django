@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant User
+    participant Web/Mobile
+    participant DjangoServer
+    participant RegisterSerializer
+    participant Custom_User_DB
+
+    User->>Web/Mobile: Register (with or without password)
+    Web/Mobile->>DjangoServer: POST /register
+    DjangoServer->>RegisterSerializer: create/validate
+    alt Valid
+        DjangoServer->>Custom_User_DB: create user
+        DjangoServer->>Custom_User_DB: hash password? (optional)
+        DjangoServer->>Custom_User_DB: generate PIN, send email
+    else Invalid
+        DjangoServer->>Custom_User_DB: lookup by email/uuid/username
+        alt User found
+            DjangoServer->>Custom_User_DB: use user
+        else Not found
+            DjangoServer-->>Web/Mobile: 400 Bad Request
+            return
+        end
+    end
+    DjangoServer->>Custom_User_DB: fetch conversations/messages
+    DjangoServer-->>Web/Mobile: 201 Created + JWT + user data + conversations

@@ -1,0 +1,22 @@
+<diagram program="umletino" version="15.1"><zoom_level>11</zoom_level><help_text>Space for diagram notes</help_text><element><id>UMLGeneric</id><coordinates><x>539</x><y>374</y><w>110</w><h>33</h></coordinates><panel_attributes>Web/Mobile
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLActor</id><coordinates><x>319</x><y>253</y><w>77</w><h>121</h></coordinates><panel_attributes>Actor
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>352</x><y>429</y><w>33</w><h>33</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>583</x><y>396</y><w>33</w><h>88</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;60</additional_attributes></element><element><id>Relation</id><coordinates><x>352</x><y>462</y><w>253</w><h>44</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(1) Clicks 'Continue as Visitor'</panel_attributes><additional_attributes>210;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>539</x><y>715</y><w>110</w><h>33</h></coordinates><panel_attributes>Web/Mobile
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>583</x><y>462</y><w>22</w><h>99</h></coordinates><panel_attributes>bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>583</x><y>550</y><w>33</w><h>187</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;150;10;10</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>341</x><y>440</y><w>22</w><h>132</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>341</x><y>352</y><w>33</w><h>110</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;80</additional_attributes></element><element><id>Relation</id><coordinates><x>352</x><y>506</y><w>253</w><h>44</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(2) Authenticated</panel_attributes><additional_attributes>10;20;210;20</additional_attributes></element><element><id>UMLActor</id><coordinates><x>319</x><y>649</y><w>77</w><h>121</h></coordinates><panel_attributes>Actor
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>341</x><y>561</y><w>33</w><h>110</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;80</additional_attributes></element><element><id>UMLNote</id><coordinates><x>715</x><y>231</y><w>264</w><h>594</h></coordinates><panel_attributes>Change log
+halign=left
+style=wordwrap
+-
+Sprint 9
+-
+The diagram was created at `  Sprint6`
+- Added change log
+- Easied the user's use of the system as some of the userbase consists of "privacy first" users, the easier auth will empower them to use the system and give feedback and perhaps even contribute to its development and growth.</panel_attributes><additional_attributes></additional_attributes></element></diagram>

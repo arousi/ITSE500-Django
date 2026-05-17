@@ -28,53 +28,53 @@ services:
   - key: MAILEROO_API_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: 224f52eb58c3d95ff60836b7cf4799ee894f9e7406465d3510e0c5a4228c84fb
+    value: ***************************d3510e0c5a4228c84fb
   - key: ZERUH_API_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: 7f97762a2fad9a7f4cbba0f827540f6e57160a154bbd48b67b7d8784911e66cf
+    value: ***************************7b7d8784911e66cf
   - key: DJANGO_SETTINGS_MODULE
     scope: RUN_AND_BUILD_TIME
     value: prompeteer_server.settings
   - key: SECRET_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:KBuFXM/d1NTQPoo9yGMufnZBqAvtz0+I:nXtQde5hdFnX88FrS27S16+joesJKqrL7EyuHaoPi3+ooKuXUmB7vt1OpN4TQ6F+/tYaO1UxfQnAye2eqGTAMSHeZyRY5HgCI3NMMU2LAhdLxA==]
+    value: EV[1***************************]
   - key: DEBUG
     scope: RUN_AND_BUILD_TIME
     value: "False"
   - key: OPENROUTER_PROVISIONING_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:IHwvpGlbyYyjbtpXC5nmVyUrVcwdD66J:VSCxxL66kqiJ4ePRxMFVgfnufUGGm6Td2gP/8qopDmVAUEbd96dII3MLvrh9qWjnRw51fprbeWkNWbWEIGzkP5LbHe+weyHly6jV5NkoCLk11n3Ax7Hca6U=]
+    value: EV[1:I***************************]
   - key: MS_CLIENT_ID
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:bZRusyFShY5xKz1Q1l2aNj4HaHRokx0t:RKODvXBXGpIU7DdUoaUcy6sMuDS6TW1/iqG4saKg5sxF0n1uKgU7JD2AmyCldR3QZ0R8zA==]
+    value: EV[1:bZ***************************]
   - key: MS_CLIENT_SECRET
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:UgXWLtngznwZ8pSJwhnbDLn0gimEPSo3:cu7Hd5v4XOwEijUANHy9jvudDA+DNgwqlvx4OCNLubjEtAzOaNN9pN1tFexoj0IcEelHZabRF+k=]
+    value: EV[1:***************************]
   - key: GITHUB_CLIENT_ID
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:12x6ipwagunkziLKNCSZT6Bt44gXmhaE:idxDWzZNDpxlGOGHvu5UpHOZXWFyK9RUexXyNK66x6CtYvjB]
+    value: EV[1:1***************************]
   - key: GITHUB_CLIENT_SECRET
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:bH6jFGioyoXzvXhPL02a/YlZaT6cEH98:aUozG8qS7PTXrTFayGZcVSvQHmEgBr057jETSm9cyh1+97J/aUGbNwyGg31Sl6YlFNIZlc2KRWs=]
+    value: EV[1:***************************]
   - key: GOOGLE_OAUTH_CLIENT_ID
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:/9YiCUMa7IiR63Q/j1p41kSHs0jUEiWt:WvhNGM7hpVa5fGP8Sw4vHGrYNqzAHkYkC98X4/EHvCihWKy3jcDU2mNIphaR5ZoI1UkrBHxXynfEdoPnmFor3l7Fs6ZyZZs+kI2J0n2/VTP4wn097Ht+]
+    value: EV[1:***************************]
   - key: GOOGLE_OAUTH_CLIENT_SECRET
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:QaSin3suTZPpWipx1+6E23620p4EvJDF:/vkeSigP5TMPXB652WI9otufhNEa9UCkk3iX8ghMHcRlYKruZRm991FBXzne2UOl9WB/]
+    value: EV[1:***************************]
   - key: BACKEND_PASSWORD_SALT
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: EV[1:1vblqiJmlmpfTxOb5vcjYJVsuz37a+Yy:S64vmodN0rT+yWKvtB2q5ZFVLnuqPHD6g8zGYbiP0+v8IR8O7sKXXFQJtXRkQRAfRBxGz2KczuQSgKR54Le6JQ==]
+    value: EV[1:***************************]
   - key: ALLOWED_HOSTS
     scope: RUN_AND_BUILD_TIME
     value: '["itse500-ok.ly", "www.itse500-ok.ly", "157.230.29.188", "188.166.193.176"]'

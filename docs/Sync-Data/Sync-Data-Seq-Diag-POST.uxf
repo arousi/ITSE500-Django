@@ -1,0 +1,138 @@
+<diagram program="umletino" version="15.1"><zoom_level>6</zoom_level><help_text>Space for diagram notes</help_text><element><id>UMLActor</id><coordinates><x>0</x><y>354</y><w>42</w><h>66</h></coordinates><panel_attributes>Actor
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>144</x><y>378</y><w>60</w><h>18</h></coordinates><panel_attributes>Web/Mobile
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>288</x><y>372</y><w>138</w><h>18</h></coordinates><panel_attributes>UnifiedSyncView(API Endpoint)
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>474</x><y>366</y><w>60</w><h>24</h></coordinates><panel_attributes>resolve_user()
+style=autoresize
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>594</x><y>366</y><w>60</w><h>24</h></coordinates><panel_attributes>Related Models
+style=autoresize
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>738</x><y>402</y><w>60</w><h>18</h></coordinates><panel_attributes>Server DB
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Text</id><coordinates><x>738</x><y>348</y><w>60</w><h>48</h></coordinates><panel_attributes>// Text Element
+// DB Symbol
+_umletcode=
+fg='black';
+bg='#222222';
+drawArc(0,0,width,height*2/5,0,180,true) //Parameters (x, y, width, height, start, extent, open)
+bg='bg';
+drawArc(0,0,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+fg='#929292';
+bg='#222222';
+drawRectangle(0,(height+0.5)/5,width,(height)*3/5-1)  //Parameters (x, y, width, height)
+fg='black'
+drawLine(0,height/5,0,height*4/5) //Parameters (x1, y1, x2, y2)
+drawLine(width,height/5,width,height*4/5) //Parameters (x1, y1, x2, y2)
+bg='bg';
+drawArc(0,height*1/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,height*2/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+bg='#222222'
+drawArc(0,height*3/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>168</x><y>828</y><w>12</w><h>30</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>18</x><y>444</y><w>12</w><h>24</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>18</x><y>414</y><w>18</w><h>42</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;50</additional_attributes></element><element><id>Relation</id><coordinates><x>24</x><y>444</y><w>156</w><h>30</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(1) Sync mode is 'ON' or
+ enteres profile</panel_attributes><additional_attributes>240;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>168</x><y>450</y><w>12</w><h>42</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>174</x><y>456</y><w>192</w><h>30</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(2) POST sync-conversations (data)
+profile = bool, chat = bool</panel_attributes><additional_attributes>300;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>354</x><y>384</y><w>18</w><h>84</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;120</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>354</x><y>456</y><w>12</w><h>66</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>168</x><y>390</y><w>18</w><h>72</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>Relation</id><coordinates><x>498</x><y>384</y><w>18</w><h>96</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;140</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>498</x><y>468</y><w>12</w><h>48</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>360</x><y>468</y><w>150</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(3) user, _ , error = func(data)</panel_attributes><additional_attributes>230;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>618</x><y>504</y><w>12</w><h>66</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>618</x><y>384</y><w>18</w><h>132</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;200</additional_attributes></element><element><id>Relation</id><coordinates><x>504</x><y>498</y><w>126</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(4) user, _ , error = func(data)</panel_attributes><additional_attributes>190;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>624</x><y>516</y><w>150</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(5) user, _ , error = func(data)</panel_attributes><additional_attributes>230;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>762</x><y>414</y><w>18</w><h>114</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;170</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>762</x><y>516</y><w>12</w><h>48</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>624</x><y>540</y><w>150</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(6) true: validated data</panel_attributes><additional_attributes>10;20;230;20</additional_attributes></element><element><id>Relation</id><coordinates><x>504</x><y>552</y><w>126</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(7) true: validated data</panel_attributes><additional_attributes>10;20;190;20</additional_attributes></element><element><id>Relation</id><coordinates><x>498</x><y>510</y><w>18</w><h>54</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;70</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>498</x><y>552</y><w>12</w><h>36</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>360</x><y>570</y><w>150</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(8) User not found</panel_attributes><additional_attributes>10;20;230;20</additional_attributes></element><element><id>Relation</id><coordinates><x>354</x><y>516</y><w>18</w><h>66</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;90</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>354</x><y>570</y><w>12</w><h>42</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>174</x><y>594</y><w>192</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(9) Respons 404: User not found</panel_attributes><additional_attributes>10;20;300;20</additional_attributes></element><element><id>Relation</id><coordinates><x>168</x><y>486</y><w>18</w><h>126</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;190</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>168</x><y>600</y><w>12</w><h>30</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>18</x><y>462</y><w>18</w><h>168</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;260</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>18</x><y>618</y><w>12</w><h>18</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>24</x><y>612</y><w>156</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(10) Inform user</panel_attributes><additional_attributes>10;20;240;20</additional_attributes></element><element><id>Relation</id><coordinates><x>354</x><y>606</y><w>18</w><h>66</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;90</additional_attributes></element><element><id>Relation</id><coordinates><x>498</x><y>582</y><w>18</w><h>90</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;130</additional_attributes></element><element><id>Relation</id><coordinates><x>762</x><y>558</y><w>18</w><h>360</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;580</additional_attributes></element><element><id>Relation</id><coordinates><x>618</x><y>564</y><w>18</w><h>192</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;300</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>498</x><y>660</y><w>12</w><h>138</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>360</x><y>660</y><w>150</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(11) User found</panel_attributes><additional_attributes>10;20;230;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>354</x><y>660</y><w>12</w><h>90</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>360</x><y>684</y><w>108</w><h>36</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(12) Begin Transaction</panel_attributes><additional_attributes>10;40;40;40;40;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>360</x><y>726</y><w>150</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(13) Begin Upsert of Data</panel_attributes><additional_attributes>230;20;10;20</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>618</x><y>744</y><w>12</w><h>36</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>504</x><y>738</y><w>126</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(14) Begin Upsert of Data</panel_attributes><additional_attributes>190;20;10;20</additional_attributes></element><element><id>Relation</id><coordinates><x>504</x><y>762</y><w>126</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(15) Begin Upsert of Data</panel_attributes><additional_attributes>10;20;190;20</additional_attributes></element><element><id>Relation</id><coordinates><x>360</x><y>780</y><w>150</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(16) Data</panel_attributes><additional_attributes>10;20;230;20</additional_attributes></element><element><id>Relation</id><coordinates><x>354</x><y>744</y><w>18</w><h>42</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;50</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>354</x><y>774</y><w>12</w><h>78</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>360</x><y>798</y><w>78</w><h>36</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(17) Serialize</panel_attributes><additional_attributes>10;40;40;40;40;10;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>174</x><y>828</y><w>192</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(18) Respons 200: OK, Data, stats</panel_attributes><additional_attributes>10;20;300;20</additional_attributes></element><element><id>Relation</id><coordinates><x>168</x><y>624</y><w>18</w><h>216</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;340</additional_attributes></element><element><id>Relation</id><coordinates><x>18</x><y>630</y><w>18</w><h>228</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;360</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>18</x><y>846</y><w>12</w><h>18</h></coordinates><panel_attributes>bg=black
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>24</x><y>840</y><w>156</w><h>24</h></coordinates><panel_attributes>lt=&lt;&lt;&lt;-
+(19) Inform user</panel_attributes><additional_attributes>10;20;240;20</additional_attributes></element><element><id>Relation</id><coordinates><x>618</x><y>774</y><w>18</w><h>144</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;220</additional_attributes></element><element><id>Relation</id><coordinates><x>498</x><y>792</y><w>18</w><h>132</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;200</additional_attributes></element><element><id>Relation</id><coordinates><x>354</x><y>846</y><w>18</w><h>78</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;110</additional_attributes></element><element><id>Relation</id><coordinates><x>168</x><y>852</y><w>18</w><h>72</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;100</additional_attributes></element><element><id>Relation</id><coordinates><x>18</x><y>858</y><w>18</w><h>54</h></coordinates><panel_attributes>lt=.</panel_attributes><additional_attributes>10;10;10;70</additional_attributes></element><element><id>UMLActor</id><coordinates><x>0</x><y>906</y><w>42</w><h>66</h></coordinates><panel_attributes>Actor
+bg=black
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>144</x><y>912</y><w>60</w><h>18</h></coordinates><panel_attributes>Web/Mobile
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>294</x><y>912</y><w>138</w><h>18</h></coordinates><panel_attributes>UnifiedSyncView(API Endpoint)
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>474</x><y>912</y><w>60</w><h>24</h></coordinates><panel_attributes>resolve_user()
+style=autoresize
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>594</x><y>912</y><w>60</w><h>24</h></coordinates><panel_attributes>Related Models
+style=autoresize
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>738</x><y>906</y><w>60</w><h>18</h></coordinates><panel_attributes>Server DB
+bg=black
+fg=white
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Text</id><coordinates><x>738</x><y>930</y><w>60</w><h>48</h></coordinates><panel_attributes>// Text Element
+// DB Symbol
+_umletcode=
+fg='black';
+bg='#222222';
+drawArc(0,0,width,height*2/5,0,180,true) //Parameters (x, y, width, height, start, extent, open)
+bg='bg';
+drawArc(0,0,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+fg='#929292';
+bg='#222222';
+drawRectangle(0,(height+0.5)/5,width,(height)*3/5-1)  //Parameters (x, y, width, height)
+fg='black'
+drawLine(0,height/5,0,height*4/5) //Parameters (x1, y1, x2, y2)
+drawLine(width,height/5,width,height*4/5) //Parameters (x1, y1, x2, y2)
+bg='bg';
+drawArc(0,height*1/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+drawArc(0,height*2/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+bg='#222222'
+drawArc(0,height*3/5,width,height*2/5,180,180,true)  //Parameters (x, y, width, height, start, extent, open)
+layer=1
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLFrame</id><coordinates><x>198</x><y>648</y><w>630</w><h>222</h></coordinates><panel_attributes>Correct Data
+fg=#29B828
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLFrame</id><coordinates><x>198</x><y>498</y><w>630</w><h>138</h></coordinates><panel_attributes>inCorrect Data
+fg=#A8041A
+layer=1</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLFrame</id><coordinates><x>270</x><y>336</y><w>540</w><h>654</h></coordinates><panel_attributes>Server
+layer=0
+bg=#808080</panel_attributes><additional_attributes></additional_attributes></element></diagram>

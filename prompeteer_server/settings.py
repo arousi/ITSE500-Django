@@ -103,7 +103,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = [
+_DEFAULT_ALLOWED = [
     'react.itse500-ok.ly',
     '127.0.0.1',
     'itse500-ok.ly',
@@ -113,6 +113,13 @@ ALLOWED_HOSTS = [
     'grad-project-server-tq36w.ondigitalocean.app',
     'flutter.itse500-ok.ly',
 ]
+
+# Allow overriding allowed hosts via environment (comma-separated)
+_env_allowed = os.getenv('ALLOWED_HOSTS')
+if _env_allowed:
+    ALLOWED_HOSTS = [h.strip() for h in _env_allowed.split(',') if h.strip()]
+else:
+    ALLOWED_HOSTS = _DEFAULT_ALLOWED
 
 
 # Application definition

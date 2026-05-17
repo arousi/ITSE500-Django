@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant Client
+    participant View as UnifiedSyncView.delete
+    participant Resolve as resolve_user
+    participant DB as Database
+    participant Logger as logger
+
+    Client->>View: DELETE /unified-sync\n(body or ?action=delete|archive, temp_id/user_id/...)
+    View->>Resolve: resolve_user(request)
+
+    Resolve-->>View: (user, _, error_response)
+    alt error_response
+        View-->>Client: 404 {"error":"User not found"}
+    else continue
+        View->>DB: Query attachments/messages/conversations/tokens for user
+        DB-->>View: counts -> stats
+
+        alt action == "delete"
+            View->>DB: attachments.delete()
+            View->>DB: messages.delete()
+            View->>DB: conversations.delete()
+            View->>DB: tokens.delete()
+            View->>DB: user.delete()
+            Logger-->>View: info("User ... deleted and data removed")
+            View-->>Client: 200 {"message":"User and all related data deleted","deleted": stats}
+        else action == "archive"
+            View->>DB: set user.is_archived=True, user.is_active=False
+            View->>DB: clear provider flags (is_google_user,...)
+            View->>DB: user.save(update_fields=[...])
+            View->>DB: tokens.delete()
+            Logger-->>View: info("User ... archived; tokens purged")
+            View-->>Client: 200 {"message":"User archived","archived": stats}
+        else
+            View-->>Client: 400 {"error":"Specify action=delete or action=archive"}
+        end
+    end

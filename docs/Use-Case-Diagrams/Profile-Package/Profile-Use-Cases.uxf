@@ -1,0 +1,100 @@
+<diagram program="umletino" version="15.1"><zoom_level>14</zoom_level><help_text>Space for diagram notes</help_text><element><id>UMLPackage</id><coordinates><x>182</x><y>238</y><w>742</w><h>602</h></coordinates><panel_attributes>Profile
+--
+bg=gray</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>70</x><y>392</y><w>238</w><h>84</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;150;40</additional_attributes></element><element><id>Relation</id><coordinates><x>70</x><y>434</y><w>252</w><h>182</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;160;110</additional_attributes></element><element><id>Relation</id><coordinates><x>70</x><y>448</y><w>336</w><h>322</h></coordinates><panel_attributes>layer=2
+
+
+</panel_attributes><additional_attributes>10;10;220;210</additional_attributes></element><element><id>Relation</id><coordinates><x>70</x><y>476</y><w>224</w><h>308</h></coordinates><panel_attributes>layer=2
+
+</panel_attributes><additional_attributes>10;10;140;200</additional_attributes></element><element><id>UMLActor</id><coordinates><x>0</x><y>364</y><w>84</w><h>154</h></coordinates><panel_attributes>User</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>280</x><y>420</y><w>168</w><h>56</h></coordinates><panel_attributes>Display-Data
+layer=3
+group=group-7.1</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>336</x><y>462</y><w>112</w><h>140</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;extends&gt;&gt;
+layer=4
+fontsize=8
+cbase=rd</panel_attributes><additional_attributes>10;80;40;10</additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>266</x><y>574</y><w>168</w><h>70</h></coordinates><panel_attributes>Delete or Archive
+Data
+
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>210</x><y>756</y><w>168</w><h>56</h></coordinates><panel_attributes>Delete-Profile
+layer=2</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>378</x><y>616</y><w>126</w><h>140</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8
+cbase=rd</panel_attributes><additional_attributes>10;17;50;80</additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>378</x><y>728</y><w>168</w><h>56</h></coordinates><panel_attributes>Archive-Profile
+layer=2
+
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>168</x><y>126</y><w>770</w><h>728</h></coordinates><panel_attributes>System
+halign=left
+layer=0
+style=wordwrap</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>210</x><y>294</y><w>168</w><h>56</h></coordinates><panel_attributes>Update-Data
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>70</x><y>308</y><w>168</w><h>112</h></coordinates><panel_attributes>layer=2</panel_attributes><additional_attributes>10;60;100;10</additional_attributes></element><element><id>Relation</id><coordinates><x>266</x><y>336</y><w>126</w><h>112</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8</panel_attributes><additional_attributes>10;10;50;60</additional_attributes></element><element><id>Relation</id><coordinates><x>252</x><y>630</y><w>98</w><h>154</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+layer=2
+fontsize=8
+cbase=ld
+
+</panel_attributes><additional_attributes>40;10;50;90</additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>462</x><y>518</y><w>168</w><h>70</h></coordinates><panel_attributes>Enter Provider
+ API Key
+
+</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>392</x><y>294</y><w>168</w><h>56</h></coordinates><panel_attributes>Connect to 
+LLM-Provider
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>504</x><y>350</y><w>154</w><h>56</h></coordinates><panel_attributes>Delete Key</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>742</x><y>336</y><w>168</w><h>70</h></coordinates><panel_attributes>Toggle on/off 
+Provider
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>742</x><y>448</y><w>168</w><h>56</h></coordinates><panel_attributes>Fetch LLMs
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>742</x><y>560</y><w>168</w><h>70</h></coordinates><panel_attributes>Filter Fetched 
+LLMs
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>742</x><y>686</y><w>168</w><h>70</h></coordinates><panel_attributes>Favorite Models 
+List
+
+l</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>714</x><y>770</y><w>168</w><h>56</h></coordinates><panel_attributes>Toggle OAuth
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>448</x><y>602</y><w>168</w><h>70</h></coordinates><panel_attributes>Authentication 
+Options
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>70</x><y>406</y><w>434</w><h>168</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;290;92</additional_attributes></element><element><id>Relation</id><coordinates><x>70</x><y>420</y><w>420</w><h>224</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;270;120;280;140</additional_attributes></element><element><id>Relation</id><coordinates><x>770</x><y>490</y><w>98</w><h>98</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;extends&gt;&gt;
+fontsize=8
+</panel_attributes><additional_attributes>10;10;10;50</additional_attributes></element><element><id>Relation</id><coordinates><x>784</x><y>392</y><w>98</w><h>84</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8
+</panel_attributes><additional_attributes>10;10;10;40</additional_attributes></element><element><id>Relation</id><coordinates><x>574</x><y>378</y><w>196</w><h>168</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8
+</panel_attributes><additional_attributes>10;100;120;10</additional_attributes></element><element><id>Relation</id><coordinates><x>420</x><y>336</y><w>126</w><h>224</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8
+</panel_attributes><additional_attributes>60;132;10;10</additional_attributes></element><element><id>Relation</id><coordinates><x>574</x><y>560</y><w>210</w><h>168</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8
+</panel_attributes><additional_attributes>10;17;130;100</additional_attributes></element><element><id>Relation</id><coordinates><x>602</x><y>630</y><w>196</w><h>168</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8
+</panel_attributes><additional_attributes>10;10;120;100</additional_attributes></element><element><id>UMLUseCase</id><coordinates><x>518</x><y>770</y><w>168</w><h>56</h></coordinates><panel_attributes>Toggle Biometric
+layer=3</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>546</x><y>658</y><w>126</w><h>140</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8
+</panel_attributes><additional_attributes>10;10;60;80</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>994</x><y>644</y><w>140</w><h>98</h></coordinates><panel_attributes>System
+-
+LLM Provider
+halign=left</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>602</x><y>560</y><w>420</w><h>196</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;280;112</additional_attributes></element><element><id>Relation</id><coordinates><x>882</x><y>602</y><w>140</w><h>98</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;80;42</additional_attributes></element><element><id>Relation</id><coordinates><x>840</x><y>490</y><w>182</w><h>196</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;110;112</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>770</x><y>910</y><w>140</w><h>98</h></coordinates><panel_attributes>System
+-
+OAuth Provider
+halign=left</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>812</x><y>812</y><w>42</w><h>140</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;10;72</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>546</x><y>910</y><w>140</w><h>98</h></coordinates><panel_attributes>System
+-
+OS Provider
+halign=left</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>588</x><y>812</y><w>42</w><h>140</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;10;72</additional_attributes></element><element><id>UMLGeneric</id><coordinates><x>770</x><y>154</y><w>140</w><h>98</h></coordinates><panel_attributes>Package
+-
+Chat Package
+halign=left</panel_attributes><additional_attributes></additional_attributes></element><element><id>Relation</id><coordinates><x>826</x><y>238</y><w>42</w><h>140</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>10;10;10;72</additional_attributes></element><element><id>Relation</id><coordinates><x>560</x><y>238</y><w>238</w><h>322</h></coordinates><panel_attributes>layer=2
+</panel_attributes><additional_attributes>150;10;10;202</additional_attributes></element><element><id>Relation</id><coordinates><x>532</x><y>392</y><w>98</w><h>168</h></coordinates><panel_attributes>lt=.&gt;
+&lt;&lt;includes&gt;&gt;
+fontsize=8
+</panel_attributes><additional_attributes>10;92;20;10</additional_attributes></element></diagram>

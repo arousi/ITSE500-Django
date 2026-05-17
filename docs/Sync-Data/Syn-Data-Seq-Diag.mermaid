@@ -1,0 +1,48 @@
+sequenceDiagram
+    participant Client
+    participant View as UnifiedSyncView
+    participant Resolve as resolve_user
+    participant CreateV as _create_visitor
+    participant Associate as _associate_device
+    participant DB as Database
+    participant Serializer
+    participant Tx as transaction.atomic
+    participant Logger as logger
+
+    Client->>View: HTTP GET/POST/DELETE /unified-sync\n(body: user_id/anon_id/temp_id, device_id, payload...)
+    View->>Resolve: resolve_user(request)
+
+    alt temp_id provided & user not found
+        Resolve->>DB: SELECT Custom_User WHERE temp_id=...
+        Resolve->>CreateV: _create_visitor(temp_id)
+        CreateV->>DB: INSERT Custom_User (visitor)
+        CreateV-->>Resolve: new visitor user
+    else user exists (user_id/anon_id/temp_id)
+        Resolve->>DB: SELECT Custom_User by id/anon/temp
+    end
+
+    Resolve-->>View: (user, is_new_visitor, error_response)
+
+    alt error_response
+        View-->>Client: 404 {"error":"User not found"}
+    else continue
+        opt device_id present
+            View->>Associate: _associate_device(user, device_id)
+            Associate->>DB: read/modify related_devices, set device_id, last_login
+            Associate-->>View: done
+        end
+
+        opt GET flow
+            View->>DB: Conversation.objects.filter(user).prefetch_related("messages")
+            DB-->>Serializer: queryset (conversations + messages)
+            Serializer-->>View: serialized conversations
+            View-->>Client: 200 {"user_id", "is_new", "conversations": [...]}
+        end
+
+        opt POST flow
+            View->>View: validate payload lists (conversations/messages/requests/responses/outputs)
+            View->>Tx: with transaction.atomic()
+            Tx-->>View: begin
+            loop conversations_data
+                View->>DB: SELECT Conversation WHERE conversation_id=...
+                View->>Serializer: ConversationSerializer(instance?, data=conv, partial=True)

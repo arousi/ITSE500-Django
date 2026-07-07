@@ -268,7 +268,13 @@ class UnifiedSyncView(APIView):
             user = Custom_User.objects.filter(user_id=user_id).first()
             if not user:
                 return None, False, Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND), None
-            return user, False, None, None
+            # SECURITY: never expose profile/email or chat content on the
+            # unauthenticated public-UUID path. Return only a minimal existence
+            # indicator; anything more requires the user's own auth/visitor token.
+            return None, False, Response(
+                {"exists": True, "is_visitor": bool(getattr(user, "is_visitor", False))},
+                status=status.HTTP_200_OK,
+            ), None
 
         # Deny other unauthenticated access
         return None, False, Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED), temp_id

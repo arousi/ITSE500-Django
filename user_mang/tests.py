@@ -72,6 +72,21 @@ class TestUnifiedSyncGet:
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["user_id"] == str(user_a.user_id)
 
+    def test_public_uuid_path_does_not_leak_profile_or_chat(self, api_client, make_user):
+        """SECURITY: the unauthenticated allow_public_uuid path must return only a
+        minimal existence indicator -- never email or chat content."""
+        user = make_user(username="pubuser", email="secret@example.com")
+        Conversation.objects.create(user_id=user, title="Private conv")
+        resp = api_client.get(
+            ME_URL,
+            {"user_id": str(user.user_id), "allow_public_uuid": "true", "chat": "true"},
+        )
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data == {"exists": True, "is_visitor": False}
+        assert "secret@example.com" not in str(resp.data)
+        assert "profile" not in resp.data
+        assert "chat" not in resp.data
+
 
 @pytest.mark.django_db
 class TestUnifiedSyncPost:

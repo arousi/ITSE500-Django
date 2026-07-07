@@ -164,8 +164,9 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     # Throttling: global anon rate + a strict 'auth' scope for brute-force protection.
-    # NOTE follow-up: per-view throttle_scope='auth' still needs to be wired into
-    # login/register/OTP views to actually apply the 'auth' rate; rates are configured here.
+    # Brute-forceable auth views (Login, Register, EmailPinVerify, SetPasswordAfterEmailVerify,
+    # SendLoginOTP, VerifyLoginOTP, LoginWithOTP) declare throttle_scope = 'auth' to apply the
+    # stricter 'auth' rate below via ScopedRateThrottle.
     'DEFAULT_THROTTLE_CLASSES': (
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.ScopedRateThrottle',

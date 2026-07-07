@@ -178,6 +178,7 @@ class RegisterView(APIView):
     - Returns onboarding details and a first sync payload when applicable.
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     @(
         extend_schema(
@@ -402,6 +403,7 @@ class EmailPinVerifyView(APIView):
     # AllowAny + inline auth (access or refresh) to avoid hard dependency on a custom auth class
     authentication_classes = [JWTAuthentication]
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
@@ -560,6 +562,7 @@ class SetPasswordAfterEmailVerifyView(APIView):
     # AllowAny + inline auth (access or refresh)
     authentication_classes = [JWTAuthentication]
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
@@ -651,6 +654,7 @@ class LoginView(APIView):
     { "message": "Login successful", "access_token": "...", "refresh_token": "...", "conversations": [...], "attachments": [...] }
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     @(
         extend_schema(
@@ -1791,6 +1795,7 @@ class MicrosoftCallbackView(OAuthCallbackBase):
 class SendLoginOTPView(APIView):
     """Sends a 6-digit OTP for passwordless login with simple rate limiting in case of the first 1 not working or not being received."""
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         """
@@ -1837,6 +1842,7 @@ class SendLoginOTPView(APIView):
 class VerifyLoginOTPView(APIView):
     """Verifies OTP and returns JWT tokens."""
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         """
@@ -1861,6 +1867,7 @@ class LoginWithOTPView(APIView):
         }
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         """Deprecated endpoint: Login-with-OTP is disabled in this release."""

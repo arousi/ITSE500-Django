@@ -140,6 +140,22 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Per-endpoint abuse throttles for unauthenticated auth flows
+    # (brute-force credential guessing / PIN guessing defense). Each view
+    # opts in via `throttle_scope`; endpoints without a scope are
+    # unaffected. Rates are intentionally generous enough not to disrupt
+    # legitimate retry flows (e.g. re-entering a mistyped PIN) while still
+    # bounding automated brute-force attempts. Overridable via env vars so
+    # ops can tighten/loosen without a code change.
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'auth-register': os.environ.get('THROTTLE_RATE_REGISTER', '10/hour'),
+        'auth-login': os.environ.get('THROTTLE_RATE_LOGIN', '10/min'),
+        'auth-verify-email-pin': os.environ.get('THROTTLE_RATE_VERIFY_EMAIL_PIN', '10/min'),
+        'auth-otp-login': os.environ.get('THROTTLE_RATE_OTP_LOGIN', '10/min'),
+    },
 }
 
 SIMPLE_JWT = {

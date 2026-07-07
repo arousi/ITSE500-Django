@@ -177,6 +177,7 @@ class RegisterView(APIView):
     - Returns onboarding details and a first sync payload when applicable.
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth-register'
 
     @(
         extend_schema(
@@ -401,6 +402,7 @@ class EmailPinVerifyView(APIView):
     # AllowAny + inline auth (access or refresh) to avoid hard dependency on a custom auth class
     authentication_classes = [JWTAuthentication]
     permission_classes = [AllowAny]
+    throttle_scope = 'auth-verify-email-pin'
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
@@ -650,6 +652,7 @@ class LoginView(APIView):
     { "message": "Login successful", "access_token": "...", "refresh_token": "...", "conversations": [...], "attachments": [...] }
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth-login'
 
     @(
         extend_schema(
@@ -1842,6 +1845,7 @@ class LoginWithOTPView(APIView):
         }
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth-otp-login'
 
     def post(self, request):
         """Deprecated endpoint: Login-with-OTP is disabled in this release."""

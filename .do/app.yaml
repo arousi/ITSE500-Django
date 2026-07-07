@@ -21,7 +21,6 @@ region: fra
 services:
 - build_command: |
     pip install -r requirements.txt
-    python manage.py makemigrations auth_api user_mang chat_api crypto_api
     python manage.py migrate --noinput
   environment_slug: python
   envs:
@@ -87,5 +86,3 @@ services:
   name: web
   run_command: |
     gunicorn prompeteer_server.wsgi:application
-    python manage.py makemigrations auth_api user_mang chat_api crypto_api
-    python manage.py migrate --noinput

@@ -1,0 +1,7 @@
+# Force LF line endings for files that run inside Linux containers,
+# regardless of the developer machine's git core.autocrlf setting. A
+# CRLF-corrupted entrypoint.sh fails with "no such file or directory" /
+# `$'\r': command not found` inside the container.
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf

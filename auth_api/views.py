@@ -19,7 +19,6 @@ import base64
 import string
 import requests
 import json
-import pyotp
 from typing import Any, Dict, Optional, cast
 import urllib.parse
 from django.shortcuts import redirect, render
@@ -178,6 +177,7 @@ class RegisterView(APIView):
     - Returns onboarding details and a first sync payload when applicable.
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth-register'
 
     @(
         extend_schema(
@@ -402,6 +402,7 @@ class EmailPinVerifyView(APIView):
     # AllowAny + inline auth (access or refresh) to avoid hard dependency on a custom auth class
     authentication_classes = [JWTAuthentication]
     permission_classes = [AllowAny]
+    throttle_scope = 'auth-verify-email-pin'
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
@@ -651,6 +652,7 @@ class LoginView(APIView):
     { "message": "Login successful", "access_token": "...", "refresh_token": "...", "conversations": [...], "attachments": [...] }
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth-login'
 
     @(
         extend_schema(
@@ -1843,53 +1845,9 @@ class LoginWithOTPView(APIView):
         }
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth-otp-login'
 
     def post(self, request):
         """Deprecated endpoint: Login-with-OTP is disabled in this release."""
         return Response({'detail': 'OTP endpoints are deprecated in this release.'}, status=status.HTTP_410_GONE)
         
-
-class EnableTOTPView(APIView):
-    """
-    Generates a TOTP secret and provisioning URI for the user to scan with Microsoft Authenticator.
-    """
-    permission_classes = [AllowAny]  # Or IsAuthenticated if you want
-
-    def post(self, request):
-        """Enable TOTP for the authenticated user and return provisioning details."""
-        user = request.user
-        if not user.is_authenticated:
-            return Response({'detail': 'Authentication required.'}, status=401)
-        # Generate a new secret
-        secret = pyotp.random_base32()
-        user.totp_secret = secret
-        user.save(update_fields=['totp_secret'])
-        # Generate provisioning URI for QR code
-        issuer = "YourAppName"
-        email = user.email or user.username
-        uri = pyotp.totp.TOTP(secret).provisioning_uri(name=email, issuer_name=issuer)
-        return Response({
-            'secret': secret,
-            'provisioning_uri': uri,
-            'qr_code_url': f"https://api.qrserver.com/v1/create-qr-code/?data={urllib.parse.quote(uri)}"
-        })
-
-class VerifyTOTPView(APIView):
-    """
-    Verifies a TOTP code from the user's Authenticator app.
-    """
-    permission_classes = [AllowAny]  # Or IsAuthenticated
-
-    def post(self, request):
-        """Verify a provided TOTP code for the authenticated user and return status."""
-        user = request.user
-        if not user.is_authenticated:
-            return Response({'detail': 'Authentication required.'}, status=401)
-        code = request.data.get('code')
-        if not user.totp_secret:
-            return Response({'detail': 'TOTP not enabled.'}, status=400)
-        totp = pyotp.TOTP(user.totp_secret)
-        if totp.verify(code):
-            return Response({'message': 'TOTP verified.'})
-        else:
-            return Response({'detail': 'Invalid code.'}, status=400)

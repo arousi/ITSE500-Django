@@ -1,0 +1,1617 @@
+openapi: 3.0.3
+info:
+  title: ITSE500 APIs Documentation
+  version: 1.0.0
+  description: Authentication, Chat, and User Management API
+paths:
+  /api/v1/auth_api/github/authorize/:
+    get:
+      operationId: v1_auth_api_github_authorize_retrieve
+      description: Construct and return (or redirect to) the GitHub authorization
+        URL.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth_api/github/authorize/ssr/:
+    get:
+      operationId: v1_auth_api_github_authorize_ssr_retrieve
+      description: Construct and return (or redirect to) the GitHub authorization
+        URL.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth_api/github/callback:
+    get:
+      operationId: v1_auth_api_github_callback_retrieve
+      description: 'Process GitHub callback: exchange code, upsert user, issue app
+        JWTs.'
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_auth_api_github_callback_create
+      description: Accept callback data via POST (bridge) and delegate to GET handler.
+      summary: OAuth callback (POST bridge)
+      tags:
+      - oauth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+  /api/v1/auth_api/github/callback/:
+    get:
+      operationId: v1_auth_api_github_callback_retrieve_2
+      description: 'Process GitHub callback: exchange code, upsert user, issue app
+        JWTs.'
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_auth_api_github_callback_create_2
+      description: Accept callback data via POST (bridge) and delegate to GET handler.
+      summary: OAuth callback (POST bridge)
+      tags:
+      - oauth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+  /api/v1/auth_api/google/authorize/:
+    get:
+      operationId: v1_auth_api_google_authorize_retrieve
+      description: Returns provider authorize URL and state for SSR or SPA/mobile
+        flows.
+      summary: Start OAuth authorization
+      parameters:
+      - in: query
+        name: callback_host
+        schema:
+          type: string
+        description: Mobile emulator host swap
+      - in: query
+        name: mode
+        schema:
+          type: string
+        description: Use 'redirect' for SSR redirect
+      - in: query
+        name: redirect_uri
+        schema:
+          type: string
+        description: Custom redirect for mobile/SPA
+      - in: query
+        name: scope
+        schema:
+          type: string
+        description: OAuth scopes (space-separated)
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthAuthorizeResponse'
+          description: ''
+        '302':
+          description: Redirect to provider
+  /api/v1/auth_api/google/authorize/ssr/:
+    get:
+      operationId: v1_auth_api_google_authorize_ssr_retrieve
+      description: Returns provider authorize URL and state for SSR or SPA/mobile
+        flows.
+      summary: Start OAuth authorization
+      parameters:
+      - in: query
+        name: callback_host
+        schema:
+          type: string
+        description: Mobile emulator host swap
+      - in: query
+        name: mode
+        schema:
+          type: string
+        description: Use 'redirect' for SSR redirect
+      - in: query
+        name: redirect_uri
+        schema:
+          type: string
+        description: Custom redirect for mobile/SPA
+      - in: query
+        name: scope
+        schema:
+          type: string
+        description: OAuth scopes (space-separated)
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthAuthorizeResponse'
+          description: ''
+        '302':
+          description: Redirect to provider
+  /api/v1/auth_api/google/callback:
+    get:
+      operationId: v1_auth_api_google_callback_retrieve
+      description: |-
+        Handle an OAuth2 callback from a provider and return a unified JSON payload.
+        Validates state, exchanges code for tokens, creates/updates a user, persists
+        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
+      summary: OAuth callback handler
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+        description: Authorization code
+      - in: query
+        name: error
+        schema:
+          type: string
+        description: Error message from provider
+      - in: query
+        name: state
+        schema:
+          type: string
+        description: Opaque state string
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+        '400':
+          description: Invalid state or token exchange failed
+        '409':
+          description: State already used
+    post:
+      operationId: v1_auth_api_google_callback_create
+      description: Accept callback data via POST (bridge) and delegate to GET handler.
+      summary: OAuth callback (POST bridge)
+      tags:
+      - oauth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+  /api/v1/auth_api/google/callback/:
+    get:
+      operationId: v1_auth_api_google_callback_retrieve_2
+      description: |-
+        Handle an OAuth2 callback from a provider and return a unified JSON payload.
+        Validates state, exchanges code for tokens, creates/updates a user, persists
+        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
+      summary: OAuth callback handler
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+        description: Authorization code
+      - in: query
+        name: error
+        schema:
+          type: string
+        description: Error message from provider
+      - in: query
+        name: state
+        schema:
+          type: string
+        description: Opaque state string
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+        '400':
+          description: Invalid state or token exchange failed
+        '409':
+          description: State already used
+    post:
+      operationId: v1_auth_api_google_callback_create_2
+      description: Accept callback data via POST (bridge) and delegate to GET handler.
+      summary: OAuth callback (POST bridge)
+      tags:
+      - oauth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+  /api/v1/auth_api/google/oauth/:
+    get:
+      operationId: v1_auth_api_google_oauth_retrieve
+      description: Returns provider authorize URL and state for SSR or SPA/mobile
+        flows.
+      summary: Start OAuth authorization
+      parameters:
+      - in: query
+        name: callback_host
+        schema:
+          type: string
+        description: Mobile emulator host swap
+      - in: query
+        name: mode
+        schema:
+          type: string
+        description: Use 'redirect' for SSR redirect
+      - in: query
+        name: redirect_uri
+        schema:
+          type: string
+        description: Custom redirect for mobile/SPA
+      - in: query
+        name: scope
+        schema:
+          type: string
+        description: OAuth scopes (space-separated)
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthAuthorizeResponse'
+          description: ''
+        '302':
+          description: Redirect to provider
+  /api/v1/auth_api/health/:
+    get:
+      operationId: v1_auth_api_health_retrieve
+      description: Report server liveness with a simple JSON payload and 200 status.
+      summary: Health check
+      tags:
+      - ops
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+          description: ''
+  /api/v1/auth_api/login/:
+    post:
+      operationId: v1_auth_api_login_create
+      description: |-
+        Authenticate a user and return JWT tokens plus initial sync payload.
+        Accepts identifier (email/username) and user_password/password. Returns 200
+        with access/refresh tokens, conversations, and attachments on success.
+        Returns 401 for invalid credentials, 403 if user is inactive/locked, or 400/500 otherwise.
+      summary: Login with identifier + password
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+        '401':
+          description: Invalid credentials
+        '403':
+          description: User locked
+  /api/v1/auth_api/logout/:
+    post:
+      operationId: v1_auth_api_logout_create
+      description: |-
+        Invalidate the current session and instruct the client to discard tokens.
+        Returns a 200 response with a brief message. Does not blacklist tokens server-side.
+        Requires a valid JWT and authenticated user.
+      summary: Logout (client discards tokens)
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+          description: ''
+  /api/v1/auth_api/microsoft/authorize/:
+    get:
+      operationId: v1_auth_api_microsoft_authorize_retrieve
+      description: Construct and return (or redirect to) the Microsoft authorization
+        URL.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth_api/microsoft/authorize/ssr/:
+    get:
+      operationId: v1_auth_api_microsoft_authorize_ssr_retrieve
+      description: Construct and return (or redirect to) the Microsoft authorization
+        URL.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth_api/microsoft/callback:
+    get:
+      operationId: v1_auth_api_microsoft_callback_retrieve
+      description: 'Process Microsoft callback: exchange code, upsert user, issue
+        app JWTs.'
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_auth_api_microsoft_callback_create
+      description: Accept callback data via POST (bridge) and delegate to GET handler.
+      summary: OAuth callback (POST bridge)
+      tags:
+      - oauth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+  /api/v1/auth_api/microsoft/callback/:
+    get:
+      operationId: v1_auth_api_microsoft_callback_retrieve_2
+      description: 'Process Microsoft callback: exchange code, upsert user, issue
+        app JWTs.'
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_auth_api_microsoft_callback_create_2
+      description: Accept callback data via POST (bridge) and delegate to GET handler.
+      summary: OAuth callback (POST bridge)
+      tags:
+      - oauth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+  /api/v1/auth_api/oauth/result/{state_value}/:
+    get:
+      operationId: v1_auth_api_oauth_result_retrieve
+      description: |-
+        Fetch the stored OAuth result payload for the given state (one-time).
+        Returns 202 if the result isn't ready yet, 410 if already retrieved, 404 if
+        the state is unknown, and 200 with the payload on success.
+      summary: Fetch OAuth result by state
+      parameters:
+      - in: path
+        name: state_value
+        schema:
+          type: string
+        description: State value used in OAuth
+        required: true
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+        '202':
+          description: Result not ready
+        '404':
+          description: Not found
+        '410':
+          description: Already retrieved
+  /api/v1/auth_api/openrouter/authorize/:
+    get:
+      operationId: v1_auth_api_openrouter_authorize_retrieve
+      description: Returns provider authorize URL and state for SSR or SPA/mobile
+        flows.
+      summary: Start OAuth authorization
+      parameters:
+      - in: query
+        name: callback_host
+        schema:
+          type: string
+        description: Mobile emulator host swap
+      - in: query
+        name: mode
+        schema:
+          type: string
+        description: Use 'redirect' for SSR redirect
+      - in: query
+        name: redirect_uri
+        schema:
+          type: string
+        description: Custom redirect for mobile/SPA
+      - in: query
+        name: scope
+        schema:
+          type: string
+        description: OAuth scopes (space-separated)
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthAuthorizeResponse'
+          description: ''
+        '302':
+          description: Redirect to provider
+  /api/v1/auth_api/openrouter/authorize/ssr/:
+    get:
+      operationId: v1_auth_api_openrouter_authorize_ssr_retrieve
+      description: Returns provider authorize URL and state for SSR or SPA/mobile
+        flows.
+      summary: Start OAuth authorization
+      parameters:
+      - in: query
+        name: callback_host
+        schema:
+          type: string
+        description: Mobile emulator host swap
+      - in: query
+        name: mode
+        schema:
+          type: string
+        description: Use 'redirect' for SSR redirect
+      - in: query
+        name: redirect_uri
+        schema:
+          type: string
+        description: Custom redirect for mobile/SPA
+      - in: query
+        name: scope
+        schema:
+          type: string
+        description: OAuth scopes (space-separated)
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthAuthorizeResponse'
+          description: ''
+        '302':
+          description: Redirect to provider
+  /api/v1/auth_api/openrouter/callback:
+    get:
+      operationId: v1_auth_api_openrouter_callback_retrieve
+      description: |-
+        Handle an OAuth2 callback from a provider and return a unified JSON payload.
+        Validates state, exchanges code for tokens, creates/updates a user, persists
+        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
+      summary: OAuth callback handler
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+        description: Authorization code
+      - in: query
+        name: error
+        schema:
+          type: string
+        description: Error message from provider
+      - in: query
+        name: state
+        schema:
+          type: string
+        description: Opaque state string
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+        '400':
+          description: Invalid state or token exchange failed
+        '409':
+          description: State already used
+    post:
+      operationId: v1_auth_api_openrouter_callback_create
+      description: Accept callback data via POST (bridge) and delegate to GET handler.
+      summary: OAuth callback (POST bridge)
+      tags:
+      - oauth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+  /api/v1/auth_api/openrouter/callback/:
+    get:
+      operationId: v1_auth_api_openrouter_callback_retrieve_2
+      description: |-
+        Handle an OAuth2 callback from a provider and return a unified JSON payload.
+        Validates state, exchanges code for tokens, creates/updates a user, persists
+        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
+      summary: OAuth callback handler
+      parameters:
+      - in: query
+        name: code
+        schema:
+          type: string
+        description: Authorization code
+      - in: query
+        name: error
+        schema:
+          type: string
+        description: Error message from provider
+      - in: query
+        name: state
+        schema:
+          type: string
+        description: Opaque state string
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+        '400':
+          description: Invalid state or token exchange failed
+        '409':
+          description: State already used
+    post:
+      operationId: v1_auth_api_openrouter_callback_create_2
+      description: Accept callback data via POST (bridge) and delegate to GET handler.
+      summary: OAuth callback (POST bridge)
+      tags:
+      - oauth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OAuthCallbackRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+  /api/v1/auth_api/openrouter/oauth/:
+    get:
+      operationId: v1_auth_api_openrouter_oauth_retrieve
+      description: Returns provider authorize URL and state for SSR or SPA/mobile
+        flows.
+      summary: Start OAuth authorization
+      parameters:
+      - in: query
+        name: callback_host
+        schema:
+          type: string
+        description: Mobile emulator host swap
+      - in: query
+        name: mode
+        schema:
+          type: string
+        description: Use 'redirect' for SSR redirect
+      - in: query
+        name: redirect_uri
+        schema:
+          type: string
+        description: Custom redirect for mobile/SPA
+      - in: query
+        name: scope
+        schema:
+          type: string
+        description: OAuth scopes (space-separated)
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthAuthorizeResponse'
+          description: ''
+        '302':
+          description: Redirect to provider
+  /api/v1/auth_api/otp-login/:
+    post:
+      operationId: v1_auth_api_otp_login_create
+      description: 'Deprecated endpoint: Login-with-OTP is disabled in this release.'
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth_api/register/:
+    post:
+      operationId: v1_auth_api_register_create
+      description: Create a new account or reconcile existing identity; returns JWTs
+        and initial sync.
+      summary: Register account
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+        '409':
+          description: invalid credentials.
+  /api/v1/auth_api/set-password-after-email-verify/:
+    post:
+      operationId: v1_auth_api_set_password_after_email_verify_create
+      description: |-
+        Set/reset the account password after email verification.
+
+        Expects JSON body with:
+        - email: string; must match the authenticated user's email
+        - password: string; client-side sha256(raw)
+
+        On success, stores a salted backend hash and returns 200 with a message.
+        May return 400 if data is invalid or email not verified; 404 if user not found;
+        401 if JWT is missing/invalid.
+      summary: Set password after email verify
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPasswordAfterEmailVerifyRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SetPasswordAfterEmailVerifyRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SetPasswordAfterEmailVerifyRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetPasswordAfterEmailVerifyResponse'
+          description: ''
+        '400':
+          description: Invalid data or email not verified
+        '401':
+          description: Auth required
+        '404':
+          description: User not found
+  /api/v1/auth_api/token/refresh/:
+    post:
+      operationId: v1_auth_api_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth_api/verify-email-pin/:
+    post:
+      operationId: v1_auth_api_verify_email_pin_create
+      description: |-
+        Verify the 5-digit email PIN for the authenticated user.
+
+        Expects JSON body with:
+        - email: string; must match the authenticated user's email
+        - pin: string; 5-digit code
+
+        Returns 200 with a success message on valid PIN; 400 for invalid/expired PIN;
+        404 if the user is not found; 401 if JWT is missing/invalid.
+      summary: Verify email PIN
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailPinVerifyRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailPinVerifyRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailPinVerifyRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailPinVerifyResponse'
+          description: ''
+        '400':
+          description: Invalid PIN or expired
+        '401':
+          description: Auth required
+        '404':
+          description: User not found
+  /api/v1/crypto_api/umk/:
+    get:
+      operationId: v1_crypto_api_umk_retrieve
+      description: Return the caller's UMK metadata + base64 (phase 0).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: v1_crypto_api_umk_create
+      description: Provision UMK once. Reject if already exists unless rotate=true
+        (not yet supported).
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/user_mang/me/:
+    get:
+      operationId: v1_user_mang_me_retrieve
+      description: |-
+        GET
+
+        Returns a nested payload containing `profile` and/or `chat` depending on flags.
+
+        Response shape (high level):
+            {
+                "user_id": <uuid>,
+                "is_new": <bool>,
+                "temp_id": <str|null>,
+                "profile": { ... } ,          # present when profile=true or by default
+                "chat": {                     # present when chat=true or by default
+                    "conversations": [...],
+                    "messages": [...],
+                    "message_request": [...],
+                    "message_response": [...],
+                    "message_output": [...],
+                    "attachments": [...]
+                }
+            }
+
+        Notes / implementation details:
+        - Serializers: when available the view uses `FullProfileSerializer` and `FullChatSerializer` to produce the
+          canonical output. If serializers fail the view falls back to minimal manual assembly.
+        - Attachments returned in `chat.attachments` always include a `user_id` field (derived from the related
+          message) to make ownership explicit for clients.
+
+        Example Request:
+            GET /api/v1/unified-sync/?user_id=123e4567-e89b-12d3-a456-426614174000&profile=true&chat=true
+
+        Example Response (simplified):
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "is_new": false,
+                "temp_id": null,
+                "profile": {
+                    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "username": "john_doe",
+                    "email": "john@example.com",
+                    "is_visitor": false,
+                    "is_active": true,
+                    "is_archived": false
+                },
+                "chat": {
+                    "conversations": [
+                        {
+                            "conversation_id": "c1",
+                            "title": "My Conversation",
+                            "messages": [ {"message_id": "m1", "content": "Hello!"} ]
+                        }
+                    ],
+                    "messages": [ {"message_id": "m1", "content": "Hello!"} ],
+                    "attachments": [
+                        {
+                            "id": 1,
+                            "type": "image",
+                            "file_path": "/media/attachments/1.png",
+                            "user_id": "123e4567-e89b-12d3-a456-426614174000"
+                        }
+                    ]
+                }
+            }
+      summary: Unified sync (fetch profile/chat)
+      parameters:
+      - in: query
+        name: allow_public_uuid
+        schema:
+          type: boolean
+        description: Allow unauthenticated read by UUID for GET
+      - in: query
+        name: chat
+        schema:
+          type: boolean
+        description: Include chat section
+      - in: query
+        name: device_id
+        schema:
+          type: string
+        description: Associate device with user/visitor
+      - in: query
+        name: profile
+        schema:
+          type: boolean
+        description: Include profile section
+      - in: query
+        name: temp_id
+        schema:
+          type: string
+        description: Visitor temp identifier (issues short-lived tokens)
+      - in: query
+        name: user_id
+        schema:
+          type: string
+        description: User UUID (GET only, when allow_public_uuid=true)
+      tags:
+      - sync
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: Nested profile/chat payload with optional visitor tokens
+    post:
+      operationId: v1_user_mang_me_create
+      description: Upsert profile and chat model lists atomically; returns summary/errors
+        and canonical payload.
+      summary: Unified upsert (profile/chat)
+      tags:
+      - sync
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: Upsert result with summary/errors and canonical payload
+        '400':
+          description: Validation error
+        '500':
+          description: Transaction failed
+    patch:
+      operationId: v1_user_mang_me_partial_update
+      description: Authenticated partial update for profile fields (me endpoint style).
+      summary: Partial profile update
+      tags:
+      - sync
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: Updated profile
+        '400':
+          description: Validation error
+        '401':
+          description: Auth required
+    delete:
+      operationId: v1_user_mang_me_destroy
+      description: |-
+        DELETE
+
+        Delete or archive a user's profile and/or chat data.
+
+        Important behavior changes:
+            - The ``action`` parameter is now restricted to "delete" or "archive". Other values are rejected.
+            - On any successful delete or archive operation this endpoint will always generate BOTH a CSV and a
+              PDF export of the user's data.
+            - Exports are saved under MEDIA_ROOT/exports/<user_id> and emailed to the user's verified address when
+              available.
+            - If the caller provides ``download_now`` (truthy: 1/true/yes) the view will zip the CSV+PDF and
+              immediately return the zip file as a FileResponse. If ``download_now`` is falsy the files are kept on
+              disk and the response will include URLs the client can use to download them.
+
+        Parameters (body or query):
+            - action: "delete" | "archive"  (required)
+            - profile: true/false
+            - chat: true/false
+            - download_now: true/false or 1/0 — when true return a zip (csv+pdf) immediately; when false save and
+              return URLs instead
+            - reason: optional string for audit logs
+
+        Returns (examples):
+
+        Example Request (delete + return URLs):
+            DELETE /api/v1/unified-sync/
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "action": "delete",
+                "profile": true,
+                "chat": true,
+                "download_now": false
+            }
+
+        Example Response (delete, saved exports):
+            HTTP 200
+            {
+                "message": "User and all related data deleted successfully",
+                "deleted": { "attachments": 2, "messages": 5, "conversations": 1, "tokens": 1, "user": 1 },
+                "export_urls": {
+                    "csv": "https://example.com/media/exports/<user_id>/user_export_20250829123000.csv",
+                    "pdf": "https://example.com/media/exports/<user_id>/user_export_20250829123000.pdf"
+                },
+                "profile": { /* FullProfileSerializer output or minimal fallback */ },
+                "chat": { /* FullChatSerializer output or minimal fallback */ }
+            }
+
+        Example Request (archive + immediate download):
+            DELETE /api/v1/unified-sync/
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "action": "archive",
+                "profile": true,
+                "download_now": true
+            }
+
+        Example Response (archive, immediate zip):
+            HTTP 200
+            (A FileResponse serving an attachment named "user_export_<user_id>.zip" containing both CSV and PDF)
+
+        Notes:
+            - Exporting and emailing are best-effort. Failures while creating or sending exports are logged and do
+              not prevent the delete/archive from completing.
+            - The response will include ``export_urls`` when files are saved and not directly returned.
+      summary: Delete or archive user data
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: '''delete'' or ''archive'''
+      - in: query
+        name: chat
+        schema:
+          type: boolean
+      - in: query
+        name: download_now
+        schema:
+          type: boolean
+        description: If true, returns a zip of CSV+PDF
+      - in: query
+        name: profile
+        schema:
+          type: boolean
+      tags:
+      - sync
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          description: Deletion/archive result with optional export URLs or zip
+        '400':
+          description: Invalid action or request
+        '401':
+          description: Auth required
+components:
+  schemas:
+    AttachmentDoc:
+      type: object
+      properties:
+        attachment_id:
+          type: string
+        message_id:
+          type: string
+        url:
+          type: string
+    ConversationDoc:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+        title:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageDoc'
+      required:
+      - conversation_id
+      - messages
+    EmailPinVerifyRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        pin:
+          type: string
+          minLength: 1
+          maxLength: 5
+      required:
+      - email
+      - pin
+    EmailPinVerifyResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+      required:
+      - message
+      - status
+    LoginRequest:
+      type: object
+      properties:
+        identifier:
+          type: string
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        user_password:
+          type: string
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user_id:
+          type: string
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        email_verified:
+          type: boolean
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationDoc'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentDoc'
+      required:
+      - access_token
+      - attachments
+      - conversations
+      - email_verified
+      - message
+      - refresh_token
+      - user_id
+    LogoutResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    MessageDoc:
+      type: object
+      properties:
+        message_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        has_image:
+          type: boolean
+        has_document:
+          type: boolean
+      required:
+      - message_id
+      - timestamp
+    OAuthAuthorizeResponse:
+      type: object
+      properties:
+        authorize_url:
+          type: string
+        state:
+          type: string
+        state_id:
+          type: string
+        expires_at:
+          type: string
+        bridge:
+          type: boolean
+      required:
+      - authorize_url
+      - bridge
+      - expires_at
+      - state
+      - state_id
+    OAuthCallbackRequest:
+      type: object
+      properties:
+        state:
+          type: string
+          minLength: 1
+        code:
+          type: string
+        error:
+          type: string
+      required:
+      - state
+    OAuthCallbackResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user_id:
+          type: string
+        username:
+          type: string
+          nullable: true
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        provider_scope:
+          type: string
+          nullable: true
+        provider_expires_at:
+          type: string
+          nullable: true
+        provider_access_token:
+          type: string
+          nullable: true
+        provider_refresh_token:
+          type: string
+          nullable: true
+        provider_token_type:
+          type: string
+          nullable: true
+        id_token:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        email_verified:
+          type: boolean
+        is_google_user:
+          type: boolean
+        is_openrouter_user:
+          type: boolean
+        is_github_user:
+          type: boolean
+        is_ms_user:
+          type: boolean
+      required:
+      - access_token
+      - message
+      - refresh_token
+      - user_id
+    RegisterRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          writeOnly: true
+          minLength: 1
+        user_password:
+          type: string
+          writeOnly: true
+          minLength: 6
+      required:
+      - email
+      - username
+    RegisterResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user_id:
+          type: string
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        email:
+          type: string
+          format: email
+        onboarding:
+          type: boolean
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationDoc'
+        temp_id:
+          type: string
+          nullable: true
+        device_id:
+          type: string
+          nullable: true
+        related_devices:
+          type: array
+          items:
+            type: string
+      required:
+      - access_token
+      - conversations
+      - email
+      - message
+      - onboarding
+      - refresh_token
+      - user_id
+    SetPasswordAfterEmailVerifyRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          minLength: 6
+      required:
+      - email
+      - password
+    SetPasswordAfterEmailVerifyResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+      required:
+      - access
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - refresh
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -35,6 +35,7 @@ media/
 local_settings.py
 .env
 .env.*
+!.env.example
 *.env
 *.secret
 *.bak
@@ -113,7 +114,6 @@ prompeteer_server/auth_api.log
 
 # Ignore secrets and credentials
 secrets.json
-
-# Ignore migrations (optional, if you want to keep them out of version control)
-**/migrations/
-!**/migrations/__init__.py
+*.googleusercontent.com.json
+client_secret*.json
+*credentials*.json

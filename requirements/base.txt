@@ -1,0 +1,56 @@
+# Runtime dependencies for prompeteer_server (Django backend)
+# Derived from prompeteer_server/settings.py INSTALLED_APPS + actual imports
+# across auth_api, chat_api, user_mang, crypto_api, core.
+#
+# Keep this file lean: only add a package here if it is imported by
+# application code or required to run the app in production.
+
+# --- Django core ---
+Django==5.1.7
+asgiref==3.8.1
+sqlparse==0.5.3
+
+# --- REST API ---
+djangorestframework==3.15.2
+djangorestframework_simplejwt==5.5.0
+django-cors-headers==4.3.1
+django-oauth-toolkit==3.0.1
+drf-spectacular==0.28.0
+drf-spectacular-sidecar==2025.9.1
+
+# --- Realtime (channels app is installed; ASGI app defined but no
+# websocket route/channel layer is wired yet - see DEPLOYMENT.md) ---
+channels==4.2.0
+
+# --- Auth / crypto / OTP ---
+PyJWT==2.9.0
+pyotp==2.9.0
+cryptography==44.0.0
+argon2-cffi==23.1.0
+bcrypt==4.3.0
+
+# --- Static files / WSGI server ---
+whitenoise==6.9.0
+gunicorn==21.2.0
+uvicorn==0.34.0
+
+# --- Database (Postgres in production; sqlite3 is stdlib for local dev) ---
+psycopg[binary]==3.2.3
+
+# --- Media / images (required by ImageField in chat_api models) ---
+pillow==10.4.0
+
+# --- PDF generation (user_mang/views.py: reportlab canvas/pagesizes) ---
+reportlab==4.2.5
+
+# --- Misc app dependencies ---
+python-dotenv==1.0.1
+requests==2.32.3
+segno==1.6.1
+
+# --- AI chat providers (used by chat_api's model-calling features) ---
+openai==1.66.3
+litellm==1.63.11
+
+# --- Admin UI ---
+django-jazzmin==3.0.1

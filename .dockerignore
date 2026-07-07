@@ -23,3 +23,25 @@ build
 dist
 *.egg-info
 .git
+
+# Secrets: never bake these into the image
+.env
+.env.*
+!.env.example
+*.googleusercontent.com.json
+client_secret*.json
+*credentials*.json
+secrets.json
+
+# Editor/OS/dev cruft not needed in the image
+.vscode
+.pytest_cache
+.claude
+*.md
+docs
+exports
+Screenshot*.png
+postman-*.json
+cline_mcp_settings.json
+pyvenv.cfg
+reqs.txt

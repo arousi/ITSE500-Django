@@ -89,18 +89,6 @@ class TestUnifiedSyncPost:
         assert conv.user_id_id == user.pk  # FK forced to the authenticated user, not client-suppliable
         assert str(conv.conversation_id) == client_conv_id  # client-supplied id honored on create
 
-    @pytest.mark.xfail(
-        reason=(
-            "SECURITY BUG: UnifiedSyncView.post() looks up the conversation by "
-            "conversation_id alone (`Conversation.objects.filter(conversation_id=conv_id)"
-            ".first()`), with no ownership/tenant check, then unconditionally reassigns "
-            "it to the caller via `serializer.save(user_id=user)`. Any authenticated user "
-            "who learns/guesses another user's conversation_id can hijack (reassign) it. "
-            "This is the same IDOR class that commit b6391e3 fixed for two other paths -- "
-            "this one (conversations upsert) is still open. Do not patch here; report only."
-        ),
-        strict=True,
-    )
     def test_post_cannot_hijack_existing_conversation_owned_by_another_user(self, api_client, make_user):
         """IDOR guard: upserting a conversation_id owned by a different user must not
         transfer ownership to the attacker."""

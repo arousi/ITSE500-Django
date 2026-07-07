@@ -717,8 +717,17 @@ class UnifiedSyncView(APIView):
                         if user is None:
                             errors["conversations"].append({"data": conv, "error": "User is None"})
                             continue
+                        # IDOR guard: a conversation_id that already exists but belongs to a
+                        # different user must never be looked up/reassigned by this caller.
+                        # Scope the lookup to request.user's own rows; if a row with this id
+                        # exists but is owned by someone else, reject instead of upserting.
+                        if Conversation.objects.filter(conversation_id=conv_id).exclude(user_id=user).exists():
+                            errors["conversations"].append(
+                                {"data": conv, "error": "Conversation not found or not owned by this user"}
+                            )
+                            continue
                         conv["user_id"] = user.pk
-                        instance = Conversation.objects.filter(conversation_id=conv_id).first()
+                        instance = Conversation.objects.filter(conversation_id=conv_id, user_id=user).first()
                         serializer = ConversationSerializer(instance, data=conv, partial=True, context={"request": request})
                         if serializer.is_valid():
                             # Conversation.user_id is read-only on the serializer; ensure the FK is set via save(kwargs)

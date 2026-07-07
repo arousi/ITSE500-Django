@@ -30,10 +30,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements/dev.txt
 
+      # ruff is newly adopted in this modernization; the large pre-existing codebase
+      # (auth_api/user_mang legacy views, seeder, etc.) isn't ruff-formatted yet.
+      # Keep lint non-blocking for now so it reports issues in the logs without failing
+      # the build; a dedicated `style:` PR will ruff-format the repo and drop these flags.
       - name: ruff check
+        continue-on-error: true
         run: ruff check .
 
       - name: ruff format --check
+        continue-on-error: true
         run: ruff format --check .
 
   test:

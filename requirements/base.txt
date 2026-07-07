@@ -49,8 +49,8 @@ requests==2.33.0
 segno==1.6.1
 
 # --- AI chat providers (used by chat_api's model-calling features) ---
-openai==1.66.3
-litellm==1.63.11
+openai==2.44.0
+litellm==1.84.0
 
 # --- Admin UI ---
 django-jazzmin==3.0.1

@@ -67,6 +67,15 @@ This plan takes it from "solid auth skeleton" to a **secure, reproducible, produ
 
 **Also (review):** add a `Message.status` enum (`pending|streaming|complete|error`) before Phase 4 LLM execution (a total request failure is currently unrepresentable); N+1 in the POST write path (GET path already uses `select_related`/`prefetch`); design pagination into the `chat_api` list endpoints from day one (Phase 4), not Phase 6; confirm attachment upload order (`Attachment` FKs `Message` only).
 
+### Implementation session 2 (security-first) — DONE + verified
+
+- ✅ **#15 & #16 (both IDOR holes) fixed** in `UnifiedSyncView` and covered by **red→green regression tests** (`user_mang/test_unified_sync_security.py`): unauthenticated `allow_public_uuid` GET now 401s; POST upsert enforces per-item ownership (no cross-user overwrite/reparent). Verified the tests fail against the pre-fix code.
+- ✅ **#19 auth throttle wired**: `throttle_scope='auth'` (10/min) on Login/Register/EmailPinVerify/SetPassword/OTP views; `conftest.py` isolates throttle cache between tests.
+- 🧪 A verifiable **Django 5.1.7 test env** now exists (installed in the session scratchpad venv); `manage.py check` is clean.
+- 🔴 **New finding — stale test suites:** `user_mang/test_views_comprehensive.py` and `auth_api/test_views_comprehensive.py` predate the refactor and **do not run** against current code (reference the removed `Visitor` model, `CustomeUserSerializer`, `UserDetailView`). They give a false sense of coverage and **will block CI** — must be rewritten (fold into Phase 7).
+- **Decisions locked:** start **clean on Postgres** (no SQLite data migration); **security-first** sequencing.
+- **Next:** fix chat_api model PK defects (#17) + add `Message.status` → generate & commit initial migrations → Phase 2 (Postgres/Redis/MinIO) → chat_api LLM MVP (Phase 4).
+
 ---
 
 ## 3. Target Architecture (VPS)

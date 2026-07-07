@@ -9,8 +9,13 @@ import pytest
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
+import uuid
+
 from user_mang.models.custom_user import Custom_User
 from chat_api.models.conversation import Conversation
+from chat_api.models.message import Message
+from chat_api.models.attachment import Attachment
+from chat_api.models.message_response import MessageResponse
 
 
 ME_URL = "/api/v1/user_mang/me/"
@@ -109,6 +114,91 @@ class TestUnifiedSyncPost:
     def test_post_requires_authentication(self, api_client):
         resp = api_client.post(ME_URL, {"conversations": []}, format="json")
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+class TestUnifiedSyncPostSiblingIDOR:
+    """Ownership guards on the POST sibling upserts (messages / attachments /
+    request-response-output). An authenticated user must not be able to
+    overwrite or take over another user's rows by supplying their ids."""
+
+    def _auth(self, api_client, user):
+        refresh = RefreshToken.for_user(user)
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
+
+    def test_cannot_overwrite_another_users_message(self, api_client, make_user):
+        victim = make_user(username="v_msg", email="vmsg@example.com")
+        attacker = make_user(username="a_msg", email="amsg@example.com")
+        v_conv = Conversation.objects.create(user_id=victim, title="v")
+        v_msg = Message.objects.create(user_id=victim, conversation_id=v_conv)
+        a_conv = Conversation.objects.create(user_id=attacker, title="a")
+
+        self._auth(api_client, attacker)
+        payload = {"messages": [{
+            "message_id": str(v_msg.message_id),
+            "conversation_id": str(a_conv.conversation_id),
+            "metadata": {"x": "hijacked"},
+        }]}
+        resp = api_client.post(ME_URL, payload, format="json")
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data["summary"]["messages_updated"] == 0
+        v_msg.refresh_from_db()
+        assert v_msg.user_id_id == victim.pk
+        assert v_msg.conversation_id_id == v_conv.pk  # not moved to attacker's conversation
+
+    def test_cannot_add_message_to_another_users_conversation(self, api_client, make_user):
+        victim = make_user(username="v_conv", email="vconv@example.com")
+        attacker = make_user(username="a_conv", email="aconv@example.com")
+        v_conv = Conversation.objects.create(user_id=victim, title="v")
+
+        self._auth(api_client, attacker)
+        new_msg_id = str(uuid.uuid4())
+        payload = {"messages": [{
+            "message_id": new_msg_id,
+            "conversation_id": str(v_conv.conversation_id),
+        }]}
+        resp = api_client.post(ME_URL, payload, format="json")
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data["summary"]["messages_created"] == 0
+        assert not Message.objects.filter(message_id=new_msg_id).exists()
+
+    def test_cannot_overwrite_another_users_response(self, api_client, make_user):
+        victim = make_user(username="v_resp", email="vresp@example.com")
+        attacker = make_user(username="a_resp", email="aresp@example.com")
+        v_conv = Conversation.objects.create(user_id=victim, title="v")
+        resp_row = MessageResponse.objects.create(response_id="resp_victim_1", status="completed")
+        Message.objects.create(user_id=victim, conversation_id=v_conv, response_id=resp_row)
+
+        self._auth(api_client, attacker)
+        payload = {"message_responses": [{"response_id": "resp_victim_1", "status": "TAMPERED"}]}
+        resp = api_client.post(ME_URL, payload, format="json")
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data["summary"]["responses_updated"] == 0
+        resp_row.refresh_from_db()
+        assert resp_row.status == "completed"
+
+    def test_cannot_overwrite_another_users_attachment(self, api_client, make_user):
+        victim = make_user(username="v_att", email="vatt@example.com")
+        attacker = make_user(username="a_att", email="aatt@example.com")
+        v_conv = Conversation.objects.create(user_id=victim, title="v")
+        v_msg = Message.objects.create(user_id=victim, conversation_id=v_conv)
+        att = Attachment.objects.create(message_id=v_msg, type="image", file_path="/victim/secret.png")
+        a_conv = Conversation.objects.create(user_id=attacker, title="a")
+        a_msg = Message.objects.create(user_id=attacker, conversation_id=a_conv)
+
+        self._auth(api_client, attacker)
+        payload = {"attachments": [{
+            "id": str(att.attachment_id),
+            "message_id": str(a_msg.message_id),
+            "type": "image",
+            "file_path": "/attacker/tampered.png",
+        }]}
+        resp = api_client.post(ME_URL, payload, format="json")
+        assert resp.status_code == status.HTTP_200_OK
+        assert resp.data["summary"]["attachments_updated"] == 0
+        att.refresh_from_db()
+        assert att.file_path == "/victim/secret.png"
+        assert att.message_id_id == v_msg.pk
 
 
 @pytest.mark.django_db

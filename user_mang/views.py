@@ -706,6 +706,15 @@ class UnifiedSyncView(APIView):
             created, updated = dict(conv=0, msg=0, req=0, resp=0, out=0, att=0), dict(conv=0, msg=0, req=0, resp=0, out=0, att=0)
             errors = {k: [] for k in ["conversations", "messages", "message_requests", "message_responses", "message_outputs", "attachments"]}
 
+            def _linked_owner_pk(obj):
+                """Owner pk of the Message linked (reverse O2O 'message') to a
+                request/response/output row, or None when the row isn't linked
+                to any message yet (ambiguous ownership -> caller may claim it)."""
+                try:
+                    return obj.message.user_id_id
+                except Exception:
+                    return None
+
             try:
                 with transaction.atomic():
                     # Conversations
@@ -743,6 +752,9 @@ class UnifiedSyncView(APIView):
                             errors["message_requests"].append({"data": req, "error": "Missing id"})
                             continue
                         instance = MessageRequest.objects.filter(request_id=req_id).first()
+                        if instance is not None and _linked_owner_pk(instance) not in (None, user.pk):
+                            errors["message_requests"].append({"data": req, "error": "Not found or not owned by this user"})
+                            continue
                         serializer = MessageRequestSerializer(instance, data=req, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -757,6 +769,9 @@ class UnifiedSyncView(APIView):
                             errors["message_responses"].append({"data": resp, "error": "Missing id"})
                             continue
                         instance = MessageResponse.objects.filter(response_id=resp_id).first()
+                        if instance is not None and _linked_owner_pk(instance) not in (None, user.pk):
+                            errors["message_responses"].append({"data": resp, "error": "Not found or not owned by this user"})
+                            continue
                         serializer = MessageResponseSerializer(instance, data=resp, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -771,6 +786,9 @@ class UnifiedSyncView(APIView):
                             errors["message_outputs"].append({"data": out, "error": "Missing id"})
                             continue
                         instance = MessageOutput.objects.filter(output_id=out_id).first()
+                        if instance is not None and _linked_owner_pk(instance) not in (None, user.pk):
+                            errors["message_outputs"].append({"data": out, "error": "Not found or not owned by this user"})
+                            continue
                         serializer = MessageOutputSerializer(instance, data=out, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -787,8 +805,17 @@ class UnifiedSyncView(APIView):
                         if user is None:
                             errors["messages"].append({"data": msg, "error": "User is None"})
                             continue
+                        # IDOR guard: forbid attaching into a conversation the caller
+                        # doesn't own, and reject a message_id owned by another user.
+                        _conv_ref = msg.get("conversation_id")
+                        if _conv_ref and not Conversation.objects.filter(conversation_id=_conv_ref, user_id=user).exists():
+                            errors["messages"].append({"data": msg, "error": "conversation_id not found or not owned by this user"})
+                            continue
+                        if Message.objects.filter(message_id=msg_id).exclude(user_id=user).exists():
+                            errors["messages"].append({"data": msg, "error": "Message not found or not owned by this user"})
+                            continue
                         msg["user_id"] = user.pk
-                        instance = Message.objects.filter(message_id=msg_id).first()
+                        instance = Message.objects.filter(message_id=msg_id, user_id=user).first()
                         serializer = MessageSerializer(instance, data=msg, partial=True, context={"request": request})
                         if serializer.is_valid():
                             # Message.user_id is read-only on the serializer; pass the user instance to save()
@@ -809,7 +836,16 @@ class UnifiedSyncView(APIView):
                         else:
                             errors["attachments"].append({"data": att, "error": "User is None"})
                             continue
-                        instance = Attachment.objects.filter(pk=att_id).first()
+                        # IDOR guard: an existing attachment must belong to the caller's
+                        # own message; a new one must attach to the caller's message.
+                        _msg_ref = att.get("message_id")
+                        if _msg_ref and not Message.objects.filter(message_id=_msg_ref, user_id=user).exists():
+                            errors["attachments"].append({"data": att, "error": "message_id not found or not owned by this user"})
+                            continue
+                        if Attachment.objects.filter(pk=att_id).exclude(message_id__user_id=user).exists():
+                            errors["attachments"].append({"data": att, "error": "Attachment not found or not owned by this user"})
+                            continue
+                        instance = Attachment.objects.filter(pk=att_id, message_id__user_id=user).first()
                         serializer = AttachmentSerializer(instance, data=att, partial=True, context={"request": request})
                         if serializer.is_valid():
                             # Attachment.user_id is read-only; set FK on save

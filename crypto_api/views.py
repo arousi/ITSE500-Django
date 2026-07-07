@@ -42,5 +42,5 @@ class UserUMKView(APIView):
             import os
             raw = os.urandom(32)
             umk_b64 = base64.b64encode(raw).decode('utf-8')
-        ukm = UserKeyMaterial.objects.create(user=request.user, umk_b64=umk_b64)
+        ukm = UserKeyMaterial.objects.create(user_id=request.user, umk_b64=umk_b64)
         return Response(UserKeyMaterialSerializer(ukm).data, status=status.HTTP_201_CREATED)

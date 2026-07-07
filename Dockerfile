@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # copy requirements first to leverage layer caching
 COPY requirements.txt /app/
+COPY requirements/ /app/requirements/
 
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt

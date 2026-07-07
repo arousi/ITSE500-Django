@@ -1,0 +1,47 @@
+# Core runtime dependencies, shared by every environment (prod + dev).
+# Keep this file to DIRECT imports only; transitive deps are resolved by pip.
+
+# --- Django / DRF core ---
+Django==5.1.7
+djangorestframework==3.15.2
+djangorestframework_simplejwt==5.5.0
+channels==4.2.0
+django-cors-headers==4.3.1
+django-oauth-toolkit==3.0.1
+django-jazzmin
+drf-spectacular
+drf-spectacular-sidecar
+
+# NOTE: channels_redis is referenced in prompeteer_server/settings.py but the
+# CHANNEL_LAYERS block that uses it is currently commented out (in-memory
+# channel layer is used instead). Not installed yet - see requirements/prod.txt
+# Phase 2 section for when the Redis-backed channel layer is turned back on.
+
+# --- Auth / crypto ---
+cryptography==44.0.0
+argon2-cffi==23.1.0
+argon2-cffi-bindings==21.2.0
+PyJWT==2.9.0
+pyotp==2.9.0
+
+# --- HTTP / networking ---
+requests==2.32.3
+httpx==0.28.1
+
+# --- LLM / AI providers (used by chat_api / crypto_api integrations) ---
+# review: keep - project is an LLM-integration ("Prompeteer") server; litellm
+# and openai are the model-routing/client layer even though a plain top-level
+# `import openai`/`import litellm` wasn't found by grep (likely imported
+# dynamically or from a submodule not yet greppable). Confirm on next audit.
+litellm==1.63.11
+openai==1.66.3
+
+# --- Documents / media ---
+reportlab==4.2.5
+pillow==10.4.0
+
+# --- Config / env ---
+python-dotenv==1.0.1
+
+# --- WSGI static file serving (also needed at runtime, not just prod server) ---
+whitenoise==6.9.0

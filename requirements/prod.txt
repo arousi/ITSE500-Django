@@ -1,0 +1,13 @@
+-r base.txt
+
+# --- Production application server ---
+gunicorn==21.2.0
+uvicorn==0.34.0
+
+# --- Phase 2 (not active yet - uncomment when the corresponding
+# infrastructure/backing service is provisioned) ---
+# psycopg[binary]==3.2.*        # Postgres driver, once we move off SQLite
+# django-storages[s3]==1.14.*   # S3-backed MEDIA/STATIC storage
+# boto3==1.35.*                 # required by django-storages[s3]
+# channels-redis==4.2.*         # Redis-backed CHANNEL_LAYERS (see base.txt note)
+# celery[redis]==5.4.*          # background task queue

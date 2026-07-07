@@ -156,6 +156,12 @@ REST_FRAMEWORK = {
         'auth-verify-email-pin': os.environ.get('THROTTLE_RATE_VERIFY_EMAIL_PIN', '10/min'),
         'auth-otp-login': os.environ.get('THROTTLE_RATE_OTP_LOGIN', '10/min'),
     },
+    # Behind Traefik (or any reverse proxy) REMOTE_ADDR is the proxy's IP, which
+    # would collapse every client into one throttle bucket (defeating the
+    # brute-force protection above). NUM_PROXIES tells DRF to derive the real
+    # client IP from X-Forwarded-For. Set to the number of trusted proxies in
+    # front of the app (Traefik = 1); default 0 for local/dev (uses REMOTE_ADDR).
+    'NUM_PROXIES': int(os.environ.get('NUM_PROXIES', '0')),
 }
 
 SIMPLE_JWT = {

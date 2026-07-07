@@ -252,6 +252,7 @@ class TestHealthCheckView:
         assert resp.data["status"] == "ok"
 
 
+@pytest.mark.django_db
 def test_root_healthz(client):
     """Root-level liveness probe added by containerization."""
     resp = client.get("/healthz")

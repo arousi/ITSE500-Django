@@ -9,8 +9,8 @@ channels==4.2.0
 django-cors-headers==4.3.1
 django-oauth-toolkit==3.0.1
 django-jazzmin
-drf-spectacular
-drf-spectacular-sidecar
+drf-spectacular==0.30.0        # pinned: schema generation must be reproducible (CI schema-drift gate)
+drf-spectacular-sidecar==2026.7.1
 
 # NOTE: channels_redis is referenced in prompeteer_server/settings.py but the
 # CHANNEL_LAYERS block that uses it is currently commented out (in-memory

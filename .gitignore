@@ -29,15 +29,21 @@ var/
 *.pyo
 *.db
 *.sqlite3
+*.sqlite3-query
 db.sqlite3
 media/
+staticfiles/
 
 local_settings.py
 .env
 .env.*
 *.env
+!.env.example
 *.secret
 *.bak
+
+# OAuth / Google client secret exports
+client_secret_*.json
 
 # VS Code
 .vscode/
@@ -113,7 +119,3 @@ prompeteer_server/auth_api.log
 
 # Ignore secrets and credentials
 secrets.json
-
-# Ignore migrations (optional, if you want to keep them out of version control)
-**/migrations/
-!**/migrations/__init__.py

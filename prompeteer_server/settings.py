@@ -95,13 +95,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
-
-
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.getenv('SECRET_KEY', '')
+if not SECRET_KEY:
+    if DEBUG:
+        # Local-only fallback so `manage.py check`/tests can run without a .env.
+        SECRET_KEY = 'django-insecure-local-dev-only-fallback-key'
+    else:
+        raise RuntimeError(
+            'SECRET_KEY environment variable is required when DJANGO_DEBUG is not set. '
+            'Generate one with: python -c "from django.core.management.utils import '
+            'get_random_secret_key; print(get_random_secret_key())"'
+        )
 
 _DEFAULT_ALLOWED = [
     'react.itse500-ok.ly',
@@ -114,7 +122,8 @@ _DEFAULT_ALLOWED = [
     'flutter.itse500-ok.ly',
 ]
 
-# Allow overriding allowed hosts via environment (comma-separated)
+# Allow overriding allowed hosts via environment (comma-separated). In
+# production this MUST include the VPS domain(s) served behind Traefik.
 _env_allowed = os.getenv('ALLOWED_HOSTS')
 if _env_allowed:
     ALLOWED_HOSTS = [h.strip() for h in _env_allowed.split(',') if h.strip()]
@@ -358,14 +367,21 @@ if DEBUG:
             MIDDLEWARE.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 
 ## CORS
-# Allow production site and flexible localhost during development/testing
-CORS_ALLOWED_ORIGINS = [
-    # Production web origins (HTTPS)
+# Allow production site and flexible localhost during development/testing.
+# The hardcoded list below is the legacy/default origin set; add the new
+# VPS domain (or override entirely) via the CORS_ALLOWED_ORIGINS env var
+# (comma-separated) so the domain never needs to be hardcoded here.
+_DEFAULT_CORS_ORIGINS = [
     "https://www.itse500-ok.ly",
     "https://itse500-ok.ly",
     "https://react.itse500-ok.ly",
     "https://flutter.itse500-ok.ly",
 ]
+_env_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS')
+if _env_cors_origins:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _env_cors_origins.split(',') if o.strip()]
+else:
+    CORS_ALLOWED_ORIGINS = _DEFAULT_CORS_ORIGINS
 
 # Permit any localhost/127.0.0.1 with any port (for Flutter web dev servers)
 CORS_ALLOWED_ORIGIN_REGEXES = [
@@ -434,13 +450,39 @@ JAZZMIN_SETTINGS = {
     "welcome_sign": "Welcome to ITSE500 Admin",
 }
 
-# If using cookie auth or CSRF-protected endpoints from the SPA, trust these origins
-CSRF_TRUSTED_ORIGINS = [
+# If using cookie auth or CSRF-protected endpoints from the SPA, trust these
+# origins. Override/extend via CSRF_TRUSTED_ORIGINS env var (comma-separated,
+# full scheme+host, e.g. "https://api.example.com") so the VPS domain never
+# needs to be hardcoded here.
+_DEFAULT_CSRF_TRUSTED = [
     'https://itse500-ok.ly',
     'https://www.itse500-ok.ly',
     'https://react.itse500-ok.ly',
     'https://flutter.itse500-ok.ly',
 ]
+_env_csrf_trusted = os.getenv('CSRF_TRUSTED_ORIGINS')
+if _env_csrf_trusted:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _env_csrf_trusted.split(',') if o.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = _DEFAULT_CSRF_TRUSTED
+
+# --- Production hardening (Traefik terminates TLS in front of this app) ---
+# Gated by DEBUG so local/dev runs are unaffected. Traefik sets
+# X-Forwarded-Proto, so Django can trust it to know the original request
+# was HTTPS even though it reaches gunicorn over plain HTTP inside the
+# docker network.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # Traefik's own router already redirects HTTP -> HTTPS at the edge, so
+    # Django does not need to (and should not, to avoid redirect loops
+    # behind the proxy) redirect again.
+    SECURE_SSL_REDIRECT = False
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 
 TEMPLATES = [
@@ -469,29 +511,43 @@ WSGI_APPLICATION = 'prompeteer_server.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+#
+# Uses Postgres when POSTGRES_DB (or DATABASE_URL) is present in the
+# environment - this is the case in docker-compose.prod.yml, where the `db`
+# service provides POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD. Falls back to
+# the local db.sqlite3 file for local dev when no Postgres env is set, so
+# existing local workflows are unaffected.
 
-DATABASES = {
-    
+_POSTGRES_DB = os.environ.get('POSTGRES_DB')
+
+if _POSTGRES_DB:
+    DATABASES = {
         'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': _POSTGRES_DB,
+            'USER': os.environ.get('POSTGRES_USER', 'prompeteer'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+            'HOST': os.environ.get('POSTGRES_HOST', 'db'),
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+            'CONN_MAX_AGE': int(os.environ.get('POSTGRES_CONN_MAX_AGE', '60')),
+            'OPTIONS': (
+                {'sslmode': 'require'} if os.environ.get('POSTGRES_SSLMODE', 'disable') == 'require' else {}
+            ),
+        },
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        },
     }
 
-
-#sqlite db
-"""
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',  # Use django-pgvector engine
-        'NAME': os.environ.get('DB_NAME', 'prompeteer_db'),  # Database name
-        'USER': os.environ.get('DB_USER', 'prompeteer_user'),  # Database user
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'prompeteer_password'),  # Database password
-        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),  # Database host
-        'PORT': os.environ.get('DB_PORT', '5432'),  # Database port
-        'OPTIONS': {
-            'sslmode': 'require' if os.environ.get('DB_SSL', 'False') == 'True' else None,
-        },
-"""
+# Note: migrating existing db.sqlite3 data to Postgres (optional for MVP):
+# `python manage.py dumpdata --natural-foreign --natural-primary -e contenttypes
+# -e auth.Permission > dump.json` against sqlite, then run migrations against
+# Postgres and `python manage.py loaddata dump.json`. Not required for a fresh
+# production launch with no existing users.
 # BACKEND_PASSWORD_SALT is already defined above from environment with a safe default.
 # Keep it stable across restarts; do not override it here.
 

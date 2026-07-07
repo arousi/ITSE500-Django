@@ -214,7 +214,10 @@ class UnifiedSyncView(APIView):
             operations to prevent privilege escalation.
         - Unauthenticated requests may create or lookup a visitor by `temp_id`. When `device_id` is provided the
             visitor will be associated with that device.
-        - A limited unauthenticated GET-by-UUID is allowed only when `allow_public_uuid=true` and the method is GET.
+        - `allow_public_uuid=true` no longer grants unauthenticated or cross-user access. It now only
+            re-affirms that an AUTHENTICATED caller is resolving their OWN account by uuid; the resolved
+            user must equal `request.user` or the request is rejected. This closes a prior IDOR where an
+            unauthenticated caller could pass any user_id and receive that user's full profile + chat graph.
 
         Returns a 4-tuple: (user, is_new_visitor, error_response_or_none, temp_id_or_none)
 
@@ -258,17 +261,21 @@ class UnifiedSyncView(APIView):
                 self._associate_device(user, device_id)
             return user, is_new_visitor, None, temp_id
 
-        # Allow unauthenticated limited GET-by-UUID only when explicitly requested
+        # `allow_public_uuid=true` + `user_id` no longer grants unauthenticated cross-user reads (IDOR fix).
+        # This branch is only reachable when the caller is NOT authenticated (see the authenticated branch
+        # above, which already returns). An unauthenticated caller can never prove ownership of a uuid, so
+        # any GET-by-UUID request without authentication is now rejected outright.
         user_id = request.query_params.get("user_id") or request.data.get("user_id")
         allow_public_uuid = (
             request.query_params.get("allow_public_uuid") == "true"
             or request.data.get("allow_public_uuid") is True
         )
         if request.method == "GET" and allow_public_uuid and user_id:
-            user = Custom_User.objects.filter(user_id=user_id).first()
-            if not user:
-                return None, False, Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND), None
-            return user, False, None, None
+            logger.warning(
+                "UnifiedSyncView.resolve_user: rejected unauthenticated allow_public_uuid GET for user_id=%s",
+                user_id,
+            )
+            return None, False, Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED), None
 
         # Deny other unauthenticated access
         return None, False, Response({"error": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED), temp_id
@@ -719,6 +726,13 @@ class UnifiedSyncView(APIView):
                             continue
                         conv["user_id"] = user.pk
                         instance = Conversation.objects.filter(conversation_id=conv_id).first()
+                        if instance is not None and instance.user_id_id != user.pk:
+                            logger.warning(
+                                "UnifiedSyncView.post: rejected cross-user conversation upsert conversation_id=%s owner=%s caller=%s",
+                                conv_id, instance.user_id_id, user.pk,
+                            )
+                            errors["conversations"].append({"data": conv, "error": "Not found or not owned by caller"})
+                            continue
                         serializer = ConversationSerializer(instance, data=conv, partial=True, context={"request": request})
                         if serializer.is_valid():
                             # Conversation.user_id is read-only on the serializer; ensure the FK is set via save(kwargs)
@@ -728,12 +742,25 @@ class UnifiedSyncView(APIView):
                             errors["conversations"].append(serializer.errors)
 
                     # Requests
+                    # MessageRequest only connects to a user through the Message that references it
+                    # (Message.request_id O2O, related_name="message"). If an existing row isn't yet
+                    # linked to any Message we can't prove ownership, so we conservatively reject the
+                    # update rather than risk overwriting a foreign/orphan row.
                     for req in reqs_data:
                         req_id = req.get("request_id")
                         if not req_id:
                             errors["message_requests"].append({"data": req, "error": "Missing id"})
                             continue
                         instance = MessageRequest.objects.filter(request_id=req_id).first()
+                        if instance is not None:
+                            owner_message = getattr(instance, "message", None)
+                            if owner_message is None or owner_message.user_id_id != user.pk:
+                                logger.warning(
+                                    "UnifiedSyncView.post: rejected cross-user/orphan message_request upsert request_id=%s caller=%s",
+                                    req_id, user.pk,
+                                )
+                                errors["message_requests"].append({"data": req, "error": "Not found or not owned by caller"})
+                                continue
                         serializer = MessageRequestSerializer(instance, data=req, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -742,12 +769,23 @@ class UnifiedSyncView(APIView):
                             errors["message_requests"].append(serializer.errors)
 
                     # Responses
+                    # Same ownership rule as MessageRequest: resolve via the owning Message (O2O reverse
+                    # relation), reject updates to rows we can't prove belong to the caller.
                     for resp in resps_data:
                         resp_id = resp.get("response_id")
                         if not resp_id:
                             errors["message_responses"].append({"data": resp, "error": "Missing id"})
                             continue
                         instance = MessageResponse.objects.filter(response_id=resp_id).first()
+                        if instance is not None:
+                            owner_message = getattr(instance, "message", None)
+                            if owner_message is None or owner_message.user_id_id != user.pk:
+                                logger.warning(
+                                    "UnifiedSyncView.post: rejected cross-user/orphan message_response upsert response_id=%s caller=%s",
+                                    resp_id, user.pk,
+                                )
+                                errors["message_responses"].append({"data": resp, "error": "Not found or not owned by caller"})
+                                continue
                         serializer = MessageResponseSerializer(instance, data=resp, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -756,12 +794,24 @@ class UnifiedSyncView(APIView):
                             errors["message_responses"].append(serializer.errors)
 
                     # Outputs
+                    # MessageOutput.output_id is NOT its primary key (plain CharField, non-unique) — the
+                    # lookup below matches existing behavior (filter by output_id, take first match).
+                    # Ownership is resolved the same way as request/response: via the owning Message.
                     for out in outs_data:
                         out_id = out.get("output_id")
                         if not out_id:
                             errors["message_outputs"].append({"data": out, "error": "Missing id"})
                             continue
                         instance = MessageOutput.objects.filter(output_id=out_id).first()
+                        if instance is not None:
+                            owner_message = getattr(instance, "message", None)
+                            if owner_message is None or owner_message.user_id_id != user.pk:
+                                logger.warning(
+                                    "UnifiedSyncView.post: rejected cross-user/orphan message_output upsert output_id=%s caller=%s",
+                                    out_id, user.pk,
+                                )
+                                errors["message_outputs"].append({"data": out, "error": "Not found or not owned by caller"})
+                                continue
                         serializer = MessageOutputSerializer(instance, data=out, partial=True, context={"request": request})
                         if serializer.is_valid():
                             serializer.save()
@@ -780,6 +830,13 @@ class UnifiedSyncView(APIView):
                             continue
                         msg["user_id"] = user.pk
                         instance = Message.objects.filter(message_id=msg_id).first()
+                        if instance is not None and instance.user_id_id != user.pk:
+                            logger.warning(
+                                "UnifiedSyncView.post: rejected cross-user message upsert message_id=%s owner=%s caller=%s",
+                                msg_id, instance.user_id_id, user.pk,
+                            )
+                            errors["messages"].append({"data": msg, "error": "Not found or not owned by caller"})
+                            continue
                         serializer = MessageSerializer(instance, data=msg, partial=True, context={"request": request})
                         if serializer.is_valid():
                             # Message.user_id is read-only on the serializer; pass the user instance to save()
@@ -801,6 +858,15 @@ class UnifiedSyncView(APIView):
                             errors["attachments"].append({"data": att, "error": "User is None"})
                             continue
                         instance = Attachment.objects.filter(pk=att_id).first()
+                        if instance is not None:
+                            owner_id = getattr(instance.message_id, "user_id_id", None)
+                            if owner_id != user.pk:
+                                logger.warning(
+                                    "UnifiedSyncView.post: rejected cross-user attachment upsert attachment_id=%s owner=%s caller=%s",
+                                    att_id, owner_id, user.pk,
+                                )
+                                errors["attachments"].append({"data": att, "error": "Not found or not owned by caller"})
+                                continue
                         serializer = AttachmentSerializer(instance, data=att, partial=True, context={"request": request})
                         if serializer.is_valid():
                             # Attachment.user_id is read-only; set FK on save

@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 import importlib.util as _imp
 import mimetypes
+import warnings
+from django.core.exceptions import ImproperlyConfigured
 
 # --- Early .env loader (supports lines starting with `set `) ---
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,7 +32,8 @@ def _load_simple_env(env_path: Path):
 _load_simple_env(BASE_DIR / '.env')
 # ---------------------------------------------------------------
 # settings.py
-ZERUH_API_KEY = "7f97762a2fad9a7f4cbba0f827540f6e57160a154bbd48b67b7d8784911e66cf"
+# SECURITY: previously a hardcoded literal; moved to env (no fallback value, see .env.example).
+ZERUH_API_KEY = os.getenv('ZERUH_API_KEY', '')
 
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND')
 EMAIL_HOST = os.environ.get('EMAIL_HOST')
@@ -73,7 +76,27 @@ GITHUB_REDIRECT_URI = os.getenv('GITHUB_REDIRECT_URI', '')
 MS_CLIENT_ID = os.getenv('MS_CLIENT_ID', '')
 MS_CLIENT_SECRET = os.getenv('MS_CLIENT_SECRET', '')
 MS_REDIRECT_URI = os.getenv('MS_REDIRECT_URI', '')
-BACKEND_PASSWORD_SALT = os.getenv('BACKEND_PASSWORD_SALT','fallback_dev_salt')
+
+# --- DEBUG must be known before the fail-fast secret checks below ---
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
+
+# --- Fail-fast secrets: no insecure production fallback ---
+# BACKEND_PASSWORD_SALT: required in production; ephemeral dev-only default when DEBUG=True.
+_backend_password_salt_env = os.getenv('BACKEND_PASSWORD_SALT')
+if _backend_password_salt_env:
+    BACKEND_PASSWORD_SALT = _backend_password_salt_env
+elif DEBUG:
+    BACKEND_PASSWORD_SALT = 'EPHEMERAL-DEV-ONLY-SALT-DO-NOT-USE-IN-PRODUCTION'
+    warnings.warn(
+        "BACKEND_PASSWORD_SALT not set; using an ephemeral dev-only default because DEBUG=True. "
+        "Set BACKEND_PASSWORD_SALT in the environment before deploying.",
+        RuntimeWarning,
+    )
+else:
+    raise ImproperlyConfigured(
+        "BACKEND_PASSWORD_SALT environment variable is required when DEBUG=False."
+    )
 
 """
 Django settings for prompeteer_server project.
@@ -96,12 +119,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
-
-
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
+# Fail-fast: no insecure production fallback. DEBUG was already resolved above.
+_secret_key_env = os.getenv('SECRET_KEY')
+if _secret_key_env:
+    SECRET_KEY = _secret_key_env
+elif DEBUG:
+    SECRET_KEY = 'django-insecure-EPHEMERAL-DEV-ONLY-KEY-DO-NOT-USE-IN-PRODUCTION'
+    warnings.warn(
+        "SECRET_KEY not set; using an ephemeral dev-only default because DEBUG=True. "
+        "Set SECRET_KEY in the environment before deploying.",
+        RuntimeWarning,
+    )
+else:
+    raise ImproperlyConfigured(
+        "SECRET_KEY environment variable is required when DEBUG=False."
+    )
 
 _DEFAULT_ALLOWED = [
     'react.itse500-ok.ly',
@@ -131,11 +163,25 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Throttling: global anon rate + a strict 'auth' scope for brute-force protection.
+    # NOTE follow-up: per-view throttle_scope='auth' still needs to be wired into
+    # login/register/OTP views to actually apply the 'auth' rate; rates are configured here.
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'auth': '10/min',
+    },
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    # JWT hardening: short-lived access token, rotated refresh tokens, blacklist on rotation.
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_MINUTES', '15'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_DAYS', '7'))),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'USER_ID_FIELD': 'user_id',
     'USER_ID_CLAIM': 'user_id',
 }
@@ -164,8 +210,9 @@ INSTALLED_APPS = [
     "chat_api",
     "crypto_api",
     "rest_framework",
+    'rest_framework_simplejwt.token_blacklist',
     *(['drf_spectacular'] if _HAS_SPECTACULAR else []),
-    
+
 ]
 
 """ CHANNEL_LAYERS = {
@@ -492,7 +539,7 @@ DATABASES = {
             'sslmode': 'require' if os.environ.get('DB_SSL', 'False') == 'True' else None,
         },
 """
-# BACKEND_PASSWORD_SALT is already defined above from environment with a safe default.
+# BACKEND_PASSWORD_SALT is already defined above (fail-fast from environment; see top of file).
 # Keep it stable across restarts; do not override it here.
 
 # Password validation
@@ -548,3 +595,19 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Ensure correct MIME for WASM (CanvasKit)
 mimetypes.add_type('application/wasm', '.wasm', True)
+
+# --- Production security headers (applied only when DEBUG=False) ---
+# Deploys behind nginx, which terminates TLS and forwards X-Forwarded-Proto.
+# SSL redirect + HSTS are the most disruptive to a local prod-like run without TLS,
+# so they're additionally gated behind SECURE_SSL (defaults to True in production).
+if not DEBUG:
+    _secure_ssl = os.getenv('SECURE_SSL', 'True').lower() in ('1', 'true', 'yes')
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = _secure_ssl
+    SECURE_HSTS_SECONDS = 31536000 if _secure_ssl else 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _secure_ssl
+    SECURE_HSTS_PRELOAD = _secure_ssl
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'

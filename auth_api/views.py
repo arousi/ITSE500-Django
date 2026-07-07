@@ -739,9 +739,8 @@ class LogoutView(APIView):
         ) if extend_schema else (lambda f: f)
     )
     def post(self, request):
-        """Invalidate the current session and instruct the client to discard tokens.
-        Returns a 200 response with a brief message. Does not blacklist tokens server-side.
-        Requires a valid JWT and authenticated user.
+        """Invalidate the current session and blacklist the refresh token if supplied.
+        Returns a 200 response with a brief message. Requires a valid JWT and authenticated user.
         """
         user = getattr(request, 'user', None)
         logger.info(f"[LogoutView] Incoming logout request: user_id={getattr(user, 'pk', None)}")
@@ -749,9 +748,28 @@ class LogoutView(APIView):
         logout(request)
         logger.info(f"[LogoutView] User logged out: {user.user_id if user and getattr(user, 'is_authenticated', False) else 'anonymous'}")
 
-    # No server-side token deletion: keep provider OAuth tokens intact so the user
-    # can re-login via OAuth from another interface. We also avoid blacklisting
-    # refresh tokens here; clients should discard tokens client-side after logout.
+    # Blacklist the refresh token if the client supplied one (body or header), so it
+    # can no longer be used to mint new access tokens. Best-effort: the blacklist DB
+    # table may not be migrated yet in some environments, so failures are logged
+    # (without leaking the token itself) and do not fail the logout request.
+        refresh_raw = (
+            (request.data.get('refresh_token') if isinstance(request.data, dict) else None) or
+            (request.data.get('refresh') if isinstance(request.data, dict) else None) or
+            request.META.get('HTTP_X_REFRESH_TOKEN') or
+            request.META.get('HTTP_REFRESH_TOKEN') or
+            request.COOKIES.get('refresh_token')
+        )
+        if refresh_raw:
+            try:
+                RefreshToken(refresh_raw).blacklist()
+                logger.info(f"[LogoutView] Refresh token blacklisted for user_id={getattr(user, 'pk', None)}")
+            except Exception:
+                logger.exception(
+                    f"[LogoutView] Failed to blacklist refresh token for user_id={getattr(user, 'pk', None)}"
+                )
+
+    # No server-side token deletion beyond blacklisting: keep provider OAuth tokens
+    # intact so the user can re-login via OAuth from another interface.
         resp_data = {"detail": "Logged out successfully. Please discard tokens client-side."}
         logger.info(f"[LogoutView] Logout response: status=200, resp={resp_data}")
         return Response(resp_data, status=status.HTTP_200_OK)

@@ -44,7 +44,20 @@ jobs:
         continue-on-error: true
         run: |
           pip install pip-audit
+          # JSON output for the artifact + a step-summary table; text output
+          # for the raw job log. Non-blocking for now (per policy) but the
+          # findings are surfaced in three places so they aren't silently
+          # lost: the log, the artifact, and the PR-visible step summary.
+          pip-audit -r requirements/base.txt -r requirements/dev.txt -f json -o pip-audit-report.json || true
           pip-audit -r requirements/base.txt -r requirements/dev.txt || true
+          python scripts/summarize_pip_audit.py pip-audit-report.json >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload pip-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit-report.json
 
   test:
     name: test

@@ -26,8 +26,19 @@ from django.http import HttpRequest
 
 from django.template.loader import get_template
 from django.template import TemplateDoesNotExist
+from django.http import JsonResponse
 import importlib.util as _imp
 import importlib
+
+
+def healthz(request):
+    """Lightweight liveness probe for Traefik/orchestrator healthchecks.
+
+    Deliberately does not touch the database (keeps it cheap and avoids
+    false negatives under DB connection pressure); the DB-touching check
+    used by the app itself is auth_api's /api/v1/auth_api/health/.
+    """
+    return JsonResponse({"status": "ok"})
 
 # Serve SPA at root when using the React or Flutter subdomains; otherwise keep landing
 def root_router(request: HttpRequest):
@@ -80,6 +91,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     # Removed public QR generator endpoint to avoid exposing it
 
+    # Root-level liveness probe (Traefik healthcheck target)
+    path('healthz', healthz, name='healthz'),
+    path('healthz/', healthz),
+
     path('api/v1/auth_api/', include('auth_api.urls')),
     path('api/v1/user_mang/', include('user_mang.urls')),
     #path('api/v1/chat_api/', include('chat_api.urls')),
@@ -108,7 +123,7 @@ from django.conf import settings as _settings
 if _settings.DEBUG:
     # Place this earlier so it takes precedence in development
     urlpatterns = [
-        re_path(r'^(?!static/|media/|api/|admin/|team/|__debug__/|silk/).*$' , flutter_index),
+        re_path(r'^(?!static/|media/|api/|admin/|team/|__debug__/|silk/|healthz).*$' , flutter_index),
     ] + urlpatterns
 
 if settings.DEBUG:

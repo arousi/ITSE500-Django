@@ -35,6 +35,7 @@ media/
 local_settings.py
 .env
 .env.*
+!.env.example
 *.env
 *.secret
 *.bak

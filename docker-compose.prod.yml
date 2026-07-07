@@ -1,0 +1,100 @@
+version: "3.8"
+
+# Production stack: Traefik (TLS termination + reverse proxy) -> web (Django,
+# gunicorn/WSGI) -> db (Postgres). No source bind-mount: the image is built
+# once and run as-is, matching what was tested in CI.
+#
+# Usage: docker compose -f docker-compose.prod.yml up -d
+# See DEPLOYMENT.md for the full runbook (DNS, first-run migrate, rollback).
+
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Redirect all HTTP -> HTTPS at the edge.
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.leresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.leresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.leresolver.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.leresolver.acme.storage=/letsencrypt/acme.json"
+      # Dashboard disabled in production - do not expose it publicly.
+      - "--api.dashboard=false"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "letsencrypt:/letsencrypt"
+    networks:
+      - webnet
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=prompeteer_server.settings
+    volumes:
+      - static_files:/server/staticfiles
+      - media_files:/server/media
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - webnet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=webnet"
+      - "traefik.http.routers.web.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.routers.web.tls=true"
+      - "traefik.http.routers.web.tls.certresolver=leresolver"
+      - "traefik.http.services.web.loadbalancer.server.port=8000"
+      - "traefik.http.services.web.loadbalancer.healthcheck.path=/healthz"
+      - "traefik.http.services.web.loadbalancer.healthcheck.interval=15s"
+      - "traefik.http.services.web.loadbalancer.healthcheck.timeout=5s"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - webnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Do not publish 5432 to the host - only `web` reaches it over webnet.
+
+networks:
+  webnet:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  static_files:
+  media_files:
+  letsencrypt:

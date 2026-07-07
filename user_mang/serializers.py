@@ -30,7 +30,7 @@ class MessageRequestSerializer(serializers.ModelSerializer):
             "request_system_role",
             "request_system_content",
             "request_system_prompt",
-            "request_use_structured_output",
+            "request_user_structured_output",
             "request_structured_schema",
             "request_user_role",
             "request_user_content",

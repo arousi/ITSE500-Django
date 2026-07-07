@@ -26,6 +26,7 @@ from .models.message_request import MessageRequest
 from .models.message_response import MessageResponse
 from .models.message_output import MessageOutput
 from .serializers import ConversationSerializer, MessageSerializer, MessageWriteSerializer
+from .services.llm import dispatch_inference
 from django.db import transaction
 from django.utils import timezone
 
@@ -113,6 +114,73 @@ class MessageListCreateView(ListCreateAPIView):
     def get_queryset(self):
         conversation = self._get_conversation()
         return Message.objects.filter(conversation_id=conversation).order_by('timestamp')
+
+    # Fields recognized on the nested `request` object when a client asks us to
+    # run LLM inference (as opposed to a plain synced-message create).
+    _REQUEST_FIELDS = [
+        "request_model",
+        "request_input",
+        "request_system_role",
+        "request_system_content",
+        "request_system_prompt",
+        "request_user_structured_output",
+        "request_structured_schema",
+        "request_user_role",
+        "request_user_content",
+        "request_min_p",
+        "request_temperature",
+        "request_top_p",
+        "request_n",
+        "request_top_k",
+        "request_stream",
+        "request_stop",
+        "request_max_tokens",
+        "repeat_penalty",
+    ]
+
+    def create(self, request, *args, **kwargs):
+        """Create a message, optionally kicking off async LLM inference.
+
+        - If the body contains a `request` object, build a MessageRequest from
+          its recognized fields, create the Message with status="pending", and
+          dispatch inference (async via Celery when available, inline
+          otherwise). The (re-loaded) message is returned with a 201.
+        - Otherwise, preserve the existing plain-create behavior unchanged
+          (status defaults to "complete", no inference triggered).
+        """
+        request_payload = request.data.get("request") if hasattr(request.data, "get") else None
+
+        if request_payload:
+            conversation = self._get_conversation()
+            request_kwargs = {
+                key: request_payload[key]
+                for key in self._REQUEST_FIELDS
+                if key in request_payload
+            }
+            message_request = MessageRequest.objects.create(**request_kwargs)
+            message = Message.objects.create(
+                conversation_id=conversation,
+                user_id=request.user,
+                request_id=message_request,
+                status="pending",
+            )
+            logger.info(
+                "message.created",
+                extra={
+                    "user_id": str(request.user.pk),
+                    "conversation_id": str(conversation.pk),
+                    "message_id": str(message.pk),
+                },
+            )
+
+            dispatch_inference(message.pk)
+
+            message.refresh_from_db()
+            serializer = MessageSerializer(message, context=self.get_serializer_context())
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         conversation = self._get_conversation()

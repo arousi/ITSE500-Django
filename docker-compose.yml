@@ -1,18 +1,22 @@
-version: "3.8"
+# Local development stack: builds the same production Dockerfile but binds
+# the source tree in for live-reload and uses SQLite (no POSTGRES_* env set).
+# For the production stack (Traefik + Postgres, no bind-mount), see
+# docker-compose.prod.yml.
 services:
   web:
     build: .
-    entrypoint: ["/app/entrypoint.sh"]
-    command: ["gunicorn", "prompeteer_server.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+    entrypoint: ["/server/entrypoint.sh"]
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
     env_file:
       - .env
     volumes:
-      - .:/app:cached
-      - static_volume:/app/staticfiles
+      - .:/server:cached
+      - static_volume:/server/staticfiles
     ports:
       - "8000:8000"
     environment:
       - DJANGO_SETTINGS_MODULE=prompeteer_server.settings
+      - DJANGO_DEBUG=1
 
 volumes:
   static_volume:

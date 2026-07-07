@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Production stack: Traefik (TLS termination + reverse proxy) -> web (Django,
 # gunicorn/WSGI) -> db (Postgres). No source bind-mount: the image is built
 # once and run as-is, matching what was tested in CI.

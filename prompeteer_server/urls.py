@@ -82,7 +82,7 @@ urlpatterns = [
 
     path('api/v1/auth_api/', include('auth_api.urls')),
     path('api/v1/user_mang/', include('user_mang.urls')),
-    #path('api/v1/chat_api/', include('chat_api.urls')),
+    path('api/v1/chat_api/', include('chat_api.urls')),
     path('api/v1/crypto_api/', include('crypto_api.urls')),
     # API schema and docs (served when package is available)
 ]

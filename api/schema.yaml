@@ -1042,6 +1042,252 @@ paths:
           description: Auth required
         '404':
           description: User not found
+  /api/v1/chat_api/conversations/:
+    get:
+      operationId: v1_chat_api_conversations_list
+      description: List the caller's own conversations, or create a new one owned
+        by the caller.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedConversationList'
+          description: ''
+    post:
+      operationId: v1_chat_api_conversations_create
+      description: List the caller's own conversations, or create a new one owned
+        by the caller.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+  /api/v1/chat_api/conversations/{conversation_id}/:
+    get:
+      operationId: v1_chat_api_conversations_retrieve
+      description: |-
+        Retrieve/update/delete a conversation owned by the caller.
+
+        Uses a user-scoped queryset so another user's conversation resolves to 404
+        (never 403) -- this avoids leaking whether the resource exists at all.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+    put:
+      operationId: v1_chat_api_conversations_update
+      description: |-
+        Retrieve/update/delete a conversation owned by the caller.
+
+        Uses a user-scoped queryset so another user's conversation resolves to 404
+        (never 403) -- this avoids leaking whether the resource exists at all.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+    patch:
+      operationId: v1_chat_api_conversations_partial_update
+      description: |-
+        Retrieve/update/delete a conversation owned by the caller.
+
+        Uses a user-scoped queryset so another user's conversation resolves to 404
+        (never 403) -- this avoids leaking whether the resource exists at all.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedConversationRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+    delete:
+      operationId: v1_chat_api_conversations_destroy
+      description: |-
+        Retrieve/update/delete a conversation owned by the caller.
+
+        Uses a user-scoped queryset so another user's conversation resolves to 404
+        (never 403) -- this avoids leaking whether the resource exists at all.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/chat_api/conversations/{conversation_id}/messages/:
+    get:
+      operationId: v1_chat_api_conversations_messages_list
+      description: |-
+        List or create messages within a conversation owned by the caller.
+
+        The parent conversation is resolved with a user-scoped lookup, so a missing
+        OR non-owned conversation both yield 404 (covers the cross-user case without
+        revealing existence of another user's conversation).
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessageList'
+          description: ''
+    post:
+      operationId: v1_chat_api_conversations_messages_create
+      description: |-
+        List or create messages within a conversation owned by the caller.
+
+        The parent conversation is resolved with a user-scoped lookup, so a missing
+        OR non-owned conversation both yield 404 (covers the cross-user case without
+        revealing existence of another user's conversation).
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MessageWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageWriteRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageWrite'
+          description: ''
   /api/v1/crypto_api/umk/:
     get:
       operationId: v1_crypto_api_umk_retrieve
@@ -1318,6 +1564,45 @@ components:
           type: string
         url:
           type: string
+    Conversation:
+      type: object
+      description: |-
+        Serialize a conversation with nested messages (read-only).
+        For writes, clients send a flat conversation object; messages are synced separately.
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          nullable: true
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        local_only:
+          type: boolean
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          readOnly: true
+      required:
+      - conversation_id
+      - created_at
+      - messages
+      - updated_at
+      - user_id
     ConversationDoc:
       type: object
       properties:
@@ -1336,6 +1621,18 @@ components:
       required:
       - conversation_id
       - messages
+    ConversationRequest:
+      type: object
+      description: |-
+        Serialize a conversation with nested messages (read-only).
+        For writes, clients send a flat conversation object; messages are synced separately.
+      properties:
+        title:
+          type: string
+          nullable: true
+          maxLength: 255
+        local_only:
+          type: boolean
     EmailPinVerifyRequestRequest:
       type: object
       properties:
@@ -1418,6 +1715,80 @@ components:
           type: string
       required:
       - detail
+    Message:
+      type: object
+      description: |-
+        Serialize a chat message.
+        - Write: accept PKs for `request_id`, `response_id`, `output_id`, `conversation_id`.
+        - Read: also include nested `request`, `response`, `output` for convenience.
+        - File fields (`img_Url`, `doc_url`) are rendered as URLs.
+      properties:
+        message_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        conversation_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+          nullable: true
+        response_id:
+          type: string
+          nullable: true
+        output_id:
+          type: integer
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        vote:
+          type: boolean
+          nullable: true
+        has_image:
+          type: boolean
+        img_Url:
+          type: string
+          format: uri
+          nullable: true
+        metadata:
+          nullable: true
+        has_embedding:
+          type: boolean
+        has_document:
+          type: boolean
+        doc_url:
+          type: string
+          format: uri
+          nullable: true
+        request:
+          allOf:
+          - $ref: '#/components/schemas/MessageRequest'
+          readOnly: true
+        response:
+          allOf:
+          - $ref: '#/components/schemas/MessageResponse'
+          readOnly: true
+        output:
+          allOf:
+          - $ref: '#/components/schemas/MessageOutput'
+          readOnly: true
+      required:
+      - conversation_id
+      - message_id
+      - output
+      - request
+      - response
+      - timestamp
+      - user_id
     MessageDoc:
       type: object
       properties:
@@ -1433,6 +1804,553 @@ components:
       required:
       - message_id
       - timestamp
+    MessageOutput:
+      type: object
+      description: |-
+        Serialize a normalized *output item* of a response (e.g., final message text).
+        Note: model has an implicit AutoField `id`. `output_id` is a provider-side identifier.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        output_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_id:
+          type: string
+          nullable: true
+          maxLength: 255
+        output_status:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_content_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_content_text:
+          type: string
+          nullable: true
+        output_content_annotations:
+          type: string
+          nullable: true
+      required:
+      - id
+    MessageOutputRequest:
+      type: object
+      description: |-
+        Serialize a normalized *output item* of a response (e.g., final message text).
+        Note: model has an implicit AutoField `id`. `output_id` is a provider-side identifier.
+      properties:
+        output_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_id:
+          type: string
+          nullable: true
+          maxLength: 255
+        output_status:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_content_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_content_text:
+          type: string
+          nullable: true
+        output_content_annotations:
+          type: string
+          nullable: true
+    MessageRequest:
+      type: object
+      description: |-
+        Serialize a single model generation *request* (the user's prompt/config).
+        Primary key: `request_id` (UUID).
+        Used both to return request details (GET) and to upsert them (POST).
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          readOnly: true
+        request_model:
+          type: string
+          nullable: true
+          maxLength: 255
+        request_input:
+          type: string
+          nullable: true
+        request_system_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        request_system_content:
+          type: string
+          nullable: true
+        request_system_prompt:
+          type: string
+          nullable: true
+        request_user_structured_output:
+          type: boolean
+          nullable: true
+        request_structured_schema:
+          type: string
+          nullable: true
+        request_user_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        request_user_content:
+          type: string
+          nullable: true
+        request_min_p:
+          type: number
+          format: double
+          nullable: true
+        request_temperature:
+          type: number
+          format: double
+          nullable: true
+        request_top_p:
+          type: number
+          format: double
+          nullable: true
+        request_n:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        request_top_k:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        request_stream:
+          type: boolean
+        request_stop:
+          type: string
+          nullable: true
+        request_max_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        repeat_penalty:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - request_id
+    MessageRequestRequest:
+      type: object
+      description: |-
+        Serialize a single model generation *request* (the user's prompt/config).
+        Primary key: `request_id` (UUID).
+        Used both to return request details (GET) and to upsert them (POST).
+      properties:
+        request_model:
+          type: string
+          nullable: true
+          maxLength: 255
+        request_input:
+          type: string
+          nullable: true
+        request_system_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        request_system_content:
+          type: string
+          nullable: true
+        request_system_prompt:
+          type: string
+          nullable: true
+        request_user_structured_output:
+          type: boolean
+          nullable: true
+        request_structured_schema:
+          type: string
+          nullable: true
+        request_user_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        request_user_content:
+          type: string
+          nullable: true
+        request_min_p:
+          type: number
+          format: double
+          nullable: true
+        request_temperature:
+          type: number
+          format: double
+          nullable: true
+        request_top_p:
+          type: number
+          format: double
+          nullable: true
+        request_n:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        request_top_k:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        request_stream:
+          type: boolean
+        request_stop:
+          type: string
+          nullable: true
+        request_max_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        repeat_penalty:
+          type: number
+          format: double
+          nullable: true
+    MessageResponse:
+      type: object
+      description: |-
+        Serialize a provider/model *response* aggregate (metadata + usage + settings).
+        Primary key: `response_id` (string).
+      properties:
+        response_id:
+          type: string
+          maxLength: 255
+        object:
+          type: string
+          nullable: true
+          maxLength: 50
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          nullable: true
+          maxLength: 50
+        error:
+          type: string
+          nullable: true
+        model_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        parallel_tool_calls:
+          type: boolean
+        previous_response_id:
+          type: string
+          nullable: true
+          maxLength: 255
+        instructions:
+          type: string
+          nullable: true
+        reasoning_effort:
+          type: string
+          nullable: true
+        reasoning_summary:
+          type: string
+          nullable: true
+        store:
+          type: boolean
+        temperature:
+          type: number
+          format: double
+          nullable: true
+        text_format_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        tool_choice:
+          type: string
+          nullable: true
+          maxLength: 255
+        tools:
+          type: string
+          nullable: true
+        top_p:
+          type: number
+          format: double
+          nullable: true
+        truncation:
+          type: string
+          nullable: true
+          maxLength: 50
+        usage_input_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        usage_output_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        usage_total_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        user:
+          type: string
+          nullable: true
+          readOnly: true
+        metadata:
+          nullable: true
+        incomplete_details:
+          type: string
+          nullable: true
+        max_output_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+      required:
+      - response_id
+      - user
+    MessageResponseRequest:
+      type: object
+      description: |-
+        Serialize a provider/model *response* aggregate (metadata + usage + settings).
+        Primary key: `response_id` (string).
+      properties:
+        response_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        object:
+          type: string
+          nullable: true
+          maxLength: 50
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          nullable: true
+          maxLength: 50
+        error:
+          type: string
+          nullable: true
+        model_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        parallel_tool_calls:
+          type: boolean
+        previous_response_id:
+          type: string
+          nullable: true
+          maxLength: 255
+        instructions:
+          type: string
+          nullable: true
+        reasoning_effort:
+          type: string
+          nullable: true
+        reasoning_summary:
+          type: string
+          nullable: true
+        store:
+          type: boolean
+        temperature:
+          type: number
+          format: double
+          nullable: true
+        text_format_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        tool_choice:
+          type: string
+          nullable: true
+          maxLength: 255
+        tools:
+          type: string
+          nullable: true
+        top_p:
+          type: number
+          format: double
+          nullable: true
+        truncation:
+          type: string
+          nullable: true
+          maxLength: 50
+        usage_input_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        usage_output_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        usage_total_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        metadata:
+          nullable: true
+        incomplete_details:
+          type: string
+          nullable: true
+        max_output_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+      required:
+      - response_id
+    MessageWrite:
+      type: object
+      description: |-
+        Write-side Message serializer for the nested conversation messages endpoint.
+
+        The conversation is supplied by the view (from the URL), not the client, so
+        `conversation_id` is not required in the request body.
+      properties:
+        message_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        conversation_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+          nullable: true
+        response_id:
+          type: string
+          nullable: true
+        output_id:
+          type: integer
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        vote:
+          type: boolean
+          nullable: true
+        has_image:
+          type: boolean
+        img_Url:
+          type: string
+          format: uri
+          nullable: true
+        metadata:
+          nullable: true
+        has_embedding:
+          type: boolean
+        has_document:
+          type: boolean
+        doc_url:
+          type: string
+          format: uri
+          nullable: true
+        request:
+          allOf:
+          - $ref: '#/components/schemas/MessageRequest'
+          readOnly: true
+        response:
+          allOf:
+          - $ref: '#/components/schemas/MessageResponse'
+          readOnly: true
+        output:
+          allOf:
+          - $ref: '#/components/schemas/MessageOutput'
+          readOnly: true
+      required:
+      - message_id
+      - output
+      - request
+      - response
+      - timestamp
+      - user_id
+    MessageWriteRequest:
+      type: object
+      description: |-
+        Write-side Message serializer for the nested conversation messages endpoint.
+
+        The conversation is supplied by the view (from the URL), not the client, so
+        `conversation_id` is not required in the request body.
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+          nullable: true
+        response_id:
+          type: string
+          minLength: 1
+          nullable: true
+        output_id:
+          type: integer
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        vote:
+          type: boolean
+          nullable: true
+        has_image:
+          type: boolean
+        img_Url:
+          type: string
+          format: binary
+          nullable: true
+        metadata:
+          nullable: true
+        has_embedding:
+          type: boolean
+        has_document:
+          type: boolean
+        doc_url:
+          type: string
+          format: binary
+          nullable: true
     OAuthAuthorizeResponse:
       type: object
       properties:
@@ -1515,6 +2433,64 @@ components:
       - message
       - refresh_token
       - user_id
+    PaginatedConversationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+    PaginatedMessageList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+    PatchedConversationRequest:
+      type: object
+      description: |-
+        Serialize a conversation with nested messages (read-only).
+        For writes, clients send a flat conversation object; messages are synced separately.
+      properties:
+        title:
+          type: string
+          nullable: true
+          maxLength: 255
+        local_only:
+          type: boolean
     RegisterRequest:
       type: object
       properties:
@@ -1598,6 +2574,18 @@ components:
           type: string
       required:
       - message
+    StatusEnum:
+      enum:
+      - pending
+      - streaming
+      - complete
+      - error
+      type: string
+      description: |-
+        * `pending` - pending
+        * `streaming` - streaming
+        * `complete` - complete
+        * `error` - error
     TokenRefresh:
       type: object
       properties:

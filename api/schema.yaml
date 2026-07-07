@@ -1288,6 +1288,96 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageWrite'
           description: ''
+  /api/v1/chat_api/conversations/{conversation_id}/messages/{message_id}/attachments/:
+    get:
+      operationId: v1_chat_api_conversations_messages_attachments_list
+      description: |-
+        List or upload attachments belonging to a message owned by the caller.
+
+        The parent message is resolved with a user-scoped lookup (through its
+        conversation's owner), so a missing OR non-owned message/conversation both
+        yield 404 -- never leaking existence of another user's data.
+
+        Uses a dedicated `AttachmentUploadSerializer` for this endpoint only; the
+        `user_mang.serializers.AttachmentSerializer` used by `UnifiedSyncView` is
+        untouched.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: message_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAttachmentUploadList'
+          description: ''
+    post:
+      operationId: v1_chat_api_conversations_messages_attachments_create
+      description: |-
+        List or upload attachments belonging to a message owned by the caller.
+
+        The parent message is resolved with a user-scoped lookup (through its
+        conversation's owner), so a missing OR non-owned message/conversation both
+        yield 404 -- never leaking existence of another user's data.
+
+        Uses a dedicated `AttachmentUploadSerializer` for this endpoint only; the
+        `user_mang.serializers.AttachmentSerializer` used by `UnifiedSyncView` is
+        untouched.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: message_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttachmentUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttachmentUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentUpload'
+          description: ''
   /api/v1/crypto_api/umk/:
     get:
       operationId: v1_crypto_api_umk_retrieve
@@ -1564,6 +1654,108 @@ components:
           type: string
         url:
           type: string
+    AttachmentUpload:
+      type: object
+      description: |-
+        Write-side Attachment serializer for the message-scoped upload/list endpoint.
+
+        Dedicated to this endpoint only -- does NOT replace or alias
+        `user_mang.serializers.AttachmentSerializer`, which the UnifiedSyncView still
+        uses unchanged. The parent message is supplied by the view (from the URL),
+        and `size_bytes`/`sha256` are computed server-side from the uploaded bytes.
+      properties:
+        attachment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        message_id:
+          type: string
+          format: uuid
+          readOnly: true
+        type:
+          type: string
+          maxLength: 32
+        mime_type:
+          type: string
+          nullable: true
+          maxLength: 128
+        encrypted_blob:
+          type: string
+          format: uri
+          nullable: true
+          description: Encrypted ciphertext blob uploaded by client
+        size_bytes:
+          type: integer
+          readOnly: true
+          nullable: true
+        sha256:
+          type: string
+          readOnly: true
+          nullable: true
+        is_encrypted:
+          type: boolean
+        enc_algo:
+          type: string
+          nullable: true
+          maxLength: 32
+        iv_base64:
+          type: string
+          nullable: true
+          maxLength: 64
+        key_ref:
+          type: string
+          nullable: true
+          maxLength: 64
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attachment_id
+      - created_at
+      - message_id
+      - sha256
+      - size_bytes
+      - type
+    AttachmentUploadRequest:
+      type: object
+      description: |-
+        Write-side Attachment serializer for the message-scoped upload/list endpoint.
+
+        Dedicated to this endpoint only -- does NOT replace or alias
+        `user_mang.serializers.AttachmentSerializer`, which the UnifiedSyncView still
+        uses unchanged. The parent message is supplied by the view (from the URL),
+        and `size_bytes`/`sha256` are computed server-side from the uploaded bytes.
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 32
+        mime_type:
+          type: string
+          nullable: true
+          maxLength: 128
+        encrypted_blob:
+          type: string
+          format: binary
+          nullable: true
+          description: Encrypted ciphertext blob uploaded by client
+        is_encrypted:
+          type: boolean
+        enc_algo:
+          type: string
+          nullable: true
+          maxLength: 32
+        iv_base64:
+          type: string
+          nullable: true
+          maxLength: 64
+        key_ref:
+          type: string
+          nullable: true
+          maxLength: 64
+      required:
+      - type
     Conversation:
       type: object
       description: |-
@@ -2433,6 +2625,29 @@ components:
       - message
       - refresh_token
       - user_id
+    PaginatedAttachmentUploadList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentUpload'
     PaginatedConversationList:
       type: object
       required:

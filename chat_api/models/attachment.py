@@ -4,8 +4,8 @@ from django.conf import settings
 from .message import Message
 
 def encrypted_upload_path(instance, filename):
-    # Store under encrypted/<conversation_id>/<uuid>.bin
-    return f"encrypted/{instance.conversation.conversation_id}/{instance.id}.bin"
+    # Store under encrypted/<message_id>/<attachment_id>.bin
+    return f"encrypted/{instance.message_id.pk}/{instance.attachment_id}.bin"
 
 class Attachment(models.Model):
     """Represents an artifact (image, embedding, document, etc.) optionally encrypted client-side.

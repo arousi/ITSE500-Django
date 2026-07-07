@@ -12,12 +12,14 @@ English
 
 from django.shortcuts import render, get_object_or_404
 
+import hashlib
 import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Conversation
 from .models import Message
 from .models.attachment import Attachment
@@ -25,7 +27,12 @@ from rest_framework import viewsets, permissions
 from .models.message_request import MessageRequest
 from .models.message_response import MessageResponse
 from .models.message_output import MessageOutput
-from .serializers import ConversationSerializer, MessageSerializer, MessageWriteSerializer
+from .serializers import (
+    ConversationSerializer,
+    MessageSerializer,
+    MessageWriteSerializer,
+    AttachmentUploadSerializer,
+)
 from .services.llm import dispatch_inference
 from django.db import transaction
 from django.utils import timezone
@@ -193,3 +200,77 @@ class MessageListCreateView(ListCreateAPIView):
                 "message_id": str(message.pk),
             },
         )
+
+
+# Max accepted upload size for message attachments (25 MB).
+MAX_ATTACHMENT_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+class AttachmentListCreateView(ListCreateAPIView):
+    """List or upload attachments belonging to a message owned by the caller.
+
+    The parent message is resolved with a user-scoped lookup (through its
+    conversation's owner), so a missing OR non-owned message/conversation both
+    yield 404 -- never leaking existence of another user's data.
+
+    Uses a dedicated `AttachmentUploadSerializer` for this endpoint only; the
+    `user_mang.serializers.AttachmentSerializer` used by `UnifiedSyncView` is
+    untouched.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    serializer_class = AttachmentUploadSerializer
+
+    def _get_message(self):
+        return get_object_or_404(
+            Message,
+            message_id=self.kwargs['message_id'],
+            conversation_id__conversation_id=self.kwargs['conversation_id'],
+            conversation_id__user_id=self.request.user,
+        )
+
+    def get_queryset(self):
+        message = self._get_message()
+        return Attachment.objects.filter(message_id=message).order_by('created_at')
+
+    def create(self, request, *args, **kwargs):
+        message = self._get_message()
+
+        uploaded_file = request.data.get('encrypted_blob')
+        if uploaded_file is not None and hasattr(uploaded_file, 'size'):
+            if uploaded_file.size > MAX_ATTACHMENT_UPLOAD_BYTES:
+                return Response(
+                    {"encrypted_blob": ["Upload exceeds the 25 MB size limit."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        size_bytes = None
+        sha256_hex = None
+        if uploaded_file is not None:
+            hasher = hashlib.sha256()
+            for chunk in uploaded_file.chunks():
+                hasher.update(chunk)
+            sha256_hex = hasher.hexdigest()
+            size_bytes = uploaded_file.size
+            # Rewind so the FileField save below doesn't persist an empty blob.
+            uploaded_file.seek(0)
+
+        attachment = serializer.save(
+            message_id=message,
+            size_bytes=size_bytes,
+            sha256=sha256_hex,
+        )
+        logger.info(
+            "attachment.created",
+            extra={
+                "user_id": str(request.user.pk),
+                "message_id": str(message.pk),
+                "attachment_id": str(attachment.pk),
+            },
+        )
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

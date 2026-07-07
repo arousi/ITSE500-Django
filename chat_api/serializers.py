@@ -8,9 +8,17 @@ conversation-scoped message-create endpoint: the parent conversation is resolved
 from the URL by the view, so `conversation_id` (and `user_id`) must not be
 required from the request body.
 """
-from user_mang.serializers import ConversationSerializer, MessageSerializer
+from rest_framework import serializers
 
-__all__ = ["ConversationSerializer", "MessageSerializer", "MessageWriteSerializer"]
+from user_mang.serializers import ConversationSerializer, MessageSerializer
+from .models.attachment import Attachment
+
+__all__ = [
+    "ConversationSerializer",
+    "MessageSerializer",
+    "MessageWriteSerializer",
+    "AttachmentUploadSerializer",
+]
 
 
 class MessageWriteSerializer(MessageSerializer):
@@ -26,3 +34,43 @@ class MessageWriteSerializer(MessageSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["conversation_id"].required = False
+
+
+class AttachmentUploadSerializer(serializers.ModelSerializer):
+    """Write-side Attachment serializer for the message-scoped upload/list endpoint.
+
+    Dedicated to this endpoint only -- does NOT replace or alias
+    `user_mang.serializers.AttachmentSerializer`, which the UnifiedSyncView still
+    uses unchanged. The parent message is supplied by the view (from the URL),
+    and `size_bytes`/`sha256` are computed server-side from the uploaded bytes.
+    """
+
+    class Meta:
+        model = Attachment
+        fields = [
+            "attachment_id",
+            "message_id",
+            "type",
+            "mime_type",
+            "encrypted_blob",
+            "size_bytes",
+            "sha256",
+            "is_encrypted",
+            "enc_algo",
+            "iv_base64",
+            "key_ref",
+            "created_at",
+        ]
+        read_only_fields = [
+            "attachment_id",
+            "message_id",
+            "size_bytes",
+            "sha256",
+            "created_at",
+        ]
+
+    def validate_type(self, value: str):
+        allowed = {"image", "embedding", "pdf", "other"}
+        if value and value not in allowed:
+            raise serializers.ValidationError(f"type must be one of {sorted(allowed)}")
+        return value

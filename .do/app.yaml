@@ -21,18 +21,17 @@ region: fra
 services:
 - build_command: |
     pip install -r requirements.txt
-    python manage.py makemigrations auth_api user_mang chat_api crypto_api
     python manage.py migrate --noinput
   environment_slug: python
   envs:
   - key: MAILEROO_API_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: ***************************d3510e0c5a4228c84fb
+    value: ${MAILEROO_API_KEY}
   - key: ZERUH_API_KEY
     scope: RUN_AND_BUILD_TIME
     type: SECRET
-    value: ***************************7b7d8784911e66cf
+    value: ${ZERUH_API_KEY}
   - key: DJANGO_SETTINGS_MODULE
     scope: RUN_AND_BUILD_TIME
     value: prompeteer_server.settings
@@ -87,5 +86,3 @@ services:
   name: web
   run_command: |
     gunicorn prompeteer_server.wsgi:application
-    python manage.py makemigrations auth_api user_mang chat_api crypto_api
-    python manage.py migrate --noinput

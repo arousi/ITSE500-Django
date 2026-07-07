@@ -46,6 +46,7 @@ from .serializers import (
     VerifyOTPSerializer,
     RegisterResponseSerializer,
     LoginResponseSerializer,
+    LogoutRequestSerializer,
     LogoutResponseSerializer,
     HealthCheckResponseSerializer,
     OAuthAuthorizeResponseSerializer,
@@ -54,17 +55,33 @@ from .serializers import (
     EmailPinVerifyResponseSerializer,
     SetPasswordAfterEmailVerifyRequestSerializer,
     SetPasswordAfterEmailVerifyResponseSerializer,
+    DeprecatedEndpointResponseSerializer,
 )
 from prompeteer_server.utils.emailer import send_verified_email
 try:
-    from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiResponse, OpenApiParameter
+    from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiExample, OpenApiResponse, OpenApiParameter
     from drf_spectacular.types import OpenApiTypes
 except Exception:
     extend_schema = None  # type: ignore
+    extend_schema_view = None  # type: ignore
     OpenApiExample = None  # type: ignore
     OpenApiResponse = None  # type: ignore
     OpenApiParameter = None  # type: ignore
     OpenApiTypes = None  # type: ignore
+
+def _exclude_from_schema(cls):
+    """Class decorator: exclude every HTTP method this view defines from the OpenAPI schema.
+
+    Used for OAuth authorize/callback views, which are browser redirects (not typed JSON API
+    calls) and whose duplicate trailing-slash routes otherwise collide on operationId.
+    """
+    if not (extend_schema_view and extend_schema):
+        return cls
+    kwargs = {}
+    for method in ('get', 'post'):
+        if hasattr(cls, method):
+            kwargs[method] = extend_schema(exclude=True)
+    return extend_schema_view(**kwargs)(cls)
 
 # Predefined OpenAPI parameter sequences for Spectacular (when available)
 OAUTH_AUTHORIZE_PARAMS = []
@@ -178,6 +195,7 @@ class RegisterView(APIView):
     - Returns onboarding details and a first sync payload when applicable.
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     @(
         extend_schema(
@@ -402,6 +420,7 @@ class EmailPinVerifyView(APIView):
     # AllowAny + inline auth (access or refresh) to avoid hard dependency on a custom auth class
     authentication_classes = [JWTAuthentication]
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
@@ -560,6 +579,7 @@ class SetPasswordAfterEmailVerifyView(APIView):
     # AllowAny + inline auth (access or refresh)
     authentication_classes = [JWTAuthentication]
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField()
@@ -651,6 +671,7 @@ class LoginView(APIView):
     { "message": "Login successful", "access_token": "...", "refresh_token": "...", "conversations": [...], "attachments": [...] }
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     @(
         extend_schema(
@@ -735,13 +756,13 @@ class LogoutView(APIView):
         extend_schema(
             tags=['auth'],
             summary='Logout (client discards tokens)',
+            request=LogoutRequestSerializer,
             responses={200: LogoutResponseSerializer},
         ) if extend_schema else (lambda f: f)
     )
     def post(self, request):
-        """Invalidate the current session and instruct the client to discard tokens.
-        Returns a 200 response with a brief message. Does not blacklist tokens server-side.
-        Requires a valid JWT and authenticated user.
+        """Invalidate the current session and blacklist the refresh token if supplied.
+        Returns a 200 response with a brief message. Requires a valid JWT and authenticated user.
         """
         user = getattr(request, 'user', None)
         logger.info(f"[LogoutView] Incoming logout request: user_id={getattr(user, 'pk', None)}")
@@ -749,9 +770,28 @@ class LogoutView(APIView):
         logout(request)
         logger.info(f"[LogoutView] User logged out: {user.user_id if user and getattr(user, 'is_authenticated', False) else 'anonymous'}")
 
-    # No server-side token deletion: keep provider OAuth tokens intact so the user
-    # can re-login via OAuth from another interface. We also avoid blacklisting
-    # refresh tokens here; clients should discard tokens client-side after logout.
+    # Blacklist the refresh token if the client supplied one (body or header), so it
+    # can no longer be used to mint new access tokens. Best-effort: the blacklist DB
+    # table may not be migrated yet in some environments, so failures are logged
+    # (without leaking the token itself) and do not fail the logout request.
+        refresh_raw = (
+            (request.data.get('refresh_token') if isinstance(request.data, dict) else None) or
+            (request.data.get('refresh') if isinstance(request.data, dict) else None) or
+            request.META.get('HTTP_X_REFRESH_TOKEN') or
+            request.META.get('HTTP_REFRESH_TOKEN') or
+            request.COOKIES.get('refresh_token')
+        )
+        if refresh_raw:
+            try:
+                RefreshToken(refresh_raw).blacklist()
+                logger.info(f"[LogoutView] Refresh token blacklisted for user_id={getattr(user, 'pk', None)}")
+            except Exception:
+                logger.exception(
+                    f"[LogoutView] Failed to blacklist refresh token for user_id={getattr(user, 'pk', None)}"
+                )
+
+    # No server-side token deletion beyond blacklisting: keep provider OAuth tokens
+    # intact so the user can re-login via OAuth from another interface.
         resp_data = {"detail": "Logged out successfully. Please discard tokens client-side."}
         logger.info(f"[LogoutView] Logout response: status=200, resp={resp_data}")
         return Response(resp_data, status=status.HTTP_200_OK)
@@ -1381,6 +1421,7 @@ class OAuthResultView(APIView):
         return Response(data)
 
 # -------------------------------- Providers -----------------------------------
+@_exclude_from_schema
 class GoogleAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the Google OAuth2 authorization flow.
@@ -1389,6 +1430,7 @@ class GoogleAuthorizeView(OAuthAuthorizeBase):
     """
     provider = 'google'
 
+@_exclude_from_schema
 class OpenRouterAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the OpenRouter OAuth2 authorization flow.
@@ -1397,6 +1439,7 @@ class OpenRouterAuthorizeView(OAuthAuthorizeBase):
     """
     provider = 'openrouter'
 
+@_exclude_from_schema
 class GoogleCallbackView(OAuthCallbackBase):
     """
     Handles the callback from Google OAuth2.
@@ -1405,6 +1448,7 @@ class GoogleCallbackView(OAuthCallbackBase):
     """
     provider = 'google'
 
+@_exclude_from_schema
 class OpenRouterCallbackView(OAuthCallbackBase):
     """
     Handles the callback from OpenRouter OAuth2.
@@ -1413,6 +1457,7 @@ class OpenRouterCallbackView(OAuthCallbackBase):
     """
     provider = 'openrouter'
 
+@_exclude_from_schema
 class GitHubAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the GitHub OAuth2 authorization flow.
@@ -1460,6 +1505,7 @@ class GitHubAuthorizeView(OAuthAuthorizeBase):
             'bridge': False
         })
 
+@_exclude_from_schema
 class GitHubCallbackView(OAuthCallbackBase):
     """
     Handles the callback from GitHub OAuth2.
@@ -1595,6 +1641,7 @@ class GitHubCallbackView(OAuthCallbackBase):
             return HttpResponse(html)
         return Response(payload)
 
+@_exclude_from_schema
 class MicrosoftAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the Microsoft OAuth2 (Azure AD) authorization flow.
@@ -1642,6 +1689,7 @@ class MicrosoftAuthorizeView(OAuthAuthorizeBase):
             'bridge': False
         })
 
+@_exclude_from_schema
 class MicrosoftCallbackView(OAuthCallbackBase):
     """
     Handles the callback from Microsoft OAuth2 (Azure AD).
@@ -1773,6 +1821,7 @@ class MicrosoftCallbackView(OAuthCallbackBase):
 class SendLoginOTPView(APIView):
     """Sends a 6-digit OTP for passwordless login with simple rate limiting in case of the first 1 not working or not being received."""
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         """
@@ -1819,6 +1868,7 @@ class SendLoginOTPView(APIView):
 class VerifyLoginOTPView(APIView):
     """Verifies OTP and returns JWT tokens."""
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
     def post(self, request):
         """
@@ -1843,7 +1893,17 @@ class LoginWithOTPView(APIView):
         }
     """
     permission_classes = [AllowAny]
+    throttle_scope = 'auth'
 
+    @(
+        extend_schema(
+            tags=['auth'],
+            summary='Login with OTP (deprecated)',
+            description='Deprecated: OTP-based login is disabled in this release. Always returns 410 Gone.',
+            request=None,
+            responses={410: DeprecatedEndpointResponseSerializer},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):
         """Deprecated endpoint: Login-with-OTP is disabled in this release."""
         return Response({'detail': 'OTP endpoints are deprecated in this release.'}, status=status.HTTP_410_GONE)

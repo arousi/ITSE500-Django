@@ -1,3 +1,6 @@
+import uuid
+from typing import Optional
+
 from rest_framework import serializers
 
 from chat_api.models.conversation import Conversation
@@ -23,6 +26,12 @@ class MessageRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MessageRequest
+        # Explicit component name: without this, drf-spectacular's request-body naming
+        # (Meta ref_name aside, the default write-serializer name is "<Name>Request")
+        # collides with the component name drf-spectacular auto-derives for
+        # `MessageSerializer` when used as a request body ("Message" + "Request").
+        # This is a schema/docs-only name; it does not change any JSON field name.
+        ref_name = "MessageRequestModel"
         fields = [
             "request_id",
             "request_model",
@@ -30,7 +39,7 @@ class MessageRequestSerializer(serializers.ModelSerializer):
             "request_system_role",
             "request_system_content",
             "request_system_prompt",
-            "request_use_structured_output",
+            "request_user_structured_output",
             "request_structured_schema",
             "request_user_role",
             "request_user_content",
@@ -110,16 +119,28 @@ class AttachmentSerializer(serializers.ModelSerializer):
     """
     Serialize an artifact attached to a message (image/pdf/embedding/etc.).
     - Accepts 'id' in payload as an alias to attachment_id to match the UnifiedSyncView.
-    - user_id is read-only and the view should call serializer.save(user=user) on create.
+    - The Attachment model has no `user_id`/`conversation_id` fields of its own -- only
+      `message_id` (FK -> Message). `user_id` and `conversation_id` below are derived,
+      read-only fields sourced from the related Message so the API shape stays stable
+      for clients; they are never written to the model (`.save()` does not take a
+      `user` or `conversation_id` kwarg -- there is nothing on Attachment to assign it to).
     """
 
     # Allow clients to send "id" mapping to attachment_id (convenience)
     id = serializers.CharField(source="attachment_id", required=False)
-    user_id = serializers.PrimaryKeyRelatedField(read_only=True)
-    conversation_id = serializers.PrimaryKeyRelatedField(queryset=Conversation.objects.all())
+    user_id = serializers.SerializerMethodField()
+    conversation_id = serializers.SerializerMethodField()
     message_id = serializers.PrimaryKeyRelatedField(queryset=Message.objects.all())
 
     encrypted_blob = serializers.FileField(use_url=True, required=False, allow_null=True)
+
+    def get_user_id(self, obj) -> Optional[uuid.UUID]:
+        message = getattr(obj, "message_id", None)
+        return getattr(message, "user_id_id", None) if message is not None else None
+
+    def get_conversation_id(self, obj) -> Optional[uuid.UUID]:
+        message = getattr(obj, "message_id", None)
+        return getattr(message, "conversation_id_id", None) if message is not None else None
 
     class Meta:
         model = Attachment
@@ -193,6 +214,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "response_id",
             "output_id",
             "timestamp",
+            "status",
             "vote",
             "has_image",
             "img_Url",
@@ -477,3 +499,77 @@ class FullChatSerializer(serializers.Serializer):
                                 ret[field_name] = field.to_representation(value) if value is not None else []
                         return ret
                 return super().to_representation(instance)
+
+
+# ------------------------- Documentation Serializers (UnifiedSyncView) -------------------------
+# These describe the real top-level response shapes for drf-spectacular; the view itself may add
+# best-effort fallback keys not modeled here (see UnifiedSyncView docstrings for full detail).
+
+class UnifiedSyncGetResponseSerializer(serializers.Serializer):
+    """GET /unified-sync/ — nested profile/chat payload (shape depends on profile=/chat= flags)."""
+    user_id = serializers.CharField(allow_null=True)
+    is_new = serializers.BooleanField()
+    temp_id = serializers.CharField(allow_null=True, required=False)
+    profile = FullProfileSerializer(required=False)
+    chat = FullChatSerializer(required=False)
+
+
+class UnifiedSyncUpsertSummarySerializer(serializers.Serializer):
+    """Per-model created/updated counters returned by POST /unified-sync/."""
+    profile_updated = serializers.BooleanField(required=False)
+    conversations_created = serializers.IntegerField(required=False)
+    conversations_updated = serializers.IntegerField(required=False)
+    messages_created = serializers.IntegerField(required=False)
+    messages_updated = serializers.IntegerField(required=False)
+    requests_created = serializers.IntegerField(required=False)
+    requests_updated = serializers.IntegerField(required=False)
+    responses_created = serializers.IntegerField(required=False)
+    responses_updated = serializers.IntegerField(required=False)
+    outputs_created = serializers.IntegerField(required=False)
+    outputs_updated = serializers.IntegerField(required=False)
+    attachments_created = serializers.IntegerField(required=False)
+    attachments_updated = serializers.IntegerField(required=False)
+
+
+class UnifiedSyncPostRequestSerializer(serializers.Serializer):
+    """POST /unified-sync/ request body: optional profile + chat model lists to upsert."""
+    profile = FullProfileSerializer(required=False)
+    conversations = ConversationSerializer(many=True, required=False)
+    messages = MessageSerializer(many=True, required=False)
+    message_requests = MessageRequestSerializer(many=True, required=False)
+    message_responses = MessageResponseSerializer(many=True, required=False)
+    message_outputs = MessageOutputSerializer(many=True, required=False)
+    attachments = AttachmentSerializer(many=True, required=False)
+
+
+class UnifiedSyncPostResponseSerializer(serializers.Serializer):
+    """POST /unified-sync/ response: upsert summary/errors + canonical profile/chat payload."""
+    summary = UnifiedSyncUpsertSummarySerializer()
+    errors = serializers.DictField(child=serializers.ListField(), required=False)
+    user_id = serializers.CharField(allow_null=True)
+    temp_id = serializers.CharField(allow_null=True, required=False)
+    profile = FullProfileSerializer(required=False)
+    chat = FullChatSerializer(required=False)
+
+
+class UnifiedSyncPatchResponseSerializer(serializers.Serializer):
+    """PATCH /unified-sync/ response: the updated profile."""
+    profile = ProfileSerializer()
+
+
+class UnifiedSyncDeleteStatsSerializer(serializers.Serializer):
+    attachments = serializers.IntegerField(required=False)
+    messages = serializers.IntegerField(required=False)
+    conversations = serializers.IntegerField(required=False)
+    tokens = serializers.IntegerField(required=False)
+    user = serializers.IntegerField(required=False)
+
+
+class UnifiedSyncDeleteResponseSerializer(serializers.Serializer):
+    """DELETE /unified-sync/ response: delete/archive summary + optional export URLs."""
+    message = serializers.CharField()
+    deleted = UnifiedSyncDeleteStatsSerializer(required=False)
+    archived = UnifiedSyncDeleteStatsSerializer(required=False)
+    export_urls = serializers.DictField(child=serializers.CharField(), required=False)
+    profile = FullProfileSerializer(required=False)
+    chat = FullChatSerializer(required=False)

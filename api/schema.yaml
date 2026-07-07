@@ -1,0 +1,2825 @@
+openapi: 3.0.3
+info:
+  title: ITSE500 APIs Documentation
+  version: 1.0.0
+  description: Authentication, Chat, and User Management API
+paths:
+  /api/v1/auth_api/health/:
+    get:
+      operationId: v1_auth_api_health_retrieve
+      description: Report server liveness with a simple JSON payload and 200 status.
+      summary: Health check
+      tags:
+      - ops
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+          description: ''
+  /api/v1/auth_api/login/:
+    post:
+      operationId: v1_auth_api_login_create
+      description: |-
+        Authenticate a user and return JWT tokens plus initial sync payload.
+        Accepts identifier (email/username) and user_password/password. Returns 200
+        with access/refresh tokens, conversations, and attachments on success.
+        Returns 401 for invalid credentials, 403 if user is inactive/locked, or 400/500 otherwise.
+      summary: Login with identifier + password
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+        '401':
+          description: Invalid credentials
+        '403':
+          description: User locked
+  /api/v1/auth_api/logout/:
+    post:
+      operationId: v1_auth_api_logout_create
+      description: |-
+        Invalidate the current session and blacklist the refresh token if supplied.
+        Returns a 200 response with a brief message. Requires a valid JWT and authenticated user.
+      summary: Logout (client discards tokens)
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+          description: ''
+  /api/v1/auth_api/oauth/result/{state_value}/:
+    get:
+      operationId: v1_auth_api_oauth_result_retrieve
+      description: |-
+        Fetch the stored OAuth result payload for the given state (one-time).
+        Returns 202 if the result isn't ready yet, 410 if already retrieved, 404 if
+        the state is unknown, and 200 with the payload on success.
+      summary: Fetch OAuth result by state
+      parameters:
+      - in: path
+        name: state_value
+        schema:
+          type: string
+        description: State value used in OAuth
+        required: true
+      tags:
+      - oauth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthCallbackResponse'
+          description: ''
+        '202':
+          description: Result not ready
+        '404':
+          description: Not found
+        '410':
+          description: Already retrieved
+  /api/v1/auth_api/otp-login/:
+    post:
+      operationId: v1_auth_api_otp_login_create
+      description: 'Deprecated: OTP-based login is disabled in this release. Always
+        returns 410 Gone.'
+      summary: Login with OTP (deprecated)
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeprecatedEndpointResponse'
+          description: ''
+  /api/v1/auth_api/register/:
+    post:
+      operationId: v1_auth_api_register_create
+      description: Create a new account or reconcile existing identity; returns JWTs
+        and initial sync.
+      summary: Register account
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+          description: ''
+        '409':
+          description: invalid credentials.
+  /api/v1/auth_api/set-password-after-email-verify/:
+    post:
+      operationId: v1_auth_api_set_password_after_email_verify_create
+      description: |-
+        Set/reset the account password after email verification.
+
+        Expects JSON body with:
+        - email: string; must match the authenticated user's email
+        - password: string; client-side sha256(raw)
+
+        On success, stores a salted backend hash and returns 200 with a message.
+        May return 400 if data is invalid or email not verified; 404 if user not found;
+        401 if JWT is missing/invalid.
+      summary: Set password after email verify
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetPasswordAfterEmailVerifyRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SetPasswordAfterEmailVerifyRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SetPasswordAfterEmailVerifyRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetPasswordAfterEmailVerifyResponse'
+          description: ''
+        '400':
+          description: Invalid data or email not verified
+        '401':
+          description: Auth required
+        '404':
+          description: User not found
+  /api/v1/auth_api/token/refresh/:
+    post:
+      operationId: v1_auth_api_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth_api/verify-email-pin/:
+    post:
+      operationId: v1_auth_api_verify_email_pin_create
+      description: |-
+        Verify the 5-digit email PIN for the authenticated user.
+
+        Expects JSON body with:
+        - email: string; must match the authenticated user's email
+        - pin: string; 5-digit code
+
+        Returns 200 with a success message on valid PIN; 400 for invalid/expired PIN;
+        404 if the user is not found; 401 if JWT is missing/invalid.
+      summary: Verify email PIN
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailPinVerifyRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailPinVerifyRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailPinVerifyRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailPinVerifyResponse'
+          description: ''
+        '400':
+          description: Invalid PIN or expired
+        '401':
+          description: Auth required
+        '404':
+          description: User not found
+  /api/v1/chat_api/conversations/:
+    get:
+      operationId: v1_chat_api_conversations_list
+      description: List the caller's own conversations, or create a new one owned
+        by the caller.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedConversationList'
+          description: ''
+    post:
+      operationId: v1_chat_api_conversations_create
+      description: List the caller's own conversations, or create a new one owned
+        by the caller.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+  /api/v1/chat_api/conversations/{conversation_id}/:
+    get:
+      operationId: v1_chat_api_conversations_retrieve
+      description: |-
+        Retrieve/update/delete a conversation owned by the caller.
+
+        Uses a user-scoped queryset so another user's conversation resolves to 404
+        (never 403) -- this avoids leaking whether the resource exists at all.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+    put:
+      operationId: v1_chat_api_conversations_update
+      description: |-
+        Retrieve/update/delete a conversation owned by the caller.
+
+        Uses a user-scoped queryset so another user's conversation resolves to 404
+        (never 403) -- this avoids leaking whether the resource exists at all.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConversationRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+    patch:
+      operationId: v1_chat_api_conversations_partial_update
+      description: |-
+        Retrieve/update/delete a conversation owned by the caller.
+
+        Uses a user-scoped queryset so another user's conversation resolves to 404
+        (never 403) -- this avoids leaking whether the resource exists at all.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedConversationRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+    delete:
+      operationId: v1_chat_api_conversations_destroy
+      description: |-
+        Retrieve/update/delete a conversation owned by the caller.
+
+        Uses a user-scoped queryset so another user's conversation resolves to 404
+        (never 403) -- this avoids leaking whether the resource exists at all.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/chat_api/conversations/{conversation_id}/messages/:
+    get:
+      operationId: v1_chat_api_conversations_messages_list
+      description: |-
+        List or create messages within a conversation owned by the caller.
+
+        The parent conversation is resolved with a user-scoped lookup, so a missing
+        OR non-owned conversation both yield 404 (covers the cross-user case without
+        revealing existence of another user's conversation).
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessageList'
+          description: ''
+    post:
+      operationId: v1_chat_api_conversations_messages_create
+      description: |-
+        List or create messages within a conversation owned by the caller.
+
+        The parent conversation is resolved with a user-scoped lookup, so a missing
+        OR non-owned conversation both yield 404 (covers the cross-user case without
+        revealing existence of another user's conversation).
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MessageWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageWriteRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageWrite'
+          description: ''
+  /api/v1/chat_api/conversations/{conversation_id}/messages/{message_id}/attachments/:
+    get:
+      operationId: v1_chat_api_conversations_messages_attachments_list
+      description: |-
+        List or upload attachments belonging to a message owned by the caller.
+
+        The parent message is resolved with a user-scoped lookup (through its
+        conversation's owner), so a missing OR non-owned message/conversation both
+        yield 404 -- never leaking existence of another user's data.
+
+        Uses a dedicated `AttachmentUploadSerializer` for this endpoint only; the
+        `user_mang.serializers.AttachmentSerializer` used by `UnifiedSyncView` is
+        untouched.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: message_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAttachmentUploadList'
+          description: ''
+    post:
+      operationId: v1_chat_api_conversations_messages_attachments_create
+      description: |-
+        List or upload attachments belonging to a message owned by the caller.
+
+        The parent message is resolved with a user-scoped lookup (through its
+        conversation's owner), so a missing OR non-owned message/conversation both
+        yield 404 -- never leaking existence of another user's data.
+
+        Uses a dedicated `AttachmentUploadSerializer` for this endpoint only; the
+        `user_mang.serializers.AttachmentSerializer` used by `UnifiedSyncView` is
+        untouched.
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: message_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AttachmentUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AttachmentUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentUpload'
+          description: ''
+  /api/v1/crypto_api/umk/:
+    get:
+      operationId: v1_crypto_api_umk_retrieve
+      description: 'Return the caller''s User Master Key metadata + base64 value,
+        or {exists: false} if not yet provisioned.'
+      summary: Get caller UMK
+      tags:
+      - crypto
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMKGetResponse'
+          description: ''
+    post:
+      operationId: v1_crypto_api_umk_create
+      description: Provision the UMK once. Reject with 409 if already provisioned
+        (rotation not yet supported).
+      summary: Provision caller UMK
+      tags:
+      - crypto
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UMKProvisionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UMKProvisionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UMKProvisionRequestRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMKProvisionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMKErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMKErrorResponse'
+          description: ''
+  /api/v1/user_mang/me/:
+    get:
+      operationId: v1_user_mang_me_retrieve
+      description: |-
+        GET
+
+        Returns a nested payload containing `profile` and/or `chat` depending on flags.
+
+        Response shape (high level):
+            {
+                "user_id": <uuid>,
+                "is_new": <bool>,
+                "temp_id": <str|null>,
+                "profile": { ... } ,          # present when profile=true or by default
+                "chat": {                     # present when chat=true or by default
+                    "conversations": [...],
+                    "messages": [...],
+                    "message_request": [...],
+                    "message_response": [...],
+                    "message_output": [...],
+                    "attachments": [...]
+                }
+            }
+
+        Notes / implementation details:
+        - Serializers: when available the view uses `FullProfileSerializer` and `FullChatSerializer` to produce the
+          canonical output. If serializers fail the view falls back to minimal manual assembly.
+        - Attachments returned in `chat.attachments` always include a `user_id` field (derived from the related
+          message) to make ownership explicit for clients.
+
+        Example Request:
+            GET /api/v1/unified-sync/?user_id=123e4567-e89b-12d3-a456-426614174000&profile=true&chat=true
+
+        Example Response (simplified):
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "is_new": false,
+                "temp_id": null,
+                "profile": {
+                    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                    "username": "john_doe",
+                    "email": "john@example.com",
+                    "is_visitor": false,
+                    "is_active": true,
+                    "is_archived": false
+                },
+                "chat": {
+                    "conversations": [
+                        {
+                            "conversation_id": "c1",
+                            "title": "My Conversation",
+                            "messages": [ {"message_id": "m1", "content": "Hello!"} ]
+                        }
+                    ],
+                    "messages": [ {"message_id": "m1", "content": "Hello!"} ],
+                    "attachments": [
+                        {
+                            "id": 1,
+                            "type": "image",
+                            "file_path": "/media/attachments/1.png",
+                            "user_id": "123e4567-e89b-12d3-a456-426614174000"
+                        }
+                    ]
+                }
+            }
+      summary: Unified sync (fetch profile/chat)
+      parameters:
+      - in: query
+        name: allow_public_uuid
+        schema:
+          type: boolean
+        description: Allow unauthenticated read by UUID for GET
+      - in: query
+        name: chat
+        schema:
+          type: boolean
+        description: Include chat section
+      - in: query
+        name: device_id
+        schema:
+          type: string
+        description: Associate device with user/visitor
+      - in: query
+        name: profile
+        schema:
+          type: boolean
+        description: Include profile section
+      - in: query
+        name: temp_id
+        schema:
+          type: string
+        description: Visitor temp identifier (issues short-lived tokens)
+      - in: query
+        name: user_id
+        schema:
+          type: string
+        description: User UUID (GET only, when allow_public_uuid=true)
+      tags:
+      - sync
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSyncGetResponse'
+          description: ''
+    post:
+      operationId: v1_user_mang_me_create
+      description: Upsert profile and chat model lists atomically; returns summary/errors
+        and canonical payload.
+      summary: Unified upsert (profile/chat)
+      tags:
+      - sync
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnifiedSyncPostRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UnifiedSyncPostRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UnifiedSyncPostRequestRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSyncPostResponse'
+          description: ''
+        '400':
+          description: Validation error
+        '500':
+          description: Transaction failed
+    patch:
+      operationId: v1_user_mang_me_partial_update
+      description: Authenticated partial update for profile fields (me endpoint style).
+      summary: Partial profile update
+      tags:
+      - sync
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSyncPatchResponse'
+          description: ''
+        '400':
+          description: Validation error
+        '401':
+          description: Auth required
+    delete:
+      operationId: v1_user_mang_me_destroy
+      description: |-
+        DELETE
+
+        Delete or archive a user's profile and/or chat data.
+
+        Important behavior changes:
+            - The ``action`` parameter is now restricted to "delete" or "archive". Other values are rejected.
+            - On any successful delete or archive operation this endpoint will always generate BOTH a CSV and a
+              PDF export of the user's data.
+            - Exports are saved under MEDIA_ROOT/exports/<user_id> and emailed to the user's verified address when
+              available.
+            - If the caller provides ``download_now`` (truthy: 1/true/yes) the view will zip the CSV+PDF and
+              immediately return the zip file as a FileResponse. If ``download_now`` is falsy the files are kept on
+              disk and the response will include URLs the client can use to download them.
+
+        Parameters (body or query):
+            - action: "delete" | "archive"  (required)
+            - profile: true/false
+            - chat: true/false
+            - download_now: true/false or 1/0 — when true return a zip (csv+pdf) immediately; when false save and
+              return URLs instead
+            - reason: optional string for audit logs
+
+        Returns (examples):
+
+        Example Request (delete + return URLs):
+            DELETE /api/v1/unified-sync/
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "action": "delete",
+                "profile": true,
+                "chat": true,
+                "download_now": false
+            }
+
+        Example Response (delete, saved exports):
+            HTTP 200
+            {
+                "message": "User and all related data deleted successfully",
+                "deleted": { "attachments": 2, "messages": 5, "conversations": 1, "tokens": 1, "user": 1 },
+                "export_urls": {
+                    "csv": "https://example.com/media/exports/<user_id>/user_export_20250829123000.csv",
+                    "pdf": "https://example.com/media/exports/<user_id>/user_export_20250829123000.pdf"
+                },
+                "profile": { /* FullProfileSerializer output or minimal fallback */ },
+                "chat": { /* FullChatSerializer output or minimal fallback */ }
+            }
+
+        Example Request (archive + immediate download):
+            DELETE /api/v1/unified-sync/
+            {
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "action": "archive",
+                "profile": true,
+                "download_now": true
+            }
+
+        Example Response (archive, immediate zip):
+            HTTP 200
+            (A FileResponse serving an attachment named "user_export_<user_id>.zip" containing both CSV and PDF)
+
+        Notes:
+            - Exporting and emailing are best-effort. Failures while creating or sending exports are logged and do
+              not prevent the delete/archive from completing.
+            - The response will include ``export_urls`` when files are saved and not directly returned.
+      summary: Delete or archive user data
+      parameters:
+      - in: query
+        name: action
+        schema:
+          type: string
+        description: '''delete'' or ''archive'''
+      - in: query
+        name: chat
+        schema:
+          type: boolean
+      - in: query
+        name: download_now
+        schema:
+          type: boolean
+        description: If true, returns a zip of CSV+PDF
+      - in: query
+        name: profile
+        schema:
+          type: boolean
+      tags:
+      - sync
+      security:
+      - jwtAuth: []
+      - BearerAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSyncDeleteResponse'
+          description: ''
+        '400':
+          description: Invalid action or request
+        '401':
+          description: Auth required
+components:
+  schemas:
+    Attachment:
+      type: object
+      description: |-
+        Serialize an artifact attached to a message (image/pdf/embedding/etc.).
+        - Accepts 'id' in payload as an alias to attachment_id to match the UnifiedSyncView.
+        - The Attachment model has no `user_id`/`conversation_id` fields of its own -- only
+          `message_id` (FK -> Message). `user_id` and `conversation_id` below are derived,
+          read-only fields sourced from the related Message so the API shape stays stable
+          for clients; they are never written to the model (`.save()` does not take a
+          `user` or `conversation_id` kwarg -- there is nothing on Attachment to assign it to).
+      properties:
+        id:
+          type: string
+        attachment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        conversation_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        message_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          maxLength: 32
+        mime_type:
+          type: string
+          nullable: true
+          maxLength: 128
+        file_path:
+          type: string
+          nullable: true
+          description: Server-side storage path or external URL
+          maxLength: 512
+        encrypted_blob:
+          type: string
+          format: uri
+          nullable: true
+        size_bytes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        height:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        sha256:
+          type: string
+          nullable: true
+          maxLength: 64
+        is_encrypted:
+          type: boolean
+        enc_algo:
+          type: string
+          nullable: true
+          maxLength: 32
+        iv_base64:
+          type: string
+          nullable: true
+          maxLength: 64
+        key_ref:
+          type: string
+          nullable: true
+          maxLength: 64
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attachment_id
+      - conversation_id
+      - created_at
+      - message_id
+      - type
+      - user_id
+    AttachmentDoc:
+      type: object
+      properties:
+        attachment_id:
+          type: string
+        message_id:
+          type: string
+        url:
+          type: string
+    AttachmentRequest:
+      type: object
+      description: |-
+        Serialize an artifact attached to a message (image/pdf/embedding/etc.).
+        - Accepts 'id' in payload as an alias to attachment_id to match the UnifiedSyncView.
+        - The Attachment model has no `user_id`/`conversation_id` fields of its own -- only
+          `message_id` (FK -> Message). `user_id` and `conversation_id` below are derived,
+          read-only fields sourced from the related Message so the API shape stays stable
+          for clients; they are never written to the model (`.save()` does not take a
+          `user` or `conversation_id` kwarg -- there is nothing on Attachment to assign it to).
+      properties:
+        id:
+          type: string
+          minLength: 1
+        message_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          minLength: 1
+          maxLength: 32
+        mime_type:
+          type: string
+          nullable: true
+          maxLength: 128
+        file_path:
+          type: string
+          nullable: true
+          description: Server-side storage path or external URL
+          maxLength: 512
+        encrypted_blob:
+          type: string
+          format: binary
+          nullable: true
+        size_bytes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        height:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        sha256:
+          type: string
+          nullable: true
+          maxLength: 64
+        is_encrypted:
+          type: boolean
+        enc_algo:
+          type: string
+          nullable: true
+          maxLength: 32
+        iv_base64:
+          type: string
+          nullable: true
+          maxLength: 64
+        key_ref:
+          type: string
+          nullable: true
+          maxLength: 64
+      required:
+      - message_id
+      - type
+    AttachmentUpload:
+      type: object
+      description: |-
+        Write-side Attachment serializer for the message-scoped upload/list endpoint.
+
+        Dedicated to this endpoint only -- does NOT replace or alias
+        `user_mang.serializers.AttachmentSerializer`, which the UnifiedSyncView still
+        uses unchanged. The parent message is supplied by the view (from the URL),
+        and `size_bytes`/`sha256` are computed server-side from the uploaded bytes.
+      properties:
+        attachment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        message_id:
+          type: string
+          format: uuid
+          readOnly: true
+        type:
+          type: string
+          maxLength: 32
+        mime_type:
+          type: string
+          nullable: true
+          maxLength: 128
+        encrypted_blob:
+          type: string
+          format: uri
+        size_bytes:
+          type: integer
+          readOnly: true
+          nullable: true
+        sha256:
+          type: string
+          readOnly: true
+          nullable: true
+        is_encrypted:
+          type: boolean
+        enc_algo:
+          type: string
+          nullable: true
+          maxLength: 32
+        iv_base64:
+          type: string
+          nullable: true
+          maxLength: 64
+        key_ref:
+          type: string
+          nullable: true
+          maxLength: 64
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attachment_id
+      - created_at
+      - encrypted_blob
+      - message_id
+      - sha256
+      - size_bytes
+      - type
+    AttachmentUploadRequest:
+      type: object
+      description: |-
+        Write-side Attachment serializer for the message-scoped upload/list endpoint.
+
+        Dedicated to this endpoint only -- does NOT replace or alias
+        `user_mang.serializers.AttachmentSerializer`, which the UnifiedSyncView still
+        uses unchanged. The parent message is supplied by the view (from the URL),
+        and `size_bytes`/`sha256` are computed server-side from the uploaded bytes.
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 32
+        mime_type:
+          type: string
+          nullable: true
+          maxLength: 128
+        encrypted_blob:
+          type: string
+          format: binary
+        is_encrypted:
+          type: boolean
+        enc_algo:
+          type: string
+          nullable: true
+          maxLength: 32
+        iv_base64:
+          type: string
+          nullable: true
+          maxLength: 64
+        key_ref:
+          type: string
+          nullable: true
+          maxLength: 64
+      required:
+      - encrypted_blob
+      - type
+    Conversation:
+      type: object
+      description: |-
+        Serialize a conversation with nested messages (read-only).
+        For writes, clients send a flat conversation object; messages are synced separately.
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          nullable: true
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        local_only:
+          type: boolean
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          readOnly: true
+      required:
+      - conversation_id
+      - created_at
+      - messages
+      - updated_at
+      - user_id
+    ConversationDoc:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+        title:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageDoc'
+      required:
+      - conversation_id
+      - messages
+    ConversationRequest:
+      type: object
+      description: |-
+        Serialize a conversation with nested messages (read-only).
+        For writes, clients send a flat conversation object; messages are synced separately.
+      properties:
+        title:
+          type: string
+          nullable: true
+          maxLength: 255
+        local_only:
+          type: boolean
+    DeprecatedEndpointResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    EmailPinVerifyRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        pin:
+          type: string
+          minLength: 1
+          maxLength: 5
+      required:
+      - email
+      - pin
+    EmailPinVerifyResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    FullChat:
+      type: object
+      description: |-
+        Composite serializer that returns the complete chat payload for a user.
+        Fields:
+            - conversations: ConversationSerializer (with nested messages)
+            - messages: MessageSerializer (flat list)
+            - message_request: MessageRequestSerializer
+            - message_response: MessageResponseSerializer
+            - message_output: MessageOutputSerializer
+            - attachments: AttachmentSerializer
+
+        This serializer is intentionally a non-model `Serializer` since it aggregates
+        multiple querysets and models into a single response shape used by
+        `UnifiedSyncView.get`.
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+          readOnly: true
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          readOnly: true
+        message_request:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageRequestModel'
+          readOnly: true
+        message_response:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponse'
+          readOnly: true
+        message_output:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageOutput'
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+          readOnly: true
+      required:
+      - attachments
+      - conversations
+      - message_output
+      - message_request
+      - message_response
+      - messages
+    FullProfile:
+      type: object
+      description: |-
+        Full profile serializer that exposes most editable user fields.
+        This allows the UnifiedSyncView to upsert the complete user object.
+        Sensitive fields like `is_superuser`, `groups`, and `user_permissions` are intentionally omitted.
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 15
+        last_modified:
+          type: string
+          format: date-time
+          readOnly: true
+        devices_id:
+          nullable: true
+        temp_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        related_devices: {}
+        email_pin_created:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the PIN was generated
+        email_verified:
+          type: boolean
+          description: Has the user verified their email?
+        is_archived:
+          type: boolean
+          description: Is the user account archived?
+        is_google_user:
+          type: boolean
+          description: Account created / linked via Google OAuth
+        is_openrouter_user:
+          type: boolean
+          description: Account created / linked via OpenRouter OAuth
+        is_microsoft_user:
+          type: boolean
+          description: Account created / linked via Microsoft OAuth
+        is_github_user:
+          type: boolean
+          description: Account created / linked via GitHub OAuth
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        is_staff:
+          type: boolean
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+      required:
+      - email
+      - last_modified
+      - user_id
+      - username
+    FullProfileRequest:
+      type: object
+      description: |-
+        Full profile serializer that exposes most editable user fields.
+        This allows the UnifiedSyncView to upsert the complete user object.
+        Sensitive fields like `is_superuser`, `groups`, and `user_permissions` are intentionally omitted.
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        user_password:
+          type: string
+          writeOnly: true
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 15
+        devices_id:
+          nullable: true
+        temp_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        related_devices: {}
+        email_pin_created:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the PIN was generated
+        email_verified:
+          type: boolean
+          description: Has the user verified their email?
+        is_archived:
+          type: boolean
+          description: Is the user account archived?
+        is_google_user:
+          type: boolean
+          description: Account created / linked via Google OAuth
+        is_openrouter_user:
+          type: boolean
+          description: Account created / linked via OpenRouter OAuth
+        is_microsoft_user:
+          type: boolean
+          description: Account created / linked via Microsoft OAuth
+        is_github_user:
+          type: boolean
+          description: Account created / linked via GitHub OAuth
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        is_staff:
+          type: boolean
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+      required:
+      - email
+      - username
+    HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+      required:
+      - message
+      - status
+    LoginRequest:
+      type: object
+      properties:
+        identifier:
+          type: string
+        email:
+          oneOf:
+          - type: string
+            format: email
+          - type: string
+            maxLength: 0
+        username:
+          type: string
+        user_password:
+          type: string
+    LoginResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user_id:
+          type: string
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        email_verified:
+          type: boolean
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationDoc'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentDoc'
+      required:
+      - access_token
+      - attachments
+      - conversations
+      - email_verified
+      - message
+      - refresh_token
+      - user_id
+    LogoutRequestRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: Refresh token to blacklist (optional; may also be supplied
+            via header/cookie).
+    LogoutResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    Message:
+      type: object
+      description: |-
+        Serialize a chat message.
+        - Write: accept PKs for `request_id`, `response_id`, `output_id`, `conversation_id`.
+        - Read: also include nested `request`, `response`, `output` for convenience.
+        - File fields (`img_Url`, `doc_url`) are rendered as URLs.
+      properties:
+        message_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        conversation_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+          nullable: true
+        response_id:
+          type: string
+          nullable: true
+        output_id:
+          type: integer
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        vote:
+          type: boolean
+          nullable: true
+        has_image:
+          type: boolean
+        img_Url:
+          type: string
+          format: uri
+          nullable: true
+        metadata:
+          nullable: true
+        has_embedding:
+          type: boolean
+        has_document:
+          type: boolean
+        doc_url:
+          type: string
+          format: uri
+          nullable: true
+        request:
+          allOf:
+          - $ref: '#/components/schemas/MessageRequestModel'
+          readOnly: true
+        response:
+          allOf:
+          - $ref: '#/components/schemas/MessageResponse'
+          readOnly: true
+        output:
+          allOf:
+          - $ref: '#/components/schemas/MessageOutput'
+          readOnly: true
+      required:
+      - conversation_id
+      - message_id
+      - output
+      - request
+      - response
+      - timestamp
+      - user_id
+    MessageDoc:
+      type: object
+      properties:
+        message_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        has_image:
+          type: boolean
+        has_document:
+          type: boolean
+      required:
+      - message_id
+      - timestamp
+    MessageOutput:
+      type: object
+      description: |-
+        Serialize a normalized *output item* of a response (e.g., final message text).
+        Note: model has an implicit AutoField `id`. `output_id` is a provider-side identifier.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        output_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_id:
+          type: string
+          nullable: true
+          maxLength: 255
+        output_status:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_content_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_content_text:
+          type: string
+          nullable: true
+        output_content_annotations:
+          type: string
+          nullable: true
+      required:
+      - id
+    MessageOutputRequest:
+      type: object
+      description: |-
+        Serialize a normalized *output item* of a response (e.g., final message text).
+        Note: model has an implicit AutoField `id`. `output_id` is a provider-side identifier.
+      properties:
+        output_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_id:
+          type: string
+          nullable: true
+          maxLength: 255
+        output_status:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_content_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        output_content_text:
+          type: string
+          nullable: true
+        output_content_annotations:
+          type: string
+          nullable: true
+    MessageRequest:
+      type: object
+      description: |-
+        Serialize a chat message.
+        - Write: accept PKs for `request_id`, `response_id`, `output_id`, `conversation_id`.
+        - Read: also include nested `request`, `response`, `output` for convenience.
+        - File fields (`img_Url`, `doc_url`) are rendered as URLs.
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+          nullable: true
+        response_id:
+          type: string
+          minLength: 1
+          nullable: true
+        output_id:
+          type: integer
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        vote:
+          type: boolean
+          nullable: true
+        has_image:
+          type: boolean
+        img_Url:
+          type: string
+          format: binary
+          nullable: true
+        metadata:
+          nullable: true
+        has_embedding:
+          type: boolean
+        has_document:
+          type: boolean
+        doc_url:
+          type: string
+          format: binary
+          nullable: true
+      required:
+      - conversation_id
+    MessageRequestModel:
+      type: object
+      description: |-
+        Serialize a single model generation *request* (the user's prompt/config).
+        Primary key: `request_id` (UUID).
+        Used both to return request details (GET) and to upsert them (POST).
+      properties:
+        request_id:
+          type: string
+          format: uuid
+          readOnly: true
+        request_model:
+          type: string
+          nullable: true
+          maxLength: 255
+        request_input:
+          type: string
+          nullable: true
+        request_system_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        request_system_content:
+          type: string
+          nullable: true
+        request_system_prompt:
+          type: string
+          nullable: true
+        request_user_structured_output:
+          type: boolean
+          nullable: true
+        request_structured_schema:
+          type: string
+          nullable: true
+        request_user_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        request_user_content:
+          type: string
+          nullable: true
+        request_min_p:
+          type: number
+          format: double
+          nullable: true
+        request_temperature:
+          type: number
+          format: double
+          nullable: true
+        request_top_p:
+          type: number
+          format: double
+          nullable: true
+        request_n:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        request_top_k:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        request_stream:
+          type: boolean
+        request_stop:
+          type: string
+          nullable: true
+        request_max_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        repeat_penalty:
+          type: number
+          format: double
+          nullable: true
+      required:
+      - request_id
+    MessageRequestModelRequest:
+      type: object
+      description: |-
+        Serialize a single model generation *request* (the user's prompt/config).
+        Primary key: `request_id` (UUID).
+        Used both to return request details (GET) and to upsert them (POST).
+      properties:
+        request_model:
+          type: string
+          nullable: true
+          maxLength: 255
+        request_input:
+          type: string
+          nullable: true
+        request_system_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        request_system_content:
+          type: string
+          nullable: true
+        request_system_prompt:
+          type: string
+          nullable: true
+        request_user_structured_output:
+          type: boolean
+          nullable: true
+        request_structured_schema:
+          type: string
+          nullable: true
+        request_user_role:
+          type: string
+          nullable: true
+          maxLength: 50
+        request_user_content:
+          type: string
+          nullable: true
+        request_min_p:
+          type: number
+          format: double
+          nullable: true
+        request_temperature:
+          type: number
+          format: double
+          nullable: true
+        request_top_p:
+          type: number
+          format: double
+          nullable: true
+        request_n:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        request_top_k:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        request_stream:
+          type: boolean
+        request_stop:
+          type: string
+          nullable: true
+        request_max_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        repeat_penalty:
+          type: number
+          format: double
+          nullable: true
+    MessageResponse:
+      type: object
+      description: |-
+        Serialize a provider/model *response* aggregate (metadata + usage + settings).
+        Primary key: `response_id` (string).
+      properties:
+        response_id:
+          type: string
+          maxLength: 255
+        object:
+          type: string
+          nullable: true
+          maxLength: 50
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          nullable: true
+          maxLength: 50
+        error:
+          type: string
+          nullable: true
+        model_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        parallel_tool_calls:
+          type: boolean
+        previous_response_id:
+          type: string
+          nullable: true
+          maxLength: 255
+        instructions:
+          type: string
+          nullable: true
+        reasoning_effort:
+          type: string
+          nullable: true
+        reasoning_summary:
+          type: string
+          nullable: true
+        store:
+          type: boolean
+        temperature:
+          type: number
+          format: double
+          nullable: true
+        text_format_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        tool_choice:
+          type: string
+          nullable: true
+          maxLength: 255
+        tools:
+          type: string
+          nullable: true
+        top_p:
+          type: number
+          format: double
+          nullable: true
+        truncation:
+          type: string
+          nullable: true
+          maxLength: 50
+        usage_input_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        usage_output_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        usage_total_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        user:
+          type: string
+          nullable: true
+          readOnly: true
+        metadata:
+          nullable: true
+        incomplete_details:
+          type: string
+          nullable: true
+        max_output_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+      required:
+      - response_id
+      - user
+    MessageResponseRequest:
+      type: object
+      description: |-
+        Serialize a provider/model *response* aggregate (metadata + usage + settings).
+        Primary key: `response_id` (string).
+      properties:
+        response_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        object:
+          type: string
+          nullable: true
+          maxLength: 50
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          nullable: true
+          maxLength: 50
+        error:
+          type: string
+          nullable: true
+        model_name:
+          type: string
+          nullable: true
+          maxLength: 255
+        parallel_tool_calls:
+          type: boolean
+        previous_response_id:
+          type: string
+          nullable: true
+          maxLength: 255
+        instructions:
+          type: string
+          nullable: true
+        reasoning_effort:
+          type: string
+          nullable: true
+        reasoning_summary:
+          type: string
+          nullable: true
+        store:
+          type: boolean
+        temperature:
+          type: number
+          format: double
+          nullable: true
+        text_format_type:
+          type: string
+          nullable: true
+          maxLength: 50
+        tool_choice:
+          type: string
+          nullable: true
+          maxLength: 255
+        tools:
+          type: string
+          nullable: true
+        top_p:
+          type: number
+          format: double
+          nullable: true
+        truncation:
+          type: string
+          nullable: true
+          maxLength: 50
+        usage_input_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        usage_output_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        usage_total_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        metadata:
+          nullable: true
+        incomplete_details:
+          type: string
+          nullable: true
+        max_output_tokens:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+      required:
+      - response_id
+    MessageWrite:
+      type: object
+      description: |-
+        Write-side Message serializer for the nested conversation messages endpoint.
+
+        The conversation is supplied by the view (from the URL), not the client, so
+        `conversation_id` is not required in the request body.
+      properties:
+        message_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        conversation_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+          nullable: true
+        response_id:
+          type: string
+          nullable: true
+        output_id:
+          type: integer
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        vote:
+          type: boolean
+          nullable: true
+        has_image:
+          type: boolean
+        img_Url:
+          type: string
+          format: uri
+          nullable: true
+        metadata:
+          nullable: true
+        has_embedding:
+          type: boolean
+        has_document:
+          type: boolean
+        doc_url:
+          type: string
+          format: uri
+          nullable: true
+        request:
+          allOf:
+          - $ref: '#/components/schemas/MessageRequestModel'
+          readOnly: true
+        response:
+          allOf:
+          - $ref: '#/components/schemas/MessageResponse'
+          readOnly: true
+        output:
+          allOf:
+          - $ref: '#/components/schemas/MessageOutput'
+          readOnly: true
+      required:
+      - message_id
+      - output
+      - request
+      - response
+      - timestamp
+      - user_id
+    MessageWriteRequest:
+      type: object
+      description: |-
+        Write-side Message serializer for the nested conversation messages endpoint.
+
+        The conversation is supplied by the view (from the URL), not the client, so
+        `conversation_id` is not required in the request body.
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+          nullable: true
+        response_id:
+          type: string
+          minLength: 1
+          nullable: true
+        output_id:
+          type: integer
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        vote:
+          type: boolean
+          nullable: true
+        has_image:
+          type: boolean
+        img_Url:
+          type: string
+          format: binary
+          nullable: true
+        metadata:
+          nullable: true
+        has_embedding:
+          type: boolean
+        has_document:
+          type: boolean
+        doc_url:
+          type: string
+          format: binary
+          nullable: true
+    OAuthCallbackResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user_id:
+          type: string
+        username:
+          type: string
+          nullable: true
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        provider_scope:
+          type: string
+          nullable: true
+        provider_expires_at:
+          type: string
+          nullable: true
+        provider_access_token:
+          type: string
+          nullable: true
+        provider_refresh_token:
+          type: string
+          nullable: true
+        provider_token_type:
+          type: string
+          nullable: true
+        id_token:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        email_verified:
+          type: boolean
+        is_google_user:
+          type: boolean
+        is_openrouter_user:
+          type: boolean
+        is_github_user:
+          type: boolean
+        is_ms_user:
+          type: boolean
+      required:
+      - access_token
+      - message
+      - refresh_token
+      - user_id
+    PaginatedAttachmentUploadList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentUpload'
+    PaginatedConversationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+    PaginatedMessageList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+    PatchedConversationRequest:
+      type: object
+      description: |-
+        Serialize a conversation with nested messages (read-only).
+        For writes, clients send a flat conversation object; messages are synced separately.
+      properties:
+        title:
+          type: string
+          nullable: true
+          maxLength: 255
+        local_only:
+          type: boolean
+    PatchedProfileRequest:
+      type: object
+      description: |-
+        Safe profile serializer for client-driven profile updates.
+        Whitelisted writable fields: username, email, phone_number, biometric_enabled.
+        Sensitive fields (email_verified, is_staff, is_superuser, user_password, related_devices, etc.)
+        are intentionally excluded.
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 15
+        biometric_enabled:
+          type: boolean
+    Profile:
+      type: object
+      description: |-
+        Safe profile serializer for client-driven profile updates.
+        Whitelisted writable fields: username, email, phone_number, biometric_enabled.
+        Sensitive fields (email_verified, is_staff, is_superuser, user_password, related_devices, etc.)
+        are intentionally excluded.
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 15
+        biometric_enabled:
+          type: boolean
+      required:
+      - email
+      - user_id
+      - username
+    RegisterRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          writeOnly: true
+          minLength: 1
+        user_password:
+          writeOnly: true
+          oneOf:
+          - type: string
+            minLength: 6
+          - type: string
+            maxLength: 0
+      required:
+      - email
+      - username
+    RegisterResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        user_id:
+          type: string
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        email:
+          type: string
+          format: email
+        onboarding:
+          type: boolean
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationDoc'
+        temp_id:
+          type: string
+          nullable: true
+        device_id:
+          type: string
+          nullable: true
+        related_devices:
+          type: array
+          items:
+            type: string
+      required:
+      - access_token
+      - conversations
+      - email
+      - message
+      - onboarding
+      - refresh_token
+      - user_id
+    SetPasswordAfterEmailVerifyRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          minLength: 6
+      required:
+      - email
+      - password
+    SetPasswordAfterEmailVerifyResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    StatusEnum:
+      enum:
+      - pending
+      - streaming
+      - complete
+      - error
+      type: string
+      description: |-
+        * `pending` - pending
+        * `streaming` - streaming
+        * `complete` - complete
+        * `error` - error
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    UMKErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+      - error
+    UMKGetResponse:
+      type: object
+      description: GET response shape when the caller's UMK exists (UserKeyMaterial
+        fields + exists=True).
+      properties:
+        user:
+          type: integer
+          description: Owning user id
+        umk_b64:
+          type: string
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        exists:
+          type: boolean
+          default: true
+      required:
+      - created_at
+      - umk_b64
+      - updated_at
+      - user
+      - version
+    UMKProvisionRequestRequest:
+      type: object
+      description: 'POST request body: optionally client-supplied 32-byte key, base64-encoded.'
+      properties:
+        umk_b64:
+          type: string
+          description: Optional client-provided 32-byte key, base64-encoded. If omitted,
+            the server generates one.
+    UMKProvisionResponse:
+      type: object
+      description: '201 response after provisioning: the created UserKeyMaterial record.'
+      properties:
+        user:
+          type: integer
+          description: Owning user id
+        umk_b64:
+          type: string
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - umk_b64
+      - updated_at
+      - user
+      - version
+    UnifiedSyncDeleteResponse:
+      type: object
+      description: 'DELETE /unified-sync/ response: delete/archive summary + optional
+        export URLs.'
+      properties:
+        message:
+          type: string
+        deleted:
+          $ref: '#/components/schemas/UnifiedSyncDeleteStats'
+        archived:
+          $ref: '#/components/schemas/UnifiedSyncDeleteStats'
+        export_urls:
+          type: object
+          additionalProperties:
+            type: string
+        profile:
+          $ref: '#/components/schemas/FullProfile'
+        chat:
+          $ref: '#/components/schemas/FullChat'
+      required:
+      - message
+    UnifiedSyncDeleteStats:
+      type: object
+      properties:
+        attachments:
+          type: integer
+        messages:
+          type: integer
+        conversations:
+          type: integer
+        tokens:
+          type: integer
+        user:
+          type: integer
+    UnifiedSyncGetResponse:
+      type: object
+      description: GET /unified-sync/ — nested profile/chat payload (shape depends
+        on profile=/chat= flags).
+      properties:
+        user_id:
+          type: string
+          nullable: true
+        is_new:
+          type: boolean
+        temp_id:
+          type: string
+          nullable: true
+        profile:
+          $ref: '#/components/schemas/FullProfile'
+        chat:
+          $ref: '#/components/schemas/FullChat'
+      required:
+      - is_new
+      - user_id
+    UnifiedSyncPatchResponse:
+      type: object
+      description: 'PATCH /unified-sync/ response: the updated profile.'
+      properties:
+        profile:
+          $ref: '#/components/schemas/Profile'
+      required:
+      - profile
+    UnifiedSyncPostRequestRequest:
+      type: object
+      description: 'POST /unified-sync/ request body: optional profile + chat model
+        lists to upsert.'
+      properties:
+        profile:
+          $ref: '#/components/schemas/FullProfileRequest'
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationRequest'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageRequest'
+        message_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageRequestModelRequest'
+        message_responses:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponseRequest'
+        message_outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageOutputRequest'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentRequest'
+    UnifiedSyncPostResponse:
+      type: object
+      description: 'POST /unified-sync/ response: upsert summary/errors + canonical
+        profile/chat payload.'
+      properties:
+        summary:
+          $ref: '#/components/schemas/UnifiedSyncUpsertSummary'
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: {}
+        user_id:
+          type: string
+          nullable: true
+        temp_id:
+          type: string
+          nullable: true
+        profile:
+          $ref: '#/components/schemas/FullProfile'
+        chat:
+          $ref: '#/components/schemas/FullChat'
+      required:
+      - summary
+      - user_id
+    UnifiedSyncUpsertSummary:
+      type: object
+      description: Per-model created/updated counters returned by POST /unified-sync/.
+      properties:
+        profile_updated:
+          type: boolean
+        conversations_created:
+          type: integer
+        conversations_updated:
+          type: integer
+        messages_created:
+          type: integer
+        messages_updated:
+          type: integer
+        requests_created:
+          type: integer
+        requests_updated:
+          type: integer
+        responses_created:
+          type: integer
+        responses_updated:
+          type: integer
+        outputs_created:
+          type: integer
+        outputs_updated:
+          type: integer
+        attachments_created:
+          type: integer
+        attachments_updated:
+          type: integer
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

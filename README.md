@@ -1,160 +1,174 @@
- # Prompeteer Server Backend
+# Prompeteer Server
 
-Welcome to the Prompeteer backend server! This guide will help you set up, run, and explore the server, even if you're new to Django or backend development.
+Django 5.1.7 / DRF backend for a privacy-focused, multi-provider **LLM chat**
+application (course project ITSE500). It ships multi-provider OAuth
+authentication, user/profile sync, and a chat MVP (conversations, messages,
+async LLM execution, attachment upload).
 
----
-
-## 📁 Project Structure
-
-```
-codebase/
-  deploy/
-    back-end/
-      prompeteer_server/
-        ├── auth_api/           # Authentication and registration logic
-        ├── chat_api/           # Chat and messaging endpoints
-        ├── user_mang/          # User management (profiles, permissions, etc.)
-        ├── prompeteer_server/  # Main Django project config (settings, urls, wsgi/asgi)
-        │   ├── static/templates/   # HTML templates (landing page, etc.)
-        ├── staticfiles/        # Collected static files for production
-        ├── db.sqlite3          # SQLite database (default)
-        ├── README.md           # This file
-        └── ...
-```
+> **Change log**
+> | Updated on | Feature / change | Reason |
+> |---|---|---|
+> | 2026-07-07 | Full rewrite: chat_api MVP, env-gated infra, JWT hardening, CI/contract | Backend modernization + chat MVP branch (`claude/wizardly-stonebraker-716af6`) shipped 25 commits since the last README pass |
 
 ---
 
-## 🚀 Getting Started
+## Setup
 
-### 1. Install Python
+### Requirements
+- Python **3.13**
+- SQLite is fine for local dev (default); Postgres/Redis/MinIO are optional
+  and env-gated (see [Infrastructure](#infrastructure) below).
 
-- Make sure you have **Python 3.10+** installed. You can check with:
-
-  ```sh
-  python --version
-  ```
-
-### 2. Create and Activate a Virtual Environment
-
-use VS-Code Terminal which will run the `server_venv` right away and run the server from there
-
-- On Windows:
-
-  ```sh
-  python -m venv server_venv
-  server_venv\Scripts\activate
-  ```
-
-- On Mac/Linux:
-
-  ```sh
-  python3 -m venv server_venv
-  source server_venv/bin/activate
-  ```
-
-### 3. Install Dependencies
-
-From the `prompeteer_server` directory, run:
+### Install
 
 ```sh
-pip install -r requirements.txt
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Mac/Linux
+
+pip install -r requirements/dev.txt    # local development (includes test/lint tooling)
+# pip install -r requirements/prod.txt # production image (no dev/test extras)
 ```
 
-**Note:**
+`requirements/base.txt` holds the shared runtime deps; `dev.txt` and
+`prod.txt` each extend it.
 
-- The `requirements.txt` file is located in your project directory, *not* inside the `server_venv` folder.
-- The `server_venv` directory is your local virtual environment and should **never** be uploaded to GitHub (it's in `.gitignore`).
-- If `requirements.txt` is missing, ask your team or run `pip freeze > requirements.txt` after installing dependencies.
+### Configure environment
 
-### 4. Run Database Migrations
+Copy `.env.example` to `.env` and fill in what you need. With **`DEBUG=True`**
+(the default when `DJANGO_DEBUG` is unset) the app falls back to safe local
+defaults for everything:
+
+- an ephemeral dev-only `SECRET_KEY` / password salt if none is set,
+- **SQLite** (no `DB_HOST`),
+- **local-memory cache**, **in-memory Channels layer**, **filesystem media
+  storage** (no `REDIS_URL` / `AWS_S3_ENDPOINT_URL`),
+- Celery tasks run **inline** (no broker configured).
+
+With **`DJANGO_DEBUG=False`**, missing `SECRET_KEY` / `BACKEND_PASSWORD_SALT`
+cause the app to **fail fast at startup** rather than silently run insecure —
+see [Security](#security--auth).
+
+### Migrate & run
 
 ```sh
 python manage.py migrate
-```
-
-### 5. Create a Superuser (for admin access)
-
-```sh
-python manage.py createsuperuser
-```
-
-### 6. Start the Development Server
-
-```sh
+python manage.py createsuperuser   # optional, for /admin/
 python manage.py runserver
 ```
 
-- Visit [http://127.0.0.1:8000/](http://127.0.0.1:8000/) to see the landing page.
-- Admin panel: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/)
+- App: http://127.0.0.1:8000/
+- Admin: http://127.0.0.1:8000/admin/
+- OpenAPI docs (when `drf-spectacular` is installed): `/api/docs/` (Swagger),
+  `/api/redoc/`, raw schema at `/api/schema/`.
+
+Migrations are **committed to git** — `manage.py migrate` only *applies* them;
+nothing runs `makemigrations` at deploy time.
 
 ---
 
-## 🗂 Navigating the Directories
+## API surface
 
-- `auth_api/` — All authentication, registration, and login endpoints.
-- `user_mang/` — User profiles, permissions, and related logic.
-- `chat_api/` — Chat and messaging endpoints.
-- `prompeteer_server/` — Django project settings, URLs, and ASGI/WSGI config.
-- `static/templates/` — HTML templates (landing page, etc.).
-- `staticfiles/` — Static files for production (after running `collectstatic`).
+All endpoints are namespaced under `/api/v1/<app>/`.
+
+| App | Base path | Purpose |
+|---|---|---|
+| `auth_api` | `/api/v1/auth_api/` | Registration, login, OAuth (Google/GitHub/Microsoft/OpenRouter), visitor login, email-PIN/OTP, health check |
+| `user_mang` | `/api/v1/user_mang/` | Profile + chat sync (`UnifiedSyncView`), CSV/PDF export, soft-delete |
+| `chat_api` | `/api/v1/chat_api/` | Conversations, messages, LLM execution, attachments (new MVP) |
+| `crypto_api` | `/api/v1/crypto_api/` | Client-side-encryption key material (UMK) |
+
+### `chat_api` (new)
+
+| Method | Path | Behavior |
+|---|---|---|
+| `GET/POST` | `/api/v1/chat_api/conversations/` | List (paginated) / create the caller's conversations |
+| `GET/PATCH/DELETE` | `/api/v1/chat_api/conversations/{id}/` | Retrieve/update/delete a conversation (user-scoped — 404s on another user's resource) |
+| `GET/POST` | `/api/v1/chat_api/conversations/{id}/messages/` | List (paginated) / create messages in a conversation |
+| `GET/POST` | `/api/v1/chat_api/conversations/{id}/messages/{mid}/attachments/` | List / upload attachments on a message (MinIO or local filesystem, ownership-gated, 25 MB cap, MIME allow-list, server-computed size + sha256) |
+
+Posting a message with a `request` payload (prompt + params) triggers
+**asynchronous LLM inference**: the `Message` is created with
+`status=pending`, execution runs via Celery (or inline if no broker is
+configured) against the configured LLM provider (`litellm`/`openai`), and the
+message transitions to `complete` (with a persisted `MessageResponse` +
+`MessageOutput`) or `error` — a single sole-authority state-machine guard
+enforces that transition idempotently.
+
+See [`api/schema.yaml`](api/schema.yaml) for the full, generated OpenAPI
+contract — it is the source of truth consumed by the Flutter and React
+clients (see [`CI_SYNC.md`](CI_SYNC.md)).
 
 ---
 
-## 📬 Making API Requests
+## Infrastructure
 
-You can use [Postman](https://www.postman.com/) or `curl` to interact with the API. For a quick start, you can import the provided Postman collection into the Postman VS Code extension:
+Postgres, Redis, MinIO, and Celery are **env-gated**: each activates only
+when its environment variable is set, with a safe local fallback otherwise.
 
-### 📨 Importing the Postman Collection in VS Code
+| Service | Activates on | Local fallback |
+|---|---|---|
+| PostgreSQL | `DB_HOST` set | SQLite |
+| Redis (cache/channels/broker) | `REDIS_URL` set | LocMemCache / in-memory channel layer |
+| MinIO (S3-compatible media) | `AWS_S3_ENDPOINT_URL` set | Filesystem `MEDIA_ROOT` |
+| Celery | broker configured | Tasks run inline (synchronously) |
 
-1. **Install the Postman VS Code extension** if you haven't already.
-2. In VS Code, open the Command Palette (`Ctrl+Shift+P`), search for `Postman: Open` and launch the extension.
-3. Click the **Import** button in the Postman panel.
-4. Select the file `postman-prompeteer-api.postman_collection.json` from the project root.
-5. The collection with all main API endpoints will appear in your Postman workspace—ready to use!
+For a real production deploy against your own VPS's Postgres/Redis/MinIO,
+see **[`DEPLOY.md`](DEPLOY.md)** (runbook, `docker-compose.prod.yml`,
+Caddy reverse-proxy example, backups/rollback).
 
-You can also use the standalone Postman app to import the same file.
+For the overall modernization scope, phased status, and open decisions, see
+**[`MODERNIZATION_PLAN.md`](MODERNIZATION_PLAN.md)**.
 
-Here are some example requests:
+For how this backend's OpenAPI contract stays in sync with the Flutter and
+React client repos (codegen + drift-checked CI), see **[`CI_SYNC.md`](CI_SYNC.md)**.
 
-### Visitor Login (Guest Session)
+---
+
+## Security / auth
+
+- **Secrets are environment-only.** `SECRET_KEY` and `BACKEND_PASSWORD_SALT`
+  fail fast at startup when `DJANGO_DEBUG=False` and unset (in `DEBUG=True`
+  an ephemeral dev-only default is used, with a warning). No secrets are
+  committed to the repo.
+- **JWT**: 15-minute access tokens (`JWT_ACCESS_MINUTES`, default 15), 7-day
+  refresh tokens (`JWT_REFRESH_DAYS`), refresh-token **rotation** and
+  **blacklisting after rotation** enabled.
+- **Throttling**: DRF request throttling is configured, with a dedicated
+  `auth` scope (10/min) applied to login/register/OTP endpoints to slow
+  brute-force attempts.
+- **Ownership enforcement**: `chat_api` endpoints and `user_mang`'s
+  `UnifiedSyncView` are user-scoped (two IDOR holes in the sync view were
+  closed and covered by regression tests).
+
+---
+
+## Testing
 
 ```sh
-curl -X POST http://127.0.0.1:8000/api/v1/auth_api/visitor-login/ \
-     -H "Content-Type: application/json" \
-     -d '{"device_id": "abc123xyz"}'
+pytest
 ```
 
-### User Registration
+The active suite is green; three pre-refactor suites that no longer match
+the current models/views are quarantined under `legacy_tests/` (excluded
+from collection — see [`legacy_tests/README.md`](legacy_tests/README.md)).
 
-```sh
-curl -X POST http://127.0.0.1:8000/api/v1/auth_api/reg/ \
-     -H "Content-Type: application/json" \
-     -d '{"username": "john_doe", "email": "john@example.com", "password": "hashedpassword123"}'
-```
-
-### User Login
-
-```sh
-curl -X POST http://127.0.0.1:8000/api/v1/auth_api/login/ \
-     -H "Content-Type: application/json" \
-     -d '{"email": "john@example.com", "password": "hashedpassword123"}'
-```
+CI (`.github/workflows/ci.yml`) runs `ruff`, `pytest --cov`, an OpenAPI
+schema-drift check against `api/schema.yaml`, and `pip-audit`.
 
 ---
 
-## 🛠 Troubleshooting
+## Project layout
 
-- If you get `ModuleNotFoundError`, check that your virtual environment is activated and dependencies are installed.
-- For database issues, try deleting `db.sqlite3` and running `python manage.py migrate` again (only for development/testing).
-- For errors or debugging check the `.log` files, utilize the `Postman`
-
----
-
-## 📚 More
-
-- For more endpoints, see the landing page at [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
-- For real-time features, make sure Redis is running (for Channels support).
-
----
-
-Happy hacking! 🚀
+```
+auth_api/       # Authentication, registration, OAuth
+user_mang/      # User profile + chat sync
+chat_api/       # Conversations, messages, LLM execution, attachments
+crypto_api/     # Client-side-encryption key material (UMK)
+core/           # Landing page / shared views
+prompeteer_server/  # Django project settings, URLs, ASGI/WSGI, Celery app
+api/            # Published OpenAPI contract (api/schema.yaml)
+deploy/         # Reverse-proxy examples (Caddyfile, etc.)
+legacy_tests/   # Quarantined pre-refactor test suites (reference only)
+requirements/   # base.txt / dev.txt / prod.txt
+```

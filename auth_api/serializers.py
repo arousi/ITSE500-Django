@@ -130,6 +130,10 @@ class LoginResponseSerializer(serializers.Serializer):
     attachments = AttachmentDoc(many=True)
 
 
+class LogoutRequestSerializer(serializers.Serializer):
+    refresh_token = serializers.CharField(required=False, allow_blank=True, help_text='Refresh token to blacklist (optional; may also be supplied via header/cookie).')
+
+
 class LogoutResponseSerializer(serializers.Serializer):
     detail = serializers.CharField()
 
@@ -183,3 +187,7 @@ class SetPasswordAfterEmailVerifyRequestSerializer(serializers.Serializer):
 
 class SetPasswordAfterEmailVerifyResponseSerializer(serializers.Serializer):
     message = serializers.CharField()
+
+
+class DeprecatedEndpointResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField()

@@ -1,3 +1,0 @@
--- database: c:\Users\hp\dev\l-ozma-kapa-project\ITSE500-Django\db.sqlite3
-
-SELECT * FROM "django_migrations" 

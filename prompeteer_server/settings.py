@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 import importlib.util as _imp
 import mimetypes
+import warnings
+from django.core.exceptions import ImproperlyConfigured
 
 # --- Early .env loader (supports lines starting with `set `) ---
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,7 +32,8 @@ def _load_simple_env(env_path: Path):
 _load_simple_env(BASE_DIR / '.env')
 # ---------------------------------------------------------------
 # settings.py
-ZERUH_API_KEY = "7f97762a2fad9a7f4cbba0f827540f6e57160a154bbd48b67b7d8784911e66cf"
+# SECURITY: previously a hardcoded literal; moved to env (no fallback value, see .env.example).
+ZERUH_API_KEY = os.getenv('ZERUH_API_KEY', '')
 
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND')
 EMAIL_HOST = os.environ.get('EMAIL_HOST')
@@ -73,7 +76,27 @@ GITHUB_REDIRECT_URI = os.getenv('GITHUB_REDIRECT_URI', '')
 MS_CLIENT_ID = os.getenv('MS_CLIENT_ID', '')
 MS_CLIENT_SECRET = os.getenv('MS_CLIENT_SECRET', '')
 MS_REDIRECT_URI = os.getenv('MS_REDIRECT_URI', '')
-BACKEND_PASSWORD_SALT = os.getenv('BACKEND_PASSWORD_SALT','fallback_dev_salt')
+
+# --- DEBUG must be known before the fail-fast secret checks below ---
+# SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
+
+# --- Fail-fast secrets: no insecure production fallback ---
+# BACKEND_PASSWORD_SALT: required in production; ephemeral dev-only default when DEBUG=True.
+_backend_password_salt_env = os.getenv('BACKEND_PASSWORD_SALT')
+if _backend_password_salt_env:
+    BACKEND_PASSWORD_SALT = _backend_password_salt_env
+elif DEBUG:
+    BACKEND_PASSWORD_SALT = 'EPHEMERAL-DEV-ONLY-SALT-DO-NOT-USE-IN-PRODUCTION'
+    warnings.warn(
+        "BACKEND_PASSWORD_SALT not set; using an ephemeral dev-only default because DEBUG=True. "
+        "Set BACKEND_PASSWORD_SALT in the environment before deploying.",
+        RuntimeWarning,
+    )
+else:
+    raise ImproperlyConfigured(
+        "BACKEND_PASSWORD_SALT environment variable is required when DEBUG=False."
+    )
 
 """
 Django settings for prompeteer_server project.
@@ -96,12 +119,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'fallback_dev_key')
-
-
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in ('1', 'true', 'yes')
+# Fail-fast: no insecure production fallback. DEBUG was already resolved above.
+_secret_key_env = os.getenv('SECRET_KEY')
+if _secret_key_env:
+    SECRET_KEY = _secret_key_env
+elif DEBUG:
+    SECRET_KEY = 'django-insecure-EPHEMERAL-DEV-ONLY-KEY-DO-NOT-USE-IN-PRODUCTION'
+    warnings.warn(
+        "SECRET_KEY not set; using an ephemeral dev-only default because DEBUG=True. "
+        "Set SECRET_KEY in the environment before deploying.",
+        RuntimeWarning,
+    )
+else:
+    raise ImproperlyConfigured(
+        "SECRET_KEY environment variable is required when DEBUG=False."
+    )
 
 _DEFAULT_ALLOWED = [
     'react.itse500-ok.ly',
@@ -131,11 +163,28 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Throttling: global anon rate + a strict 'auth' scope for brute-force protection.
+    # Brute-forceable auth views (Login, Register, EmailPinVerify, SetPasswordAfterEmailVerify,
+    # SendLoginOTP, VerifyLoginOTP, LoginWithOTP) declare throttle_scope = 'auth' to apply the
+    # stricter 'auth' rate below via ScopedRateThrottle.
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'auth': '10/min',
+    },
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    # JWT hardening: short-lived access token, rotated refresh tokens, blacklist on rotation.
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_MINUTES', '15'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_DAYS', '7'))),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'USER_ID_FIELD': 'user_id',
     'USER_ID_CLAIM': 'user_id',
 }
@@ -164,18 +213,36 @@ INSTALLED_APPS = [
     "chat_api",
     "crypto_api",
     "rest_framework",
+    'rest_framework_simplejwt.token_blacklist',
     *(['drf_spectacular'] if _HAS_SPECTACULAR else []),
-    
+
 ]
 
-""" CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("127.0.0.1", 6379) ],  # Redis server address
+# Shared Redis URL used by CACHES, CHANNEL_LAYERS, and Celery below.
+# Defined here (before first use) so its fallback (LocMemCache /
+# InMemoryChannelLayer / synchronous Celery) applies with zero infra env vars set.
+REDIS_URL = os.getenv('REDIS_URL', '')
+
+# Channel layer: env-gated on REDIS_URL. Uses channels_redis (third-party,
+# only imported when REDIS_URL is set) so real-time messaging fans out across
+# multiple worker processes/machines in production. Falls back to the
+# in-memory channel layer that ships with `channels` itself (no extra
+# dependency, single-process only) for local dev / the pytest suite.
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
         },
-    },
-} """
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 #* Logging in Deployment
 
 LOGGING = {
@@ -470,30 +537,52 @@ WSGI_APPLICATION = 'prompeteer_server.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    
+# Env-gated: if DB_HOST or DB_ENGINE is set, use PostgreSQL (psycopg v3 driver);
+# otherwise fall back to the local SQLite file (no extra dependency required).
+# This keeps local dev + the pytest suite working with zero infra env vars set,
+# since `psycopg` is not installed in that environment.
+_db_host = os.getenv('DB_HOST')
+_db_engine_override = os.getenv('DB_ENGINE')
+if _db_host or _db_engine_override:
+    _db_ssl = os.getenv('DB_SSL', 'False').lower() in ('1', 'true', 'yes')
+    DATABASES = {
         'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
-    }
-
-
-#sqlite db
-"""
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',  # Use django-pgvector engine
-        'NAME': os.environ.get('DB_NAME', 'prompeteer_db'),  # Database name
-        'USER': os.environ.get('DB_USER', 'prompeteer_user'),  # Database user
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'prompeteer_password'),  # Database password
-        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),  # Database host
-        'PORT': os.environ.get('DB_PORT', '5432'),  # Database port
-        'OPTIONS': {
-            'sslmode': 'require' if os.environ.get('DB_SSL', 'False') == 'True' else None,
+            'ENGINE': _db_engine_override or 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'prompeteer_db'),
+            'USER': os.getenv('DB_USER', 'prompeteer_user'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': _db_host or '127.0.0.1',
+            'PORT': os.getenv('DB_PORT', '5432'),
+            'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+            'OPTIONS': ({'sslmode': 'require'} if _db_ssl else {}),
         },
-"""
-# BACKEND_PASSWORD_SALT is already defined above from environment with a safe default.
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        },
+    }
+# BACKEND_PASSWORD_SALT is already defined above (fail-fast from environment; see top of file).
 # Keep it stable across restarts; do not override it here.
+
+# Cache: env-gated on REDIS_URL (defined above). Uses Django's native Redis
+# cache backend (no django-redis dependency needed). Falls back to in-process
+# LocMemCache when REDIS_URL is unset, so no third-party backend is imported.
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -539,6 +628,36 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# STORAGES (Django 5.x): env-gated on AWS_S3_ENDPOINT_URL (MinIO/S3-compatible).
+# When absent, `default` stays the built-in FileSystemStorage (MEDIA_ROOT above)
+# and nothing from `django-storages`/`boto3` is imported, so those third-party
+# packages are not required for local dev / the pytest suite.
+# `staticfiles` stays on WhiteNoise in both cases.
+AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL', '')
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+if AWS_S3_ENDPOINT_URL:
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', '')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', '')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', '')
+    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+    # Path-style addressing is required for MinIO (virtual-hosted-style needs
+    # per-bucket DNS, which a self-managed MinIO instance won't have).
+    AWS_S3_ADDRESSING_STYLE = 'path'
+    # Files are served via signed/expiring query-string URLs by default since
+    # the bucket is not assumed to be publicly readable.
+    AWS_QUERYSTRING_AUTH = os.getenv('AWS_QUERYSTRING_AUTH', 'True').lower() in ('1', 'true', 'yes')
+    STORAGES['default'] = {
+        'BACKEND': 'storages.backends.s3.S3Storage',
+    }
+else:
+    STORAGES['default'] = {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    }
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -548,3 +667,35 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Ensure correct MIME for WASM (CanvasKit)
 mimetypes.add_type('application/wasm', '.wasm', True)
+
+# --- Production security headers (applied only when DEBUG=False) ---
+# Deploys behind nginx, which terminates TLS and forwards X-Forwarded-Proto.
+# SSL redirect + HSTS are the most disruptive to a local prod-like run without TLS,
+# so they're additionally gated behind SECURE_SSL (defaults to True in production).
+if not DEBUG:
+    _secure_ssl = os.getenv('SECURE_SSL', 'True').lower() in ('1', 'true', 'yes')
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = _secure_ssl
+    SECURE_HSTS_SECONDS = 31536000 if _secure_ssl else 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _secure_ssl
+    SECURE_HSTS_PRELOAD = _secure_ssl
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+
+# --- Celery (background task queue) ---
+# Broker/result backend default to REDIS_URL (shared with CACHES/CHANNEL_LAYERS
+# above) but can be pointed at a separate Redis instance/db via CELERY_BROKER_URL
+# / CELERY_RESULT_BACKEND. When no broker is configured at all, tasks run
+# synchronously in-process (CELERY_TASK_ALWAYS_EAGER) so `celery[redis]` is
+# never required and `.delay()`/`.apply_async()` calls still work in local
+# dev / the pytest suite without a running worker.
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
+CELERY_TASK_ALWAYS_EAGER = not bool(CELERY_BROKER_URL)
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE

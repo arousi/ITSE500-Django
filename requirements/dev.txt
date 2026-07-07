@@ -1,0 +1,23 @@
+-r base.txt
+
+# --- Testing ---
+pytest==8.3.4
+pytest-django==4.10.0
+pytest-asyncio==0.25.3
+pytest-cov==6.0.0
+coverage==7.6.12
+
+# --- Interactive / notebook tooling ---
+ipython==8.32.0
+jupyterlab==4.3.5
+notebook==7.3.2
+ipykernel==6.29.5
+debugpy==1.8.12
+
+# --- In-app debugging (wired conditionally in settings.py via find_spec) ---
+django-debug-toolbar
+django-silk
+
+# --- Lint / format / hooks ---
+ruff==0.9.6
+pre-commit==4.1.0

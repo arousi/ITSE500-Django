@@ -1,0 +1,24 @@
+# Caddy reverse proxy for Prompeteer Server (auto-TLS via Let's Encrypt).
+# Copy to /etc/caddy/Caddyfile and `systemctl reload caddy`.
+# The Django app is bound to 127.0.0.1:8000 (loopback) by docker-compose.prod.yml.
+
+itse500-ok.ly, www.itse500-ok.ly {
+	encode zstd gzip
+
+	# Forward to the loopback-bound app container. Caddy sets X-Forwarded-Proto=https
+	# automatically, which satisfies Django's SECURE_PROXY_SSL_HEADER so SECURE_SSL_REDIRECT
+	# and secure-cookie handling work correctly behind the proxy.
+	reverse_proxy 127.0.0.1:8000
+
+	# Cap upload size to match the API's 25 MB attachment limit (tune as needed).
+	request_body {
+		max_size 25MB
+	}
+}
+
+# If you serve the React and/or Flutter web builds from their own subdomains, add e.g.:
+# react.itse500-ok.ly {
+# 	root * /srv/prompeteer-react
+# 	file_server
+# 	try_files {path} /index.html
+# }

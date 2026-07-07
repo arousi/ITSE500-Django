@@ -1,0 +1,16 @@
+-r base.txt
+
+# --- Production application server ---
+gunicorn==21.2.0
+uvicorn==0.34.0
+
+# --- Phase 2 (infrastructure integration - activated) ---
+# All of these are env-gated in prompeteer_server/settings.py: the app still
+# runs on SQLite/LocMemCache/InMemoryChannelLayer/FileSystemStorage with none
+# of these imported when the corresponding env var (DB_HOST, REDIS_URL,
+# AWS_S3_ENDPOINT_URL) is unset.
+psycopg[binary]==3.2.*        # Postgres driver (DB_HOST set)
+django-storages[s3]==1.14.*   # S3/MinIO-backed MEDIA storage (AWS_S3_ENDPOINT_URL set)
+boto3==1.35.*                 # required by django-storages[s3]
+channels-redis==4.2.*         # Redis-backed CHANNEL_LAYERS (REDIS_URL set)
+celery[redis]==5.4.*          # background task queue (CELERY_BROKER_URL/REDIS_URL set)

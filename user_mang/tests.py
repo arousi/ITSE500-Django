@@ -71,22 +71,23 @@ class TestUnifiedSyncGet:
 @pytest.mark.django_db
 class TestUnifiedSyncPost:
     def test_post_creates_conversation_owned_by_caller(self, api_client, make_user):
-        """NOTE: ConversationSerializer marks conversation_id as read_only (the model
-        field is editable=False), so a client-supplied conversation_id is silently
-        ignored on create and the server always assigns a fresh random UUID -- see
-        BUG report (breaks upsert/idempotency semantics for offline-first clients)."""
+        """ConversationSerializer accepts a client-supplied conversation_id on create
+        (upsert/idempotency semantics for offline-first clients), while the owning
+        user_id is always forced to request.user regardless of payload content."""
         user = make_user(username="upsertuser", email="upsert@example.com")
         refresh = RefreshToken.for_user(user)
         api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
 
+        client_conv_id = "11111111-1111-1111-1111-111111111111"
         payload = {
-            "conversations": [{"conversation_id": "11111111-1111-1111-1111-111111111111", "title": "New convo"}],
+            "conversations": [{"conversation_id": client_conv_id, "title": "New convo"}],
         }
         resp = api_client.post(ME_URL, payload, format="json")
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["summary"]["conversations_created"] == 1
         conv = Conversation.objects.get(user_id=user, title="New convo")
         assert conv.user_id_id == user.pk  # FK forced to the authenticated user, not client-suppliable
+        assert str(conv.conversation_id) == client_conv_id  # client-supplied id honored on create
 
     @pytest.mark.xfail(
         reason=(

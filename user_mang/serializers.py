@@ -212,15 +212,22 @@ class ConversationSerializer(serializers.ModelSerializer):
     """
     Serialize a conversation with nested messages (read-only).
     For writes, clients send a flat conversation object; messages are synced separately.
+
+    conversation_id is client-settable on CREATE (so offline-first clients can generate
+    the id locally and upsert idempotently), but immutable once the row exists: the model
+    field is a UUIDField(editable=False) primary key, so DRF's default ModelSerializer
+    field-building infers it as read-only unless declared explicitly here. It is declared
+    as a writable UUIDField and immutability-on-update is enforced in validate().
     """
 
+    conversation_id = serializers.UUIDField(required=False)
     user_id = serializers.PrimaryKeyRelatedField(read_only=True)
     messages = MessageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Conversation
         fields = [
-            "conversation_id",   # allow client to provide conversation_id for upsert/create
+            "conversation_id",   # client-settable on create; immutable on update (see validate())
             "user_id",
             "title",
             "created_at",
@@ -228,8 +235,15 @@ class ConversationSerializer(serializers.ModelSerializer):
             "local_only",
             "messages",
         ]
-        # keep created/updated/user read-only but allow providing conversation_id for upsert
+        # keep created/updated/user read-only
         read_only_fields = ["created_at", "updated_at", "user_id"]
+
+    def validate_conversation_id(self, value):
+        # Immutable once the conversation exists: a client cannot repoint an existing
+        # row's primary key via this field.
+        if self.instance is not None and value != self.instance.conversation_id:
+            raise serializers.ValidationError("conversation_id cannot be changed on update.")
+        return value
 
 
 class ProfileSerializer(serializers.ModelSerializer):

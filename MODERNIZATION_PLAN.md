@@ -76,6 +76,15 @@ This plan takes it from "solid auth skeleton" to a **secure, reproducible, produ
 - **Decisions locked:** start **clean on Postgres** (no SQLite data migration); **security-first** sequencing.
 - **Next:** fix chat_api model PK defects (#17) + add `Message.status` → generate & commit initial migrations → Phase 2 (Postgres/Redis/MinIO) → chat_api LLM MVP (Phase 4).
 
+### Implementation session 3 (models → migrations → infra) — DONE + verified
+
+- ✅ **Model defects (#17) fixed**: `MessageResponse.response_id` blank PK removed; `Message.status` lifecycle field added (default `complete`), exposed in serializer.
+- ✅ **First real migrations committed** for all 4 apps; `makemigrations --check` = no drift; deploy no longer runs `makemigrations` (`.do/app.yaml` fixed, incl. the dead post-`gunicorn` lines).
+- ✅ **Phase 2 infra wired (env-gated + safe local fallbacks)**: Postgres (psycopg3) / Redis cache / channels-redis / MinIO via django-storages / Celery — each activates only when its env var is set; SQLite/LocMem/InMemory/filesystem otherwise. `manage.py check` + tests pass with none of the infra packages installed. Added `docker-compose.prod.yml` (connects to the VPS's existing PG/Redis/MinIO) and `prompeteer_server/celery.py`.
+- ⚠️ **Deploy-time notes**: (1) compose `web` healthcheck uses http → collides with `SECURE_SSL_REDIRECT` when `SECURE_SSL=True` (redirect TLS at the proxy, add `X-Forwarded-Proto`, or exempt the health path); (2) static now uses WhiteNoise strict manifest storage → `collectstatic` must run (entrypoint does).
+- **To activate on the VPS**, set `DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` (+ `DB_PORT`/`DB_SSL`), `REDIS_URL`, and `AWS_S3_ENDPOINT_URL`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_STORAGE_BUCKET_NAME` (+ optional `CELERY_BROKER_URL`), then run `migrate` against Postgres.
+- **Next:** Phase 4 — the chat_api LLM MVP (conversation/message endpoints, async LLM execution via litellm/openai + Celery, MinIO attachment upload) designed with pagination + ownership from day one; then rewrite the stale test suites + CI (Phase 7) → VPS deploy (Phase 8).
+
 ---
 
 ## 3. Target Architecture (VPS)

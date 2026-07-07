@@ -1,0 +1,105 @@
+version: "3.8"
+
+# Production compose file for a self-managed VPS.
+#
+# IMPORTANT: PostgreSQL, Redis, and MinIO are NOT defined as services here —
+# this stack assumes they ALREADY run on the VPS (either as separate
+# docker-compose stacks, systemd services, or on another host) and are
+# reached purely through env vars (DB_HOST, REDIS_URL, AWS_S3_ENDPOINT_URL in
+# .env). This avoids double-provisioning stateful services and keeps their
+# lifecycle (backups, upgrades) independent of the app deploy.
+#
+# This compose file does NOT include a reverse proxy / TLS terminator.
+# Put nginx or Caddy in front of `web` (and `channels`, if enabled) on the
+# host, terminating TLS and forwarding X-Forwarded-Proto (settings.py's
+# SECURE_PROXY_SSL_HEADER expects this). Do not expose port 8000 directly
+# to the internet.
+#
+# Rollback: `docker compose -f docker-compose.prod.yml up -d --no-deps web`
+# with the previous image tag restores the prior version; Postgres/Redis/MinIO
+# state is untouched since this file never manages them. Schema changes must
+# follow expand-contract (see release-engineering skill) so rolling `web`
+# back never breaks against a since-migrated database.
+
+services:
+  web:
+    build: .
+    image: prompeteer-server:latest
+    entrypoint: ["/app/entrypoint.sh"]
+    # entrypoint.sh already runs `migrate --noinput` + `collectstatic --noinput`
+    # before exec'ing this command.
+    command: ["gunicorn", "prompeteer_server.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=prompeteer_server.settings
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    ports:
+      - "127.0.0.1:8000:8000"  # bind to loopback only; reverse proxy forwards from there
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  celery-worker:
+    build: .
+    image: prompeteer-server:latest
+    entrypoint: []
+    # No migrate/collectstatic here (web already did it); run the worker directly.
+    command: ["celery", "-A", "prompeteer_server", "worker", "--loglevel=info"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=prompeteer_server.settings
+    depends_on:
+      - web
+    healthcheck:
+      test: ["CMD", "celery", "-A", "prompeteer_server", "inspect", "ping", "-d", "celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  celery-beat:
+    build: .
+    image: prompeteer-server:latest
+    entrypoint: []
+    command: ["celery", "-A", "prompeteer_server", "beat", "--loglevel=info"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=prompeteer_server.settings
+    depends_on:
+      - web
+
+  # Optional: ASGI/Channels server for real-time (WebSocket) traffic.
+  # Uncomment and point your reverse proxy's /ws/ (or equivalent) location at
+  # this service's port once REDIS_URL is set (multi-process channel layer).
+  # channels:
+  #   build: .
+  #   image: prompeteer-server:latest
+  #   entrypoint: []
+  #   command: ["uvicorn", "prompeteer_server.asgi:application", "--host", "0.0.0.0", "--port", "8001", "--workers", "3"]
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - DJANGO_SETTINGS_MODULE=prompeteer_server.settings
+  #   volumes:
+  #     - static_volume:/app/staticfiles
+  #     - media_volume:/app/media
+  #   ports:
+  #     - "127.0.0.1:8001:8001"
+  #   depends_on:
+  #     - web
+
+volumes:
+  static_volume:
+  media_volume:

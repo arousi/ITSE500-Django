@@ -216,14 +216,31 @@ INSTALLED_APPS = [
 
 ]
 
-""" CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("127.0.0.1", 6379) ],  # Redis server address
+# Shared Redis URL used by CACHES, CHANNEL_LAYERS, and Celery below.
+# Defined here (before first use) so its fallback (LocMemCache /
+# InMemoryChannelLayer / synchronous Celery) applies with zero infra env vars set.
+REDIS_URL = os.getenv('REDIS_URL', '')
+
+# Channel layer: env-gated on REDIS_URL. Uses channels_redis (third-party,
+# only imported when REDIS_URL is set) so real-time messaging fans out across
+# multiple worker processes/machines in production. Falls back to the
+# in-memory channel layer that ships with `channels` itself (no extra
+# dependency, single-process only) for local dev / the pytest suite.
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
         },
-    },
-} """
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 #* Logging in Deployment
 
 LOGGING = {
@@ -518,30 +535,52 @@ WSGI_APPLICATION = 'prompeteer_server.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    
+# Env-gated: if DB_HOST or DB_ENGINE is set, use PostgreSQL (psycopg v3 driver);
+# otherwise fall back to the local SQLite file (no extra dependency required).
+# This keeps local dev + the pytest suite working with zero infra env vars set,
+# since `psycopg` is not installed in that environment.
+_db_host = os.getenv('DB_HOST')
+_db_engine_override = os.getenv('DB_ENGINE')
+if _db_host or _db_engine_override:
+    _db_ssl = os.getenv('DB_SSL', 'False').lower() in ('1', 'true', 'yes')
+    DATABASES = {
         'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
-    }
-
-
-#sqlite db
-"""
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',  # Use django-pgvector engine
-        'NAME': os.environ.get('DB_NAME', 'prompeteer_db'),  # Database name
-        'USER': os.environ.get('DB_USER', 'prompeteer_user'),  # Database user
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'prompeteer_password'),  # Database password
-        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),  # Database host
-        'PORT': os.environ.get('DB_PORT', '5432'),  # Database port
-        'OPTIONS': {
-            'sslmode': 'require' if os.environ.get('DB_SSL', 'False') == 'True' else None,
+            'ENGINE': _db_engine_override or 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'prompeteer_db'),
+            'USER': os.getenv('DB_USER', 'prompeteer_user'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': _db_host or '127.0.0.1',
+            'PORT': os.getenv('DB_PORT', '5432'),
+            'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+            'OPTIONS': ({'sslmode': 'require'} if _db_ssl else {}),
         },
-"""
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        },
+    }
 # BACKEND_PASSWORD_SALT is already defined above (fail-fast from environment; see top of file).
 # Keep it stable across restarts; do not override it here.
+
+# Cache: env-gated on REDIS_URL (defined above). Uses Django's native Redis
+# cache backend (no django-redis dependency needed). Falls back to in-process
+# LocMemCache when REDIS_URL is unset, so no third-party backend is imported.
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -587,6 +626,36 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# STORAGES (Django 5.x): env-gated on AWS_S3_ENDPOINT_URL (MinIO/S3-compatible).
+# When absent, `default` stays the built-in FileSystemStorage (MEDIA_ROOT above)
+# and nothing from `django-storages`/`boto3` is imported, so those third-party
+# packages are not required for local dev / the pytest suite.
+# `staticfiles` stays on WhiteNoise in both cases.
+AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL', '')
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+if AWS_S3_ENDPOINT_URL:
+    AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', '')
+    AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', '')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', '')
+    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+    # Path-style addressing is required for MinIO (virtual-hosted-style needs
+    # per-bucket DNS, which a self-managed MinIO instance won't have).
+    AWS_S3_ADDRESSING_STYLE = 'path'
+    # Files are served via signed/expiring query-string URLs by default since
+    # the bucket is not assumed to be publicly readable.
+    AWS_QUERYSTRING_AUTH = os.getenv('AWS_QUERYSTRING_AUTH', 'True').lower() in ('1', 'true', 'yes')
+    STORAGES['default'] = {
+        'BACKEND': 'storages.backends.s3.S3Storage',
+    }
+else:
+    STORAGES['default'] = {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    }
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -612,3 +681,19 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+
+# --- Celery (background task queue) ---
+# Broker/result backend default to REDIS_URL (shared with CACHES/CHANNEL_LAYERS
+# above) but can be pointed at a separate Redis instance/db via CELERY_BROKER_URL
+# / CELERY_RESULT_BACKEND. When no broker is configured at all, tasks run
+# synchronously in-process (CELERY_TASK_ALWAYS_EAGER) so `celery[redis]` is
+# never required and `.delay()`/`.apply_async()` calls still work in local
+# dev / the pytest suite without a running worker.
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
+CELERY_TASK_ALWAYS_EAGER = not bool(CELERY_BROKER_URL)
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE

@@ -195,17 +195,6 @@ class TestLoginView:
         )
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
-    @pytest.mark.xfail(
-        reason=(
-            "BUG: LoginSerializer.validate() never checks user.is_active, so inactive/"
-            "locked accounts still authenticate successfully and receive valid JWTs. "
-            "LoginView's own docstring and its `if 'inactive' in error_detail` branch "
-            "imply a 403 should be returned, but that branch is unreachable because "
-            "the serializer never raises an 'inactive' ValidationError. See BUG report "
-            "in test suite delivery notes -- do not silently patch the endpoint here."
-        ),
-        strict=True,
-    )
     def test_login_inactive_user_403(self, api_client, make_user, raw_password):
         make_user(username="loginuser3", email="login3@example.com", raw_password=raw_password, is_active=False)
         resp = api_client.post(

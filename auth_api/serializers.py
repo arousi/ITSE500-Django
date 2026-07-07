@@ -58,6 +58,8 @@ class LoginSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError({'detail': 'Invalid credentials'})
         if pwd == '':
+            if not user.is_active:
+                raise serializers.ValidationError({'detail': 'User account is inactive'})
             attrs['user'] = user
             return attrs
         BACKEND_SALT = getattr(settings, 'BACKEND_PASSWORD_SALT', 'fallback_dev_salt')
@@ -65,6 +67,8 @@ class LoginSerializer(serializers.Serializer):
         backend_hash = hashlib.sha256(salted).hexdigest()
         if user.user_password != backend_hash:
             raise serializers.ValidationError({'detail': 'Invalid credentials'})
+        if not user.is_active:
+            raise serializers.ValidationError({'detail': 'User account is inactive'})
         attrs['user'] = user
         return attrs
 

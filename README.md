@@ -1,6 +1,10 @@
  # Prompeteer Server Backend
 
+[![CI](https://github.com/arousi/ITSE500-Django/actions/workflows/ci.yml/badge.svg)](https://github.com/arousi/ITSE500-Django/actions/workflows/ci.yml)
+
 Welcome to the Prompeteer backend server! This guide will help you set up, run, and explore the server, even if you're new to Django or backend development.
+
+See [TESTING.md](./TESTING.md) for how to run the test suite locally and how the OpenAPI contract (consumed by the Flutter and React clients) is generated and kept in sync.
 
 ---
 

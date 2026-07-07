@@ -30,7 +30,7 @@ def _load_simple_env(env_path: Path):
 _load_simple_env(BASE_DIR / '.env')
 # ---------------------------------------------------------------
 # settings.py
-ZERUH_API_KEY = "7f97762a2fad9a7f4cbba0f827540f6e57160a154bbd48b67b7d8784911e66cf"
+ZERUH_API_KEY = os.getenv('ZERUH_API_KEY', '')
 
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND')
 EMAIL_HOST = os.environ.get('EMAIL_HOST')

@@ -193,6 +193,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "response_id",
             "output_id",
             "timestamp",
+            "status",
             "vote",
             "has_image",
             "img_Url",

@@ -64,6 +64,12 @@ class UnifiedSyncIDORTest(TestCase):
         # and the response reports the item as rejected
         self.assertIn("not owned", str(resp.data).lower())
 
+    def test_new_message_status_defaults_to_complete(self):
+        # Message.status was added for the async-LLM lifecycle; default keeps prior behavior.
+        from chat_api.models.message import Message
+        msg = Message.objects.create(user_id=self.victim, conversation_id=self.victim_conv)
+        self.assertEqual(msg.status, "complete")
+
     def test_owner_can_update_own_conversation(self):
         # control: the legitimate self-update path must still work
         self.client.force_authenticate(user=self.victim)

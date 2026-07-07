@@ -1,8 +1,9 @@
 from django.db import models
 
 class MessageResponse(models.Model):
-    # search the primary key field matter in django
-    response_id = models.CharField(max_length=255, blank=True, primary_key=True)
+    # Primary key is the provider/model response id (string). Must be non-blank:
+    # a blank-allowed CharField PK lets multiple rows collide on "" — removed here.
+    response_id = models.CharField(max_length=255, primary_key=True)
     object = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(blank=True, null=True)
     status = models.CharField(max_length=50, blank=True, null=True)

@@ -64,7 +64,21 @@ class Message(models.Model):
         blank=True,null=True,related_name="message"
     )
     timestamp = models.DateTimeField(auto_now_add=True)  # Matches app schema
-    has_image = models.BooleanField(default=False)  
+    # Lifecycle state for async LLM execution: pending -> streaming -> complete/error.
+    # Defaults to "complete" so existing/simple synced messages keep their prior behavior;
+    # a total request failure (no MessageResponse row yet) is representable as "error".
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "pending"),
+            ("streaming", "streaming"),
+            ("complete", "complete"),
+            ("error", "error"),
+        ],
+        default="complete",
+        db_index=True,
+    )
+    has_image = models.BooleanField(default=False)
 
     img_Url = models.ImageField(upload_to="message_images/",blank=True,
         null=True,validators=[validate_image_size])  

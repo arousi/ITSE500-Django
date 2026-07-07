@@ -7,8 +7,9 @@ without litellm/openai installed. Tests patch `chat_api.services.llm.call_provid
 directly (see chat_api/test_llm_execution.py).
 """
 import logging
+import uuid
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from chat_api.services.state import transition_message
 
@@ -36,8 +37,12 @@ def call_provider(request) -> dict:
     )
 
     usage = getattr(completion, "usage", None) or {}
+    # A valid completion must never be discarded over a missing provider id --
+    # synthesize a local one so downstream MessageResponse/MessageOutput rows
+    # (which key off response_id) always get created.
+    response_id = getattr(completion, "id", None) or f"local-{uuid.uuid4()}"
     return {
-        "response_id": getattr(completion, "id", None),
+        "response_id": response_id,
         "model": getattr(completion, "model", request.request_model),
         "output_text": completion.choices[0].message.content,
         "usage": {
@@ -54,24 +59,49 @@ def execute_inference(message_id):
     Idempotent: a Message not in "pending" status is left untouched (terminal
     states are never re-executed; this also protects against duplicate
     dispatch/delivery of the same job).
+
+    Uses a claim pattern to fix a concurrency race that existed when the whole
+    call (including the provider round-trip) happened inside one transaction:
+
+    Phase 1 -- atomically CLAIM the message: lock the row (where supported),
+    verify it is still "pending", and transition it to "streaming" before
+    releasing the lock. Two concurrent dispatches of the same message_id can
+    then never both proceed past the claim.
+
+    Phase 2 -- call the provider OUTSIDE the lock/transaction (no long-held DB
+    lock/connection during a potentially slow network call), then persist the
+    result (success -> "complete", failure -> "error" with the failure reason
+    recorded on a MessageResponse) in its own short transaction.
     """
     from chat_api.models.message import Message
     from chat_api.models.message_response import MessageResponse
     from chat_api.models.message_output import MessageOutput
 
-    message = Message.objects.select_related("request_id").get(pk=message_id)
+    # Phase 1 -- claim the message.
+    with transaction.atomic():
+        qs = Message.objects.select_related("request_id")
+        # select_for_update() is a no-op-equivalent on SQLite (no row locking
+        # support there) but matters on Postgres/prod; guard so tests running
+        # against SQLite never raise.
+        if connection.features.has_select_for_update:
+            qs = qs.select_for_update()
+        message = qs.get(pk=message_id)
 
-    if message.status != "pending":
-        logger.info(
-            "llm.execute_inference.skipped_not_pending",
-            extra={"message_id": str(message_id), "status": message.status},
-        )
-        return
+        if message.status != "pending":
+            logger.info(
+                "llm.execute_inference.skipped_not_pending",
+                extra={"message_id": str(message_id), "status": message.status},
+            )
+            return
 
+        transition_message(message, "streaming")
+        message.save()
+
+    # Phase 2 -- call the provider outside the lock.
     try:
-        with transaction.atomic():
-            result = call_provider(message.request_id)
+        result = call_provider(message.request_id)
 
+        with transaction.atomic():
             response = MessageResponse.objects.create(
                 response_id=result["response_id"],
                 model_name=result["model"],
@@ -89,7 +119,7 @@ def execute_inference(message_id):
 
             message.response_id = response
             message.output_id = output
-            transition_message(message, "complete")
+            transition_message(message, "complete")  # streaming -> complete (legal)
             message.save()
 
         logger.info(
@@ -97,21 +127,43 @@ def execute_inference(message_id):
             extra={"message_id": str(message_id), "response_id": str(result["response_id"])},
         )
     except Exception as exc:
+        with transaction.atomic():
+            # Re-fetch: message.status here is "streaming" in the DB (set in
+            # Phase 1); refresh so transition_message sees the real current
+            # state rather than the stale in-memory value.
+            message.refresh_from_db()
+            err = MessageResponse.objects.create(
+                response_id=f"error-{uuid.uuid4()}",
+                status="failed",
+                error=str(exc)[:2000],
+            )
+            message.response_id = err
+            transition_message(message, "error")  # streaming -> error (legal); reason recorded
+            message.save()
+
         logger.error(
             "llm.execute_inference.failed",
             extra={"message_id": str(message_id), "error": str(exc)},
         )
-        transition_message(message, "error")
-        message.save()
 
 
 def dispatch_inference(message_id):
     """Kick off inference asynchronously via Celery, falling back to inline
     execution when Celery isn't installed (e.g. local dev / test venv without
-    the Phase 2 async deps).
+    the Phase 2 async deps) OR when the broker is unreachable -- never let the
+    request 500 or the message hang in "pending" forever.
     """
     try:
         from chat_api.tasks import run_inference
-        run_inference.delay(message_id)
     except ImportError:
+        execute_inference(message_id)
+        return
+
+    try:
+        run_inference.delay(message_id)
+    except Exception:
+        logger.warning(
+            "dispatch_inference: broker unavailable, running inline",
+            extra={"message_id": str(message_id)},
+        )
         execute_inference(message_id)

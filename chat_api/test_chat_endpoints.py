@@ -69,6 +69,23 @@ class ChatConversationEndpointsTest(TestCase):
         self.bob_conv.refresh_from_db()
         self.assertEqual(self.bob_conv.title, "bob-conv")  # untouched
 
+    def test_list_paginates_to_page_two(self):
+        """PAGE_SIZE is 20 (settings.py REST_FRAMEWORK); create >20 conversations
+        and confirm page 1 links to a page 2 that returns the remainder."""
+        self.client.force_authenticate(self.alice)
+        for i in range(25):
+            Conversation.objects.create(user_id=self.alice, title=f"alice-conv-{i}")
+        # 25 new + 1 from setUp = 26 total for alice
+        page1 = self.client.get(CONVS)
+        self.assertEqual(page1.status_code, status.HTTP_200_OK)
+        self.assertEqual(page1.data["count"], 26)
+        self.assertIsNotNone(page1.data["next"])
+        self.assertEqual(len(page1.data["results"]), 20)
+
+        page2 = self.client.get(CONVS, {"page": 2})
+        self.assertEqual(page2.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(page2.data["results"]), 6)  # remainder: 26 - 20
+
     def test_delete_own_ok_others_404(self):
         self.client.force_authenticate(self.alice)
         self.assertEqual(

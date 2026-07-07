@@ -45,6 +45,12 @@ class AttachmentUploadSerializer(serializers.ModelSerializer):
     and `size_bytes`/`sha256` are computed server-side from the uploaded bytes.
     """
 
+    encrypted_blob = serializers.FileField(required=True, allow_empty_file=False)
+    # TODO(security, PR#2 review): mime_type is client-supplied and not verified
+    # against the uploaded bytes. For non-encrypted uploads (is_encrypted=False),
+    # sniff the real content type server-side and reject mismatches (content-type
+    # confusion / stored-XSS risk if a blob is ever served inline). Deferred.
+
     class Meta:
         model = Attachment
         fields = [

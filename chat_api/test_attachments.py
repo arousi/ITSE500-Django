@@ -13,6 +13,7 @@ Written RED first (endpoints don't exist yet).
 """
 import hashlib
 import tempfile
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -97,3 +98,30 @@ class AttachmentEndpointTest(TestCase):
         self.client.force_authenticate(self.alice)
         resp = self.client.get(self._url(self.bob_conv, self.bob_msg))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_upload_rejects_oversized_file(self):
+        """A file whose .size exceeds the cap is rejected with 400 and no
+        Attachment row is created. Rather than allocating a real 25MB payload,
+        the cap itself is patched down to a few bytes so a small file exceeds
+        it -- the request's actual parsed .size can't be spoofed client-side,
+        since Django recomputes it server-side from the real upload bytes."""
+        self.client.force_authenticate(self.alice)
+        with patch("chat_api.views.MAX_ATTACHMENT_UPLOAD_BYTES", 4):
+            resp = self.client.post(
+                self._url(self.alice_conv, self.alice_msg),
+                {"encrypted_blob": _file(b"this-is-more-than-4-bytes"), "type": "other"}, format="multipart",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Attachment.objects.filter(message_id=self.alice_msg).exists())
+
+    def test_upload_without_file_rejected(self):
+        """encrypted_blob is required for this upload endpoint -- an upload
+        with no file at all must be rejected (400), not silently create a
+        file-less Attachment row."""
+        self.client.force_authenticate(self.alice)
+        resp = self.client.post(
+            self._url(self.alice_conv, self.alice_msg),
+            {"type": "other"}, format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Attachment.objects.filter(message_id=self.alice_msg).exists())

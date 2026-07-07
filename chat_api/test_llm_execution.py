@@ -82,6 +82,108 @@ class MessageStateMachineTest(TestCase):
         msg.refresh_from_db()
         self.assertEqual(msg.status, "complete")
 
+    @patch("chat_api.services.llm.call_provider", side_effect=RuntimeError("provider 500"))
+    def test_error_records_reason(self, mock_provider):
+        """The BLOCKER: the failure reason must be recorded, not just the status flip."""
+        from chat_api.services.llm import execute_inference
+        msg = self._pending_message()
+        execute_inference(msg.pk)
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, "error")
+        self.assertIsNotNone(msg.response_id)
+        self.assertEqual(msg.response_id.status, "failed")
+        self.assertIn("provider 500", msg.response_id.error)
+
+    def test_call_provider_synthesizes_response_id_when_none(self):
+        """BLOCKER fix: call_provider must never discard a valid completion just
+        because the provider returned no id -- it synthesizes a local one.
+
+        litellm isn't installed in this venv (call_provider imports it lazily),
+        so we inject a fake module into sys.modules to exercise the real
+        call_provider body without needing the real package installed.
+        """
+        import sys
+        import types
+        from chat_api.services.llm import call_provider
+
+        fake_message = types.SimpleNamespace(content="hi")
+        fake_choice = types.SimpleNamespace(message=fake_message)
+        fake_completion = types.SimpleNamespace(
+            id=None,
+            model="gpt-4o-mini",
+            choices=[fake_choice],
+            usage=types.SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+        )
+        fake_litellm = types.SimpleNamespace(completion=lambda **kwargs: fake_completion)
+        req = MessageRequest.objects.create(request_model="gpt-4o-mini", request_user_content="Hi")
+
+        with patch.dict(sys.modules, {"litellm": fake_litellm}):
+            result = call_provider(req)
+
+        self.assertIsNotNone(result["response_id"])
+        self.assertTrue(result["response_id"].startswith("local-"))
+
+    @patch("chat_api.services.llm.call_provider")
+    def test_response_id_none_completes(self, mock_provider):
+        """A valid completion with no provider-supplied id must still complete
+        (never be discarded as an error), and a MessageResponse with a
+        synthesized (non-empty) id is linked."""
+        from chat_api.services.llm import execute_inference
+        mock_provider.return_value = {
+            "response_id": f"local-{'0' * 8}-synthesized",
+            "model": "gpt-4o-mini",
+            "output_text": "hi",
+            "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+        }
+        msg = self._pending_message()
+        execute_inference(msg.pk)
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, "complete")
+        self.assertIsNotNone(msg.response_id)
+        self.assertTrue(msg.response_id.pk)  # synthesized id is a non-empty string
+        self.assertIsNotNone(msg.output_id)
+
+
+class DispatchInferenceTest(TestCase):
+    """dispatch_inference must fall back to inline execution both when Celery
+    is absent (covered implicitly by every other test in this venv, which has
+    no celery installed) AND when the broker is unreachable (.delay() raises)."""
+
+    def setUp(self):
+        self.user = _user()
+        self.conv = Conversation.objects.create(user_id=self.user, title="c")
+
+    def _pending_message(self):
+        req = MessageRequest.objects.create(request_model="gpt-4o-mini", request_user_content="Hi")
+        return Message.objects.create(
+            user_id=self.user, conversation_id=self.conv, request_id=req, status="pending"
+        )
+
+    @patch("chat_api.services.llm.call_provider", return_value=FAKE_RESULT)
+    def test_broker_down_falls_back_to_inline(self, mock_provider):
+        """celery isn't installed in this venv, so `chat_api.tasks` (which does
+        `from celery import shared_task`) can't really be imported here either --
+        inject a fake `chat_api.tasks` module into sys.modules whose
+        `run_inference.delay` raises, to exercise the "import succeeds but the
+        broker is unreachable" branch of dispatch_inference."""
+        import sys
+        import types
+        from chat_api.services.llm import dispatch_inference
+
+        msg = self._pending_message()
+
+        fake_run_inference = types.SimpleNamespace(
+            delay=lambda message_id: (_ for _ in ()).throw(ConnectionError("broker down"))
+        )
+        fake_tasks_module = types.SimpleNamespace(run_inference=fake_run_inference)
+
+        with patch.dict(sys.modules, {"chat_api.tasks": fake_tasks_module}):
+            dispatch_inference(msg.pk)
+
+        msg.refresh_from_db()
+        self.assertEqual(msg.status, "complete")  # ran inline instead of hanging in "pending"
+        mock_provider.assert_called_once()
+
 
 class SendMessageEndpointTest(TestCase):
     def setUp(self):
@@ -109,3 +211,30 @@ class SendMessageEndpointTest(TestCase):
         self.assertEqual(resp.status_code, http_status.HTTP_201_CREATED)
         msg = Message.objects.get(conversation_id=self.conv)
         self.assertEqual(msg.status, "complete")
+
+    @patch("chat_api.services.llm.call_provider", return_value=FAKE_RESULT)
+    def test_message_create_with_request_and_top_level_request_id(self, mock_provider):
+        """Pin the behavior when a POST body has BOTH a nested `request` object
+        AND a stray top-level `request_id`: the nested-`request` inference path
+        wins, the stray top-level `request_id` is ignored (no orphan MessageRequest,
+        exactly one MessageRequest ends up linked to the created message)."""
+        stray_request = MessageRequest.objects.create(
+            request_model="stray-model", request_user_content="should be ignored"
+        )
+        resp = self.client.post(
+            self.url,
+            {
+                "request_id": str(stray_request.pk),
+                "request": {"request_model": "gpt-4o-mini", "request_user_content": "Hi"},
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, http_status.HTTP_201_CREATED)
+        msg = Message.objects.get(conversation_id=self.conv)
+        mock_provider.assert_called_once()
+        self.assertEqual(msg.status, "complete")
+        # inference ran on the nested `request`, not the stray one
+        self.assertNotEqual(msg.request_id_id, stray_request.pk)
+        self.assertEqual(msg.request_id.request_model, "gpt-4o-mini")
+        # exactly one MessageRequest is linked to this message (no orphan wiring)
+        self.assertEqual(MessageRequest.objects.filter(message=msg).count(), 1)

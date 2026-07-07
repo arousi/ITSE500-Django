@@ -1,0 +1,39 @@
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+exclude = [
+    "migrations",
+    "server_venv",
+    "staticfiles",
+    "flutter_build",
+    "frontend_build",
+    ".claude",
+]
+
+[tool.ruff.lint]
+# Initial CI ratchet: only fail the build on undefined names and syntax-level
+# errors (real bugs). Pre-existing style debt (unused imports F401, shadowed
+# imports F811, unused locals F841, etc.) is tracked but not yet gated --
+# expand this selection incrementally as that debt is paid down.
+select = ["F821", "E9"]
+
+[tool.coverage.run]
+source = ["auth_api", "user_mang", "crypto_api", "chat_api", "core", "prompeteer_server"]
+omit = [
+    "*/migrations/*",
+    "*/tests.py",
+    "*/test_*.py",
+    "manage.py",
+    "*/asgi.py",
+    "*/wsgi.py",
+    "*/seed_test_data.py",
+    "*/management/commands/*",
+]
+
+[tool.coverage.report]
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]

@@ -91,9 +91,11 @@ class TestCustomUserPasswordHashing:
 class TestPyotpTOTP:
     """Unit coverage for the pyotp-based TOTP helper logic used for 2FA.
 
-    Exercises pyotp directly (the same library auth_api imports) to lock in
-    the expected generate/verify contract independent of the (currently
-    unwired -- see auth_api.views EnableTOTPView/VerifyTOTPView) view layer.
+    Exercises pyotp directly to lock in the expected generate/verify
+    contract. There is no TOTP view layer in this release -- the former
+    EnableTOTPView/VerifyTOTPView referenced Custom_User.totp_secret, a
+    field removed in migration user_mang/0007, and have been deleted as
+    dead, crash-prone code.
     """
 
     def test_generated_code_verifies_against_same_secret(self):

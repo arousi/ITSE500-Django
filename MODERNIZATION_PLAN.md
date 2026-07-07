@@ -85,6 +85,17 @@ This plan takes it from "solid auth skeleton" to a **secure, reproducible, produ
 - **To activate on the VPS**, set `DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` (+ `DB_PORT`/`DB_SSL`), `REDIS_URL`, and `AWS_S3_ENDPOINT_URL`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_STORAGE_BUCKET_NAME` (+ optional `CELERY_BROKER_URL`), then run `migrate` against Postgres.
 - **Next:** Phase 4 — the chat_api LLM MVP (conversation/message endpoints, async LLM execution via litellm/openai + Celery, MinIO attachment upload) designed with pagination + ownership from day one; then rewrite the stale test suites + CI (Phase 7) → VPS deploy (Phase 8).
 
+### Implementation session 4 (tests/CI + chat MVP) — DONE + verified
+
+- ✅ **Tests + CI foundation (Phase A of `CI_SYNC.md`)**: stale suites quarantined to `legacy_tests/`; suite green; `.github/workflows/ci.yml` (ruff · pytest+cov · schema-drift · pip-audit); published `api/schema.yaml`; `Makefile schema`. Cross-repo sync architecture written up in `CI_SYNC.md` (Django = contract producer; Flutter + React = codegen consumers; java 8 → pure-Dart codegen for Flutter).
+- ✅ **Chat MVP core built (Phase 4), TDD/SDD via `/expand`** — 22 new tests, red→green each:
+  - Conversation CRUD + Message list/create (user-scoped querysets → 404 on others' resources, paginated).
+  - **Async LLM execution** with a `Message.status` state machine (pending→complete|error; single sole-authority transition guard; idempotent; transactional; litellm behind a test seam; Celery with inline fallback).
+  - **Attachment upload/list** (server-computed size + sha256, 25 MB cap, type allow-list; MinIO/filesystem via `STORAGES`). Fixed a latent `encrypted_upload_path` crash bug.
+  - Full suite **30 passed**, no regression, `api/schema.yaml` kept in sync (drift-gated).
+- **Repos discovered for the sync**: Flutter (`E:\ITSE500-Flutter`, real app, zero tests) + React (real app in worktree `E:\ITSE500-ok-REACT\.claude\worktrees\cranky-gauss-62a788`).
+- **Next:** Phase B (annotate the plain APIViews with `@extend_schema` so codegen is strongly typed) → React CI + TS client → Flutter CI + Dart client + baseline tests → real-time (Channels) + VPS deploy. Hardening backlog: rewrite the quarantined suites; `MessageResponse.response_id`-None and `MessageOutput.output_id` non-uniqueness edge cases.
+
 ---
 
 ## 3. Target Architecture (VPS)

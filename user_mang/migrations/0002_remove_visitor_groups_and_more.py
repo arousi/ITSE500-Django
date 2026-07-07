@@ -4,6 +4,164 @@ import uuid
 from django.db import migrations, models
 
 
+def _find_referencing_fk_columns(cursor, target_table, target_column):
+    """Discover every FK constraint in the current Postgres database that
+    references target_table(target_column). Returns a list of dicts with
+    constraint_name, referencing table/column so we can drop + re-add them
+    around the PK/column retype.
+    """
+    cursor.execute(
+        """
+        SELECT
+            tc.constraint_name,
+            tc.table_name AS referencing_table,
+            kcu.column_name AS referencing_column,
+            rc.update_rule,
+            rc.delete_rule
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage ccu
+            ON tc.constraint_name = ccu.constraint_name
+            AND tc.table_schema = ccu.table_schema
+        JOIN information_schema.referential_constraints rc
+            ON tc.constraint_name = rc.constraint_name
+            AND tc.table_schema = rc.constraint_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND ccu.table_name = %s
+            AND ccu.column_name = %s
+        """,
+        [target_table, target_column],
+    )
+    columns = [c[0] for c in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def _retype_user_id_to_uuid_postgres(apps, schema_editor):
+    """Fresh-Postgres-only forward migration: retype
+    user_mang_custom_user.user_id from integer (AutoField) to uuid, along
+    with every FK column in other tables that references it. SQLite is
+    dynamically typed and tolerates the state-only AlterField in
+    Migration.operations without any DB change, so this function no-ops
+    there.
+
+    Existing dev/prod Postgres databases that already applied this
+    migration are unaffected -- Django only re-runs RunPython for
+    databases where this migration has not yet been recorded as applied
+    (i.e. fresh databases, such as CI's ephemeral Postgres or a new
+    production database).
+    """
+    if schema_editor.connection.vendor != 'postgresql':
+        return
+
+    table = 'user_mang_custom_user'
+    column = 'user_id'
+
+    with schema_editor.connection.cursor() as cursor:
+        fks = _find_referencing_fk_columns(cursor, table, column)
+
+        # 1) Drop every FK constraint that references user_mang_custom_user.user_id
+        #    (both the referencing side, discovered above).
+        for fk in fks:
+            cursor.execute(
+                'ALTER TABLE "%s" DROP CONSTRAINT "%s"'
+                % (fk['referencing_table'], fk['constraint_name'])
+            )
+
+        # 2) Drop the identity/default sequence on the PK column (AutoField),
+        #    then retype it to uuid. Existing integer values are cast to text
+        #    then to uuid, which fails for genuinely non-uuid data -- but on a
+        #    fresh database this table is always empty at this point in the
+        #    migration graph, so the USING cast is a formality.
+        #    Django's Postgres backend creates AutoField as a GENERATED ...
+        #    AS IDENTITY column (not a plain DEFAULT + sequence), so it must
+        #    be dropped via DROP IDENTITY rather than DROP DEFAULT.
+        cursor.execute(
+            'ALTER TABLE "%s" ALTER COLUMN "%s" DROP IDENTITY IF EXISTS'
+            % (table, column)
+        )
+        cursor.execute(
+            'ALTER TABLE "%s" ALTER COLUMN "%s" TYPE uuid USING "%s"::text::uuid'
+            % (table, column, column)
+        )
+
+        # 3) Retype every referencing FK column to uuid as well.
+        for fk in fks:
+            cursor.execute(
+                'ALTER TABLE "%s" ALTER COLUMN "%s" TYPE uuid USING "%s"::text::uuid'
+                % (fk['referencing_table'], fk['referencing_column'], fk['referencing_column'])
+            )
+
+        # 4) Re-add the FK constraints with their original names + ON
+        #    UPDATE/DELETE rules.
+        for fk in fks:
+            update_rule = fk['update_rule'] or 'NO ACTION'
+            delete_rule = fk['delete_rule'] or 'NO ACTION'
+            cursor.execute(
+                'ALTER TABLE "%s" ADD CONSTRAINT "%s" FOREIGN KEY ("%s") '
+                'REFERENCES "%s" ("%s") ON UPDATE %s ON DELETE %s'
+                % (
+                    fk['referencing_table'],
+                    fk['constraint_name'],
+                    fk['referencing_column'],
+                    table,
+                    column,
+                    update_rule,
+                    delete_rule,
+                )
+            )
+
+
+def _retype_user_id_to_int_postgres(apps, schema_editor):
+    """Reverse of _retype_user_id_to_uuid_postgres. Only meaningful if
+    someone unmigrates past this point on a fresh Postgres DB; SQLite is a
+    no-op as above.
+    """
+    if schema_editor.connection.vendor != 'postgresql':
+        return
+
+    table = 'user_mang_custom_user'
+    column = 'user_id'
+
+    with schema_editor.connection.cursor() as cursor:
+        fks = _find_referencing_fk_columns(cursor, table, column)
+
+        for fk in fks:
+            cursor.execute(
+                'ALTER TABLE "%s" DROP CONSTRAINT "%s"'
+                % (fk['referencing_table'], fk['constraint_name'])
+            )
+
+        cursor.execute(
+            'ALTER TABLE "%s" ALTER COLUMN "%s" TYPE integer USING (row_number() OVER ())'
+            % (table, column)
+        )
+
+        for fk in fks:
+            cursor.execute(
+                'ALTER TABLE "%s" ALTER COLUMN "%s" TYPE integer USING NULL'
+                % (fk['referencing_table'], fk['referencing_column'])
+            )
+
+        for fk in fks:
+            update_rule = fk['update_rule'] or 'NO ACTION'
+            delete_rule = fk['delete_rule'] or 'NO ACTION'
+            cursor.execute(
+                'ALTER TABLE "%s" ADD CONSTRAINT "%s" FOREIGN KEY ("%s") '
+                'REFERENCES "%s" ("%s") ON UPDATE %s ON DELETE %s'
+                % (
+                    fk['referencing_table'],
+                    fk['constraint_name'],
+                    fk['referencing_column'],
+                    table,
+                    column,
+                    update_rule,
+                    delete_rule,
+                )
+            )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -83,10 +241,20 @@ class Migration(migrations.Migration):
             name='email',
             field=models.EmailField(default='default@temp.com', max_length=254, unique=True),
         ),
-        migrations.AlterField(
-            model_name='custom_user',
-            name='user_id',
-            field=models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False),
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AlterField(
+                    model_name='custom_user',
+                    name='user_id',
+                    field=models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False),
+                ),
+            ],
+            database_operations=[
+                migrations.RunPython(
+                    _retype_user_id_to_uuid_postgres,
+                    _retype_user_id_to_int_postgres,
+                ),
+            ],
         ),
         migrations.DeleteModel(
             name='Email',

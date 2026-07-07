@@ -8,7 +8,14 @@ from user_mang.serializers import (ConversationSerializer,                      
     MessageSerializer,
     MessageRequestSerializer,
     MessageResponseSerializer,
-    MessageOutputSerializer)
+    MessageOutputSerializer,
+    FullProfileSerializer,
+    ProfileSerializer,
+    UnifiedSyncGetResponseSerializer,
+    UnifiedSyncPostRequestSerializer,
+    UnifiedSyncPostResponseSerializer,
+    UnifiedSyncPatchResponseSerializer,
+    UnifiedSyncDeleteResponseSerializer)
 from chat_api.models.attachment import Attachment
 from chat_api.models.message import Message
 from chat_api.models.conversation import Conversation
@@ -343,7 +350,7 @@ class UnifiedSyncView(APIView):
             tags=['sync'],
             summary='Unified sync (fetch profile/chat)',
             parameters=SYNC_GET_PARAMS,
-            responses={200: OpenApiResponse(description='Nested profile/chat payload with optional visitor tokens') if OpenApiResponse else None},
+            responses={200: UnifiedSyncGetResponseSerializer},
         ) if extend_schema else (lambda f: f)
     )
     def get(self, request):
@@ -626,7 +633,8 @@ class UnifiedSyncView(APIView):
             tags=['sync'],
             summary='Unified upsert (profile/chat)',
             description='Upsert profile and chat model lists atomically; returns summary/errors and canonical payload.',
-            responses={200: OpenApiResponse(description='Upsert result with summary/errors and canonical payload') if OpenApiResponse else None, 400: OpenApiResponse(description='Validation error') if OpenApiResponse else None, 500: OpenApiResponse(description='Transaction failed') if OpenApiResponse else None},
+            request=UnifiedSyncPostRequestSerializer,
+            responses={200: UnifiedSyncPostResponseSerializer, 400: OpenApiResponse(description='Validation error') if OpenApiResponse else None, 500: OpenApiResponse(description='Transaction failed') if OpenApiResponse else None},
         ) if extend_schema else (lambda f: f)
     )
     def post(self, request):
@@ -991,7 +999,8 @@ class UnifiedSyncView(APIView):
             tags=['sync'],
             summary='Partial profile update',
             description='Authenticated partial update for profile fields (me endpoint style).',
-            responses={200: OpenApiResponse(description='Updated profile'), 400: OpenApiResponse(description='Validation error'), 401: OpenApiResponse(description='Auth required')} if OpenApiResponse else None,
+            request=ProfileSerializer,
+            responses={200: UnifiedSyncPatchResponseSerializer, 400: OpenApiResponse(description='Validation error'), 401: OpenApiResponse(description='Auth required')} if OpenApiResponse else None,
         ) if extend_schema else (lambda f: f)
     )
     def patch(self, request):
@@ -1037,7 +1046,7 @@ class UnifiedSyncView(APIView):
             tags=['sync'],
             summary='Delete or archive user data',
             parameters=SYNC_DELETE_PARAMS,
-            responses={200: OpenApiResponse(description='Deletion/archive result with optional export URLs or zip'), 400: OpenApiResponse(description='Invalid action or request'), 401: OpenApiResponse(description='Auth required')} if OpenApiResponse else None,
+            responses={200: UnifiedSyncDeleteResponseSerializer, 400: OpenApiResponse(description='Invalid action or request'), 401: OpenApiResponse(description='Auth required')} if OpenApiResponse else None,
         ) if extend_schema else (lambda f: f)
     )
     def delete(self, request):

@@ -4,11 +4,33 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 # from django.utils.crypto import get_random_string
 from .models import UserKeyMaterial
-from .serializers import UserKeyMaterialSerializer
+from .serializers import (
+    UserKeyMaterialSerializer,
+    UMKNotProvisionedResponseSerializer,
+    UMKGetResponseSerializer,
+    UMKProvisionRequestSerializer,
+    UMKProvisionResponseSerializer,
+    UMKErrorResponseSerializer,
+)
+
+try:
+    from drf_spectacular.utils import extend_schema, OpenApiResponse
+except Exception:
+    extend_schema = None  # type: ignore
+    OpenApiResponse = None  # type: ignore
+
 
 class UserUMKView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @(
+        extend_schema(
+            tags=['crypto'],
+            summary='Get caller UMK',
+            description="Return the caller's User Master Key metadata + base64 value, or {exists: false} if not yet provisioned.",
+            responses={200: UMKGetResponseSerializer},
+        ) if extend_schema else (lambda f: f)
+    )
     def get(self, request):
         """Return the caller's UMK metadata + base64 (phase 0)."""
         try:
@@ -21,6 +43,19 @@ class UserUMKView(APIView):
             data['exists'] = True
             return Response(data, status=status.HTTP_200_OK)
 
+    @(
+        extend_schema(
+            tags=['crypto'],
+            summary='Provision caller UMK',
+            description='Provision the UMK once. Reject with 409 if already provisioned (rotation not yet supported).',
+            request=UMKProvisionRequestSerializer,
+            responses={
+                201: UMKProvisionResponseSerializer,
+                400: UMKErrorResponseSerializer,
+                409: UMKErrorResponseSerializer,
+            },
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):
         """Provision UMK once. Reject if already exists unless rotate=true (not yet supported)."""
         rotate = request.query_params.get('rotate') == 'true'

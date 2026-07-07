@@ -4,386 +4,6 @@ info:
   version: 1.0.0
   description: Authentication, Chat, and User Management API
 paths:
-  /api/v1/auth_api/github/authorize/:
-    get:
-      operationId: v1_auth_api_github_authorize_retrieve
-      description: Construct and return (or redirect to) the GitHub authorization
-        URL.
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/auth_api/github/authorize/ssr/:
-    get:
-      operationId: v1_auth_api_github_authorize_ssr_retrieve
-      description: Construct and return (or redirect to) the GitHub authorization
-        URL.
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/auth_api/github/callback:
-    get:
-      operationId: v1_auth_api_github_callback_retrieve
-      description: 'Process GitHub callback: exchange code, upsert user, issue app
-        JWTs.'
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: v1_auth_api_github_callback_create
-      description: Accept callback data via POST (bridge) and delegate to GET handler.
-      summary: OAuth callback (POST bridge)
-      tags:
-      - oauth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-  /api/v1/auth_api/github/callback/:
-    get:
-      operationId: v1_auth_api_github_callback_retrieve_2
-      description: 'Process GitHub callback: exchange code, upsert user, issue app
-        JWTs.'
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: v1_auth_api_github_callback_create_2
-      description: Accept callback data via POST (bridge) and delegate to GET handler.
-      summary: OAuth callback (POST bridge)
-      tags:
-      - oauth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-  /api/v1/auth_api/google/authorize/:
-    get:
-      operationId: v1_auth_api_google_authorize_retrieve
-      description: Returns provider authorize URL and state for SSR or SPA/mobile
-        flows.
-      summary: Start OAuth authorization
-      parameters:
-      - in: query
-        name: callback_host
-        schema:
-          type: string
-        description: Mobile emulator host swap
-      - in: query
-        name: mode
-        schema:
-          type: string
-        description: Use 'redirect' for SSR redirect
-      - in: query
-        name: redirect_uri
-        schema:
-          type: string
-        description: Custom redirect for mobile/SPA
-      - in: query
-        name: scope
-        schema:
-          type: string
-        description: OAuth scopes (space-separated)
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthAuthorizeResponse'
-          description: ''
-        '302':
-          description: Redirect to provider
-  /api/v1/auth_api/google/authorize/ssr/:
-    get:
-      operationId: v1_auth_api_google_authorize_ssr_retrieve
-      description: Returns provider authorize URL and state for SSR or SPA/mobile
-        flows.
-      summary: Start OAuth authorization
-      parameters:
-      - in: query
-        name: callback_host
-        schema:
-          type: string
-        description: Mobile emulator host swap
-      - in: query
-        name: mode
-        schema:
-          type: string
-        description: Use 'redirect' for SSR redirect
-      - in: query
-        name: redirect_uri
-        schema:
-          type: string
-        description: Custom redirect for mobile/SPA
-      - in: query
-        name: scope
-        schema:
-          type: string
-        description: OAuth scopes (space-separated)
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthAuthorizeResponse'
-          description: ''
-        '302':
-          description: Redirect to provider
-  /api/v1/auth_api/google/callback:
-    get:
-      operationId: v1_auth_api_google_callback_retrieve
-      description: |-
-        Handle an OAuth2 callback from a provider and return a unified JSON payload.
-        Validates state, exchanges code for tokens, creates/updates a user, persists
-        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
-      summary: OAuth callback handler
-      parameters:
-      - in: query
-        name: code
-        schema:
-          type: string
-        description: Authorization code
-      - in: query
-        name: error
-        schema:
-          type: string
-        description: Error message from provider
-      - in: query
-        name: state
-        schema:
-          type: string
-        description: Opaque state string
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-        '400':
-          description: Invalid state or token exchange failed
-        '409':
-          description: State already used
-    post:
-      operationId: v1_auth_api_google_callback_create
-      description: Accept callback data via POST (bridge) and delegate to GET handler.
-      summary: OAuth callback (POST bridge)
-      tags:
-      - oauth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-  /api/v1/auth_api/google/callback/:
-    get:
-      operationId: v1_auth_api_google_callback_retrieve_2
-      description: |-
-        Handle an OAuth2 callback from a provider and return a unified JSON payload.
-        Validates state, exchanges code for tokens, creates/updates a user, persists
-        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
-      summary: OAuth callback handler
-      parameters:
-      - in: query
-        name: code
-        schema:
-          type: string
-        description: Authorization code
-      - in: query
-        name: error
-        schema:
-          type: string
-        description: Error message from provider
-      - in: query
-        name: state
-        schema:
-          type: string
-        description: Opaque state string
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-        '400':
-          description: Invalid state or token exchange failed
-        '409':
-          description: State already used
-    post:
-      operationId: v1_auth_api_google_callback_create_2
-      description: Accept callback data via POST (bridge) and delegate to GET handler.
-      summary: OAuth callback (POST bridge)
-      tags:
-      - oauth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-  /api/v1/auth_api/google/oauth/:
-    get:
-      operationId: v1_auth_api_google_oauth_retrieve
-      description: Returns provider authorize URL and state for SSR or SPA/mobile
-        flows.
-      summary: Start OAuth authorization
-      parameters:
-      - in: query
-        name: callback_host
-        schema:
-          type: string
-        description: Mobile emulator host swap
-      - in: query
-        name: mode
-        schema:
-          type: string
-        description: Use 'redirect' for SSR redirect
-      - in: query
-        name: redirect_uri
-        schema:
-          type: string
-        description: Custom redirect for mobile/SPA
-      - in: query
-        name: scope
-        schema:
-          type: string
-        description: OAuth scopes (space-separated)
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthAuthorizeResponse'
-          description: ''
-        '302':
-          description: Redirect to provider
   /api/v1/auth_api/health/:
     get:
       operationId: v1_auth_api_health_retrieve
@@ -448,6 +68,17 @@ paths:
       summary: Logout (client discards tokens)
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
       security:
       - jwtAuth: []
       - BearerAuth: []
@@ -457,120 +88,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LogoutResponse'
-          description: ''
-  /api/v1/auth_api/microsoft/authorize/:
-    get:
-      operationId: v1_auth_api_microsoft_authorize_retrieve
-      description: Construct and return (or redirect to) the Microsoft authorization
-        URL.
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/auth_api/microsoft/authorize/ssr/:
-    get:
-      operationId: v1_auth_api_microsoft_authorize_ssr_retrieve
-      description: Construct and return (or redirect to) the Microsoft authorization
-        URL.
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/auth_api/microsoft/callback:
-    get:
-      operationId: v1_auth_api_microsoft_callback_retrieve
-      description: 'Process Microsoft callback: exchange code, upsert user, issue
-        app JWTs.'
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: v1_auth_api_microsoft_callback_create
-      description: Accept callback data via POST (bridge) and delegate to GET handler.
-      summary: OAuth callback (POST bridge)
-      tags:
-      - oauth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-  /api/v1/auth_api/microsoft/callback/:
-    get:
-      operationId: v1_auth_api_microsoft_callback_retrieve_2
-      description: 'Process Microsoft callback: exchange code, upsert user, issue
-        app JWTs.'
-      tags:
-      - v1
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: v1_auth_api_microsoft_callback_create_2
-      description: Accept callback data via POST (bridge) and delegate to GET handler.
-      summary: OAuth callback (POST bridge)
-      tags:
-      - oauth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
           description: ''
   /api/v1/auth_api/oauth/result/{state_value}/:
     get:
@@ -606,285 +123,25 @@ paths:
           description: Not found
         '410':
           description: Already retrieved
-  /api/v1/auth_api/openrouter/authorize/:
-    get:
-      operationId: v1_auth_api_openrouter_authorize_retrieve
-      description: Returns provider authorize URL and state for SSR or SPA/mobile
-        flows.
-      summary: Start OAuth authorization
-      parameters:
-      - in: query
-        name: callback_host
-        schema:
-          type: string
-        description: Mobile emulator host swap
-      - in: query
-        name: mode
-        schema:
-          type: string
-        description: Use 'redirect' for SSR redirect
-      - in: query
-        name: redirect_uri
-        schema:
-          type: string
-        description: Custom redirect for mobile/SPA
-      - in: query
-        name: scope
-        schema:
-          type: string
-        description: OAuth scopes (space-separated)
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthAuthorizeResponse'
-          description: ''
-        '302':
-          description: Redirect to provider
-  /api/v1/auth_api/openrouter/authorize/ssr/:
-    get:
-      operationId: v1_auth_api_openrouter_authorize_ssr_retrieve
-      description: Returns provider authorize URL and state for SSR or SPA/mobile
-        flows.
-      summary: Start OAuth authorization
-      parameters:
-      - in: query
-        name: callback_host
-        schema:
-          type: string
-        description: Mobile emulator host swap
-      - in: query
-        name: mode
-        schema:
-          type: string
-        description: Use 'redirect' for SSR redirect
-      - in: query
-        name: redirect_uri
-        schema:
-          type: string
-        description: Custom redirect for mobile/SPA
-      - in: query
-        name: scope
-        schema:
-          type: string
-        description: OAuth scopes (space-separated)
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthAuthorizeResponse'
-          description: ''
-        '302':
-          description: Redirect to provider
-  /api/v1/auth_api/openrouter/callback:
-    get:
-      operationId: v1_auth_api_openrouter_callback_retrieve
-      description: |-
-        Handle an OAuth2 callback from a provider and return a unified JSON payload.
-        Validates state, exchanges code for tokens, creates/updates a user, persists
-        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
-      summary: OAuth callback handler
-      parameters:
-      - in: query
-        name: code
-        schema:
-          type: string
-        description: Authorization code
-      - in: query
-        name: error
-        schema:
-          type: string
-        description: Error message from provider
-      - in: query
-        name: state
-        schema:
-          type: string
-        description: Opaque state string
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-        '400':
-          description: Invalid state or token exchange failed
-        '409':
-          description: State already used
-    post:
-      operationId: v1_auth_api_openrouter_callback_create
-      description: Accept callback data via POST (bridge) and delegate to GET handler.
-      summary: OAuth callback (POST bridge)
-      tags:
-      - oauth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-  /api/v1/auth_api/openrouter/callback/:
-    get:
-      operationId: v1_auth_api_openrouter_callback_retrieve_2
-      description: |-
-        Handle an OAuth2 callback from a provider and return a unified JSON payload.
-        Validates state, exchanges code for tokens, creates/updates a user, persists
-        provider tokens, and returns app JWTs. For mobile bridge flows, may redirect.
-      summary: OAuth callback handler
-      parameters:
-      - in: query
-        name: code
-        schema:
-          type: string
-        description: Authorization code
-      - in: query
-        name: error
-        schema:
-          type: string
-        description: Error message from provider
-      - in: query
-        name: state
-        schema:
-          type: string
-        description: Opaque state string
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-        '400':
-          description: Invalid state or token exchange failed
-        '409':
-          description: State already used
-    post:
-      operationId: v1_auth_api_openrouter_callback_create_2
-      description: Accept callback data via POST (bridge) and delegate to GET handler.
-      summary: OAuth callback (POST bridge)
-      tags:
-      - oauth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OAuthCallbackRequest'
-        required: true
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthCallbackResponse'
-          description: ''
-  /api/v1/auth_api/openrouter/oauth/:
-    get:
-      operationId: v1_auth_api_openrouter_oauth_retrieve
-      description: Returns provider authorize URL and state for SSR or SPA/mobile
-        flows.
-      summary: Start OAuth authorization
-      parameters:
-      - in: query
-        name: callback_host
-        schema:
-          type: string
-        description: Mobile emulator host swap
-      - in: query
-        name: mode
-        schema:
-          type: string
-        description: Use 'redirect' for SSR redirect
-      - in: query
-        name: redirect_uri
-        schema:
-          type: string
-        description: Custom redirect for mobile/SPA
-      - in: query
-        name: scope
-        schema:
-          type: string
-        description: OAuth scopes (space-separated)
-      tags:
-      - oauth
-      security:
-      - jwtAuth: []
-      - BearerAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthAuthorizeResponse'
-          description: ''
-        '302':
-          description: Redirect to provider
   /api/v1/auth_api/otp-login/:
     post:
       operationId: v1_auth_api_otp_login_create
-      description: 'Deprecated endpoint: Login-with-OTP is disabled in this release.'
+      description: 'Deprecated: OTP-based login is disabled in this release. Always
+        returns 410 Gone.'
+      summary: Login with OTP (deprecated)
       tags:
-      - v1
+      - auth
       security:
       - jwtAuth: []
       - BearerAuth: []
       - {}
       responses:
-        '200':
-          description: No response body
+        '410':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeprecatedEndpointResponse'
+          description: ''
   /api/v1/auth_api/register/:
     post:
       operationId: v1_auth_api_register_create
@@ -1381,27 +638,61 @@ paths:
   /api/v1/crypto_api/umk/:
     get:
       operationId: v1_crypto_api_umk_retrieve
-      description: Return the caller's UMK metadata + base64 (phase 0).
+      description: 'Return the caller''s User Master Key metadata + base64 value,
+        or {exists: false} if not yet provisioned.'
+      summary: Get caller UMK
       tags:
-      - v1
+      - crypto
       security:
       - jwtAuth: []
       - BearerAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMKGetResponse'
+          description: ''
     post:
       operationId: v1_crypto_api_umk_create
-      description: Provision UMK once. Reject if already exists unless rotate=true
-        (not yet supported).
+      description: Provision the UMK once. Reject with 409 if already provisioned
+        (rotation not yet supported).
+      summary: Provision caller UMK
       tags:
-      - v1
+      - crypto
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UMKProvisionRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UMKProvisionRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UMKProvisionRequestRequest'
       security:
       - jwtAuth: []
       - BearerAuth: []
       responses:
-        '200':
-          description: No response body
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMKProvisionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMKErrorResponse'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMKErrorResponse'
+          description: ''
   /api/v1/user_mang/me/:
     get:
       operationId: v1_user_mang_me_retrieve
@@ -1507,7 +798,11 @@ paths:
       - {}
       responses:
         '200':
-          description: Nested profile/chat payload with optional visitor tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSyncGetResponse'
+          description: ''
     post:
       operationId: v1_user_mang_me_create
       description: Upsert profile and chat model lists atomically; returns summary/errors
@@ -1515,13 +810,28 @@ paths:
       summary: Unified upsert (profile/chat)
       tags:
       - sync
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnifiedSyncPostRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UnifiedSyncPostRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UnifiedSyncPostRequestRequest'
       security:
       - jwtAuth: []
       - BearerAuth: []
       - {}
       responses:
         '200':
-          description: Upsert result with summary/errors and canonical payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSyncPostResponse'
+          description: ''
         '400':
           description: Validation error
         '500':
@@ -1532,13 +842,28 @@ paths:
       summary: Partial profile update
       tags:
       - sync
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileRequest'
       security:
       - jwtAuth: []
       - BearerAuth: []
       - {}
       responses:
         '200':
-          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSyncPatchResponse'
+          description: ''
         '400':
           description: Validation error
         '401':
@@ -1638,13 +963,102 @@ paths:
       - {}
       responses:
         '200':
-          description: Deletion/archive result with optional export URLs or zip
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnifiedSyncDeleteResponse'
+          description: ''
         '400':
           description: Invalid action or request
         '401':
           description: Auth required
 components:
   schemas:
+    Attachment:
+      type: object
+      description: |-
+        Serialize an artifact attached to a message (image/pdf/embedding/etc.).
+        - Accepts 'id' in payload as an alias to attachment_id to match the UnifiedSyncView.
+        - user_id is read-only and the view should call serializer.save(user=user) on create.
+      properties:
+        id:
+          type: string
+        attachment_id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          readOnly: true
+        conversation_id:
+          type: string
+          format: uuid
+        message_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          maxLength: 32
+        mime_type:
+          type: string
+          nullable: true
+          maxLength: 128
+        file_path:
+          type: string
+          nullable: true
+          description: Server-side storage path or external URL
+          maxLength: 512
+        encrypted_blob:
+          type: string
+          format: uri
+          nullable: true
+        size_bytes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        height:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        sha256:
+          type: string
+          nullable: true
+          maxLength: 64
+        is_encrypted:
+          type: boolean
+        enc_algo:
+          type: string
+          nullable: true
+          maxLength: 32
+        iv_base64:
+          type: string
+          nullable: true
+          maxLength: 64
+        key_ref:
+          type: string
+          nullable: true
+          maxLength: 64
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - attachment_id
+      - conversation_id
+      - created_at
+      - message_id
+      - type
+      - user_id
     AttachmentDoc:
       type: object
       properties:
@@ -1654,6 +1068,79 @@ components:
           type: string
         url:
           type: string
+    AttachmentRequest:
+      type: object
+      description: |-
+        Serialize an artifact attached to a message (image/pdf/embedding/etc.).
+        - Accepts 'id' in payload as an alias to attachment_id to match the UnifiedSyncView.
+        - user_id is read-only and the view should call serializer.save(user=user) on create.
+      properties:
+        id:
+          type: string
+          minLength: 1
+        conversation_id:
+          type: string
+          format: uuid
+        message_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          minLength: 1
+          maxLength: 32
+        mime_type:
+          type: string
+          nullable: true
+          maxLength: 128
+        file_path:
+          type: string
+          nullable: true
+          description: Server-side storage path or external URL
+          maxLength: 512
+        encrypted_blob:
+          type: string
+          format: binary
+          nullable: true
+        size_bytes:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        width:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        height:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: -9223372036854775808
+          format: int64
+          nullable: true
+        sha256:
+          type: string
+          nullable: true
+          maxLength: 64
+        is_encrypted:
+          type: boolean
+        enc_algo:
+          type: string
+          nullable: true
+          maxLength: 32
+        iv_base64:
+          type: string
+          nullable: true
+          maxLength: 64
+        key_ref:
+          type: string
+          nullable: true
+          maxLength: 64
+      required:
+      - conversation_id
+      - message_id
+      - type
     AttachmentUpload:
       type: object
       description: |-
@@ -1825,6 +1312,13 @@ components:
           maxLength: 255
         local_only:
           type: boolean
+    DeprecatedEndpointResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
     EmailPinVerifyRequestRequest:
       type: object
       properties:
@@ -1846,6 +1340,212 @@ components:
           type: string
       required:
       - message
+    FullChat:
+      type: object
+      description: |-
+        Composite serializer that returns the complete chat payload for a user.
+        Fields:
+            - conversations: ConversationSerializer (with nested messages)
+            - messages: MessageSerializer (flat list)
+            - message_request: MessageRequestSerializer
+            - message_response: MessageResponseSerializer
+            - message_output: MessageOutputSerializer
+            - attachments: AttachmentSerializer
+
+        This serializer is intentionally a non-model `Serializer` since it aggregates
+        multiple querysets and models into a single response shape used by
+        `UnifiedSyncView.get`.
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+          readOnly: true
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          readOnly: true
+        message_request:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageRequest'
+          readOnly: true
+        message_response:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponse'
+          readOnly: true
+        message_output:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageOutput'
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+          readOnly: true
+      required:
+      - attachments
+      - conversations
+      - message_output
+      - message_request
+      - message_response
+      - messages
+    FullProfile:
+      type: object
+      description: |-
+        Full profile serializer that exposes most editable user fields.
+        This allows the UnifiedSyncView to upsert the complete user object.
+        Sensitive fields like `is_superuser`, `groups`, and `user_permissions` are intentionally omitted.
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 15
+        last_modified:
+          type: string
+          format: date-time
+          readOnly: true
+        devices_id:
+          nullable: true
+        temp_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        related_devices: {}
+        email_pin_created:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the PIN was generated
+        email_verified:
+          type: boolean
+          description: Has the user verified their email?
+        is_archived:
+          type: boolean
+          description: Is the user account archived?
+        is_google_user:
+          type: boolean
+          description: Account created / linked via Google OAuth
+        is_openrouter_user:
+          type: boolean
+          description: Account created / linked via OpenRouter OAuth
+        is_microsoft_user:
+          type: boolean
+          description: Account created / linked via Microsoft OAuth
+        is_github_user:
+          type: boolean
+          description: Account created / linked via GitHub OAuth
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        is_staff:
+          type: boolean
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+      required:
+      - email
+      - last_modified
+      - user_id
+      - username
+    FullProfileRequest:
+      type: object
+      description: |-
+        Full profile serializer that exposes most editable user fields.
+        This allows the UnifiedSyncView to upsert the complete user object.
+        Sensitive fields like `is_superuser`, `groups`, and `user_permissions` are intentionally omitted.
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        user_password:
+          type: string
+          writeOnly: true
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 15
+        devices_id:
+          nullable: true
+        temp_id:
+          type: string
+          nullable: true
+          maxLength: 64
+        related_devices: {}
+        email_pin_created:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the PIN was generated
+        email_verified:
+          type: boolean
+          description: Has the user verified their email?
+        is_archived:
+          type: boolean
+          description: Is the user account archived?
+        is_google_user:
+          type: boolean
+          description: Account created / linked via Google OAuth
+        is_openrouter_user:
+          type: boolean
+          description: Account created / linked via OpenRouter OAuth
+        is_microsoft_user:
+          type: boolean
+          description: Account created / linked via Microsoft OAuth
+        is_github_user:
+          type: boolean
+          description: Account created / linked via GitHub OAuth
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        is_staff:
+          type: boolean
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+      required:
+      - email
+      - username
     HealthCheckResponse:
       type: object
       properties:
@@ -1900,6 +1600,13 @@ components:
       - message
       - refresh_token
       - user_id
+    LogoutRequestRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: Refresh token to blacklist (optional; may also be supplied
+            via header/cookie).
     LogoutResponse:
       type: object
       properties:
@@ -2543,37 +2250,6 @@ components:
           type: string
           format: binary
           nullable: true
-    OAuthAuthorizeResponse:
-      type: object
-      properties:
-        authorize_url:
-          type: string
-        state:
-          type: string
-        state_id:
-          type: string
-        expires_at:
-          type: string
-        bridge:
-          type: boolean
-      required:
-      - authorize_url
-      - bridge
-      - expires_at
-      - state
-      - state_id
-    OAuthCallbackRequest:
-      type: object
-      properties:
-        state:
-          type: string
-          minLength: 1
-        code:
-          type: string
-        error:
-          type: string
-      required:
-      - state
     OAuthCallbackResponse:
       type: object
       properties:
@@ -2706,6 +2382,64 @@ components:
           maxLength: 255
         local_only:
           type: boolean
+    PatchedProfileRequest:
+      type: object
+      description: |-
+        Safe profile serializer for client-driven profile updates.
+        Whitelisted writable fields: username, email, phone_number, biometric_enabled.
+        Sensitive fields (email_verified, is_staff, is_superuser, user_password, related_devices, etc.)
+        are intentionally excluded.
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 15
+        biometric_enabled:
+          type: boolean
+    Profile:
+      type: object
+      description: |-
+        Safe profile serializer for client-driven profile updates.
+        Whitelisted writable fields: username, email, phone_number, biometric_enabled.
+        Sensitive fields (email_verified, is_staff, is_superuser, user_password, related_devices, etc.)
+        are intentionally excluded.
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone_number:
+          type: string
+          nullable: true
+          maxLength: 15
+        biometric_enabled:
+          type: boolean
+      required:
+      - email
+      - user_id
+      - username
     RegisterRequest:
       type: object
       properties:
@@ -2820,6 +2554,219 @@ components:
           minLength: 1
       required:
       - refresh
+    UMKErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+      - error
+    UMKGetResponse:
+      type: object
+      description: GET response shape when the caller's UMK exists (UserKeyMaterial
+        fields + exists=True).
+      properties:
+        user:
+          type: integer
+          description: Owning user id
+        umk_b64:
+          type: string
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        exists:
+          type: boolean
+          default: true
+      required:
+      - created_at
+      - umk_b64
+      - updated_at
+      - user
+      - version
+    UMKProvisionRequestRequest:
+      type: object
+      description: 'POST request body: optionally client-supplied 32-byte key, base64-encoded.'
+      properties:
+        umk_b64:
+          type: string
+          description: Optional client-provided 32-byte key, base64-encoded. If omitted,
+            the server generates one.
+    UMKProvisionResponse:
+      type: object
+      description: '201 response after provisioning: the created UserKeyMaterial record.'
+      properties:
+        user:
+          type: integer
+          description: Owning user id
+        umk_b64:
+          type: string
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - umk_b64
+      - updated_at
+      - user
+      - version
+    UnifiedSyncDeleteResponse:
+      type: object
+      description: 'DELETE /unified-sync/ response: delete/archive summary + optional
+        export URLs.'
+      properties:
+        message:
+          type: string
+        deleted:
+          $ref: '#/components/schemas/UnifiedSyncDeleteStats'
+        archived:
+          $ref: '#/components/schemas/UnifiedSyncDeleteStats'
+        export_urls:
+          type: object
+          additionalProperties:
+            type: string
+        profile:
+          $ref: '#/components/schemas/FullProfile'
+        chat:
+          $ref: '#/components/schemas/FullChat'
+      required:
+      - message
+    UnifiedSyncDeleteStats:
+      type: object
+      properties:
+        attachments:
+          type: integer
+        messages:
+          type: integer
+        conversations:
+          type: integer
+        tokens:
+          type: integer
+        user:
+          type: integer
+    UnifiedSyncGetResponse:
+      type: object
+      description: GET /unified-sync/ — nested profile/chat payload (shape depends
+        on profile=/chat= flags).
+      properties:
+        user_id:
+          type: string
+          nullable: true
+        is_new:
+          type: boolean
+        temp_id:
+          type: string
+          nullable: true
+        profile:
+          $ref: '#/components/schemas/FullProfile'
+        chat:
+          $ref: '#/components/schemas/FullChat'
+      required:
+      - is_new
+      - user_id
+    UnifiedSyncPatchResponse:
+      type: object
+      description: 'PATCH /unified-sync/ response: the updated profile.'
+      properties:
+        profile:
+          $ref: '#/components/schemas/Profile'
+      required:
+      - profile
+    UnifiedSyncPostRequestRequest:
+      type: object
+      description: 'POST /unified-sync/ request body: optional profile + chat model
+        lists to upsert.'
+      properties:
+        profile:
+          $ref: '#/components/schemas/FullProfileRequest'
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationRequest'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageRequest'
+        message_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageRequestRequest'
+        message_responses:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponseRequest'
+        message_outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageOutputRequest'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentRequest'
+    UnifiedSyncPostResponse:
+      type: object
+      description: 'POST /unified-sync/ response: upsert summary/errors + canonical
+        profile/chat payload.'
+      properties:
+        summary:
+          $ref: '#/components/schemas/UnifiedSyncUpsertSummary'
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: {}
+        user_id:
+          type: string
+          nullable: true
+        temp_id:
+          type: string
+          nullable: true
+        profile:
+          $ref: '#/components/schemas/FullProfile'
+        chat:
+          $ref: '#/components/schemas/FullChat'
+      required:
+      - summary
+      - user_id
+    UnifiedSyncUpsertSummary:
+      type: object
+      description: Per-model created/updated counters returned by POST /unified-sync/.
+      properties:
+        profile_updated:
+          type: boolean
+        conversations_created:
+          type: integer
+        conversations_updated:
+          type: integer
+        messages_created:
+          type: integer
+        messages_updated:
+          type: integer
+        requests_created:
+          type: integer
+        requests_updated:
+          type: integer
+        responses_created:
+          type: integer
+        responses_updated:
+          type: integer
+        outputs_created:
+          type: integer
+        outputs_updated:
+          type: integer
+        attachments_created:
+          type: integer
+        attachments_updated:
+          type: integer
   securitySchemes:
     jwtAuth:
       type: http

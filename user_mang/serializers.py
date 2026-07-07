@@ -478,3 +478,77 @@ class FullChatSerializer(serializers.Serializer):
                                 ret[field_name] = field.to_representation(value) if value is not None else []
                         return ret
                 return super().to_representation(instance)
+
+
+# ------------------------- Documentation Serializers (UnifiedSyncView) -------------------------
+# These describe the real top-level response shapes for drf-spectacular; the view itself may add
+# best-effort fallback keys not modeled here (see UnifiedSyncView docstrings for full detail).
+
+class UnifiedSyncGetResponseSerializer(serializers.Serializer):
+    """GET /unified-sync/ — nested profile/chat payload (shape depends on profile=/chat= flags)."""
+    user_id = serializers.CharField(allow_null=True)
+    is_new = serializers.BooleanField()
+    temp_id = serializers.CharField(allow_null=True, required=False)
+    profile = FullProfileSerializer(required=False)
+    chat = FullChatSerializer(required=False)
+
+
+class UnifiedSyncUpsertSummarySerializer(serializers.Serializer):
+    """Per-model created/updated counters returned by POST /unified-sync/."""
+    profile_updated = serializers.BooleanField(required=False)
+    conversations_created = serializers.IntegerField(required=False)
+    conversations_updated = serializers.IntegerField(required=False)
+    messages_created = serializers.IntegerField(required=False)
+    messages_updated = serializers.IntegerField(required=False)
+    requests_created = serializers.IntegerField(required=False)
+    requests_updated = serializers.IntegerField(required=False)
+    responses_created = serializers.IntegerField(required=False)
+    responses_updated = serializers.IntegerField(required=False)
+    outputs_created = serializers.IntegerField(required=False)
+    outputs_updated = serializers.IntegerField(required=False)
+    attachments_created = serializers.IntegerField(required=False)
+    attachments_updated = serializers.IntegerField(required=False)
+
+
+class UnifiedSyncPostRequestSerializer(serializers.Serializer):
+    """POST /unified-sync/ request body: optional profile + chat model lists to upsert."""
+    profile = FullProfileSerializer(required=False)
+    conversations = ConversationSerializer(many=True, required=False)
+    messages = MessageSerializer(many=True, required=False)
+    message_requests = MessageRequestSerializer(many=True, required=False)
+    message_responses = MessageResponseSerializer(many=True, required=False)
+    message_outputs = MessageOutputSerializer(many=True, required=False)
+    attachments = AttachmentSerializer(many=True, required=False)
+
+
+class UnifiedSyncPostResponseSerializer(serializers.Serializer):
+    """POST /unified-sync/ response: upsert summary/errors + canonical profile/chat payload."""
+    summary = UnifiedSyncUpsertSummarySerializer()
+    errors = serializers.DictField(child=serializers.ListField(), required=False)
+    user_id = serializers.CharField(allow_null=True)
+    temp_id = serializers.CharField(allow_null=True, required=False)
+    profile = FullProfileSerializer(required=False)
+    chat = FullChatSerializer(required=False)
+
+
+class UnifiedSyncPatchResponseSerializer(serializers.Serializer):
+    """PATCH /unified-sync/ response: the updated profile."""
+    profile = ProfileSerializer()
+
+
+class UnifiedSyncDeleteStatsSerializer(serializers.Serializer):
+    attachments = serializers.IntegerField(required=False)
+    messages = serializers.IntegerField(required=False)
+    conversations = serializers.IntegerField(required=False)
+    tokens = serializers.IntegerField(required=False)
+    user = serializers.IntegerField(required=False)
+
+
+class UnifiedSyncDeleteResponseSerializer(serializers.Serializer):
+    """DELETE /unified-sync/ response: delete/archive summary + optional export URLs."""
+    message = serializers.CharField()
+    deleted = UnifiedSyncDeleteStatsSerializer(required=False)
+    archived = UnifiedSyncDeleteStatsSerializer(required=False)
+    export_urls = serializers.DictField(child=serializers.CharField(), required=False)
+    profile = FullProfileSerializer(required=False)
+    chat = FullChatSerializer(required=False)

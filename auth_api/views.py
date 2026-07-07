@@ -46,6 +46,7 @@ from .serializers import (
     VerifyOTPSerializer,
     RegisterResponseSerializer,
     LoginResponseSerializer,
+    LogoutRequestSerializer,
     LogoutResponseSerializer,
     HealthCheckResponseSerializer,
     OAuthAuthorizeResponseSerializer,
@@ -54,17 +55,33 @@ from .serializers import (
     EmailPinVerifyResponseSerializer,
     SetPasswordAfterEmailVerifyRequestSerializer,
     SetPasswordAfterEmailVerifyResponseSerializer,
+    DeprecatedEndpointResponseSerializer,
 )
 from prompeteer_server.utils.emailer import send_verified_email
 try:
-    from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiResponse, OpenApiParameter
+    from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiExample, OpenApiResponse, OpenApiParameter
     from drf_spectacular.types import OpenApiTypes
 except Exception:
     extend_schema = None  # type: ignore
+    extend_schema_view = None  # type: ignore
     OpenApiExample = None  # type: ignore
     OpenApiResponse = None  # type: ignore
     OpenApiParameter = None  # type: ignore
     OpenApiTypes = None  # type: ignore
+
+def _exclude_from_schema(cls):
+    """Class decorator: exclude every HTTP method this view defines from the OpenAPI schema.
+
+    Used for OAuth authorize/callback views, which are browser redirects (not typed JSON API
+    calls) and whose duplicate trailing-slash routes otherwise collide on operationId.
+    """
+    if not (extend_schema_view and extend_schema):
+        return cls
+    kwargs = {}
+    for method in ('get', 'post'):
+        if hasattr(cls, method):
+            kwargs[method] = extend_schema(exclude=True)
+    return extend_schema_view(**kwargs)(cls)
 
 # Predefined OpenAPI parameter sequences for Spectacular (when available)
 OAUTH_AUTHORIZE_PARAMS = []
@@ -739,6 +756,7 @@ class LogoutView(APIView):
         extend_schema(
             tags=['auth'],
             summary='Logout (client discards tokens)',
+            request=LogoutRequestSerializer,
             responses={200: LogoutResponseSerializer},
         ) if extend_schema else (lambda f: f)
     )
@@ -1403,6 +1421,7 @@ class OAuthResultView(APIView):
         return Response(data)
 
 # -------------------------------- Providers -----------------------------------
+@_exclude_from_schema
 class GoogleAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the Google OAuth2 authorization flow.
@@ -1411,6 +1430,7 @@ class GoogleAuthorizeView(OAuthAuthorizeBase):
     """
     provider = 'google'
 
+@_exclude_from_schema
 class OpenRouterAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the OpenRouter OAuth2 authorization flow.
@@ -1419,6 +1439,7 @@ class OpenRouterAuthorizeView(OAuthAuthorizeBase):
     """
     provider = 'openrouter'
 
+@_exclude_from_schema
 class GoogleCallbackView(OAuthCallbackBase):
     """
     Handles the callback from Google OAuth2.
@@ -1427,6 +1448,7 @@ class GoogleCallbackView(OAuthCallbackBase):
     """
     provider = 'google'
 
+@_exclude_from_schema
 class OpenRouterCallbackView(OAuthCallbackBase):
     """
     Handles the callback from OpenRouter OAuth2.
@@ -1435,6 +1457,7 @@ class OpenRouterCallbackView(OAuthCallbackBase):
     """
     provider = 'openrouter'
 
+@_exclude_from_schema
 class GitHubAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the GitHub OAuth2 authorization flow.
@@ -1482,6 +1505,7 @@ class GitHubAuthorizeView(OAuthAuthorizeBase):
             'bridge': False
         })
 
+@_exclude_from_schema
 class GitHubCallbackView(OAuthCallbackBase):
     """
     Handles the callback from GitHub OAuth2.
@@ -1617,6 +1641,7 @@ class GitHubCallbackView(OAuthCallbackBase):
             return HttpResponse(html)
         return Response(payload)
 
+@_exclude_from_schema
 class MicrosoftAuthorizeView(OAuthAuthorizeBase):
     """
     Starts the Microsoft OAuth2 (Azure AD) authorization flow.
@@ -1664,6 +1689,7 @@ class MicrosoftAuthorizeView(OAuthAuthorizeBase):
             'bridge': False
         })
 
+@_exclude_from_schema
 class MicrosoftCallbackView(OAuthCallbackBase):
     """
     Handles the callback from Microsoft OAuth2 (Azure AD).
@@ -1869,6 +1895,15 @@ class LoginWithOTPView(APIView):
     permission_classes = [AllowAny]
     throttle_scope = 'auth'
 
+    @(
+        extend_schema(
+            tags=['auth'],
+            summary='Login with OTP (deprecated)',
+            description='Deprecated: OTP-based login is disabled in this release. Always returns 410 Gone.',
+            request=None,
+            responses={410: DeprecatedEndpointResponseSerializer},
+        ) if extend_schema else (lambda f: f)
+    )
     def post(self, request):
         """Deprecated endpoint: Login-with-OTP is disabled in this release."""
         return Response({'detail': 'OTP endpoints are deprecated in this release.'}, status=status.HTTP_410_GONE)

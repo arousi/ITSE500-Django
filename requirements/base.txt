@@ -38,7 +38,7 @@ uvicorn==0.34.0
 psycopg[binary]==3.2.3
 
 # --- Media / images (required by ImageField in chat_api models) ---
-pillow==10.4.0
+pillow==12.2.0
 
 # --- PDF generation (user_mang/views.py: reportlab canvas/pagesizes) ---
 reportlab==4.2.5

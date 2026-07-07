@@ -859,10 +859,7 @@ class UnifiedSyncView(APIView):
                         if not att_id:
                             errors["attachments"].append({"data": att, "error": "Missing id"})
                             continue
-                        if user is not None:
-                            # ensure the incoming payload uses 'user_id' key for clarity, but pass the user to save()
-                            att["user_id"] = user.pk
-                        else:
+                        if user is None:
                             errors["attachments"].append({"data": att, "error": "User is None"})
                             continue
                         instance = Attachment.objects.filter(pk=att_id).first()
@@ -877,8 +874,9 @@ class UnifiedSyncView(APIView):
                                 continue
                         serializer = AttachmentSerializer(instance, data=att, partial=True, context={"request": request})
                         if serializer.is_valid():
-                            # Attachment.user_id is read-only; set FK on save
-                            serializer.save(user_id=user)
+                            # Attachment has no `user_id`/`conversation_id` fields of its own
+                            # (they're derived from message_id on read); nothing extra to pass here.
+                            serializer.save()
                             (created if instance is None else updated)["att"] += 1
                         else:
                             errors["attachments"].append(serializer.errors)

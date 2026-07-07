@@ -979,7 +979,11 @@ components:
       description: |-
         Serialize an artifact attached to a message (image/pdf/embedding/etc.).
         - Accepts 'id' in payload as an alias to attachment_id to match the UnifiedSyncView.
-        - user_id is read-only and the view should call serializer.save(user=user) on create.
+        - The Attachment model has no `user_id`/`conversation_id` fields of its own -- only
+          `message_id` (FK -> Message). `user_id` and `conversation_id` below are derived,
+          read-only fields sourced from the related Message so the API shape stays stable
+          for clients; they are never written to the model (`.save()` does not take a
+          `user` or `conversation_id` kwarg -- there is nothing on Attachment to assign it to).
       properties:
         id:
           type: string
@@ -989,10 +993,14 @@ components:
           readOnly: true
         user_id:
           type: string
+          format: uuid
+          nullable: true
           readOnly: true
         conversation_id:
           type: string
           format: uuid
+          nullable: true
+          readOnly: true
         message_id:
           type: string
           format: uuid
@@ -1073,14 +1081,15 @@ components:
       description: |-
         Serialize an artifact attached to a message (image/pdf/embedding/etc.).
         - Accepts 'id' in payload as an alias to attachment_id to match the UnifiedSyncView.
-        - user_id is read-only and the view should call serializer.save(user=user) on create.
+        - The Attachment model has no `user_id`/`conversation_id` fields of its own -- only
+          `message_id` (FK -> Message). `user_id` and `conversation_id` below are derived,
+          read-only fields sourced from the related Message so the API shape stays stable
+          for clients; they are never written to the model (`.save()` does not take a
+          `user` or `conversation_id` kwarg -- there is nothing on Attachment to assign it to).
       properties:
         id:
           type: string
           minLength: 1
-        conversation_id:
-          type: string
-          format: uuid
         message_id:
           type: string
           format: uuid
@@ -1138,7 +1147,6 @@ components:
           nullable: true
           maxLength: 64
       required:
-      - conversation_id
       - message_id
       - type
     AttachmentUpload:
@@ -1369,7 +1377,7 @@ components:
         message_request:
           type: array
           items:
-            $ref: '#/components/schemas/MessageRequest'
+            $ref: '#/components/schemas/MessageRequestModel'
           readOnly: true
         message_response:
           type: array
@@ -1670,7 +1678,7 @@ components:
           nullable: true
         request:
           allOf:
-          - $ref: '#/components/schemas/MessageRequest'
+          - $ref: '#/components/schemas/MessageRequestModel'
           readOnly: true
         response:
           allOf:
@@ -1775,6 +1783,51 @@ components:
     MessageRequest:
       type: object
       description: |-
+        Serialize a chat message.
+        - Write: accept PKs for `request_id`, `response_id`, `output_id`, `conversation_id`.
+        - Read: also include nested `request`, `response`, `output` for convenience.
+        - File fields (`img_Url`, `doc_url`) are rendered as URLs.
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+          nullable: true
+        response_id:
+          type: string
+          minLength: 1
+          nullable: true
+        output_id:
+          type: integer
+          nullable: true
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        vote:
+          type: boolean
+          nullable: true
+        has_image:
+          type: boolean
+        img_Url:
+          type: string
+          format: binary
+          nullable: true
+        metadata:
+          nullable: true
+        has_embedding:
+          type: boolean
+        has_document:
+          type: boolean
+        doc_url:
+          type: string
+          format: binary
+          nullable: true
+      required:
+      - conversation_id
+    MessageRequestModel:
+      type: object
+      description: |-
         Serialize a single model generation *request* (the user's prompt/config).
         Primary key: `request_id` (UUID).
         Used both to return request details (GET) and to upsert them (POST).
@@ -1854,7 +1907,7 @@ components:
           nullable: true
       required:
       - request_id
-    MessageRequestRequest:
+    MessageRequestModelRequest:
       type: object
       description: |-
         Serialize a single model generation *request* (the user's prompt/config).
@@ -2190,7 +2243,7 @@ components:
           nullable: true
         request:
           allOf:
-          - $ref: '#/components/schemas/MessageRequest'
+          - $ref: '#/components/schemas/MessageRequestModel'
           readOnly: true
         response:
           allOf:
@@ -2699,7 +2752,7 @@ components:
         message_requests:
           type: array
           items:
-            $ref: '#/components/schemas/MessageRequestRequest'
+            $ref: '#/components/schemas/MessageRequestModelRequest'
         message_responses:
           type: array
           items:

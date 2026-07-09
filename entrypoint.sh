@@ -1,28 +1,20 @@
 #!/bin/sh
 set -e
 
-# When running against Postgres (docker-compose.prod.yml), the `db` service
-# healthcheck already gates startup via `depends_on: condition: service_healthy`,
-# but wait a little longer here too in case the app container races the DB's
-# listener coming up right after the healthcheck passes.
-if [ -n "$POSTGRES_DB" ]; then
-  echo "Waiting for Postgres at ${POSTGRES_HOST:-db}:${POSTGRES_PORT:-5432}..."
+# Wait for Postgres to accept connections before migrating. The SWE-Pioneers VPS sets DB_HOST
+# (platform-postgres is a separate stack, so compose depends_on cannot gate it); the prod
+# compose sets POSTGRES_*. No-op when neither is set (local SQLite dev).
+_PG_HOST="${DB_HOST:-$POSTGRES_HOST}"
+if [ -n "$_PG_HOST" ] || [ -n "$POSTGRES_DB" ]; then
+  _PG_HOST="${_PG_HOST:-db}"
+  _PG_PORT="${DB_PORT:-${POSTGRES_PORT:-5432}}"
+  echo "Waiting for Postgres at ${_PG_HOST}:${_PG_PORT}..."
   for i in $(seq 1 30); do
-    python - <<'PYEOF' && break
-import os, socket, sys
-host = os.environ.get("POSTGRES_HOST", "db")
-port = int(os.environ.get("POSTGRES_PORT", "5432"))
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.settimeout(2)
-try:
-    s.connect((host, port))
-    sys.exit(0)
-except OSError:
-    sys.exit(1)
-finally:
-    s.close()
-PYEOF
-    echo "Postgres not ready yet, retrying ($i/30)..."
+    if python -c "import socket,sys; s=socket.socket(); s.settimeout(2); s.connect(('${_PG_HOST}', ${_PG_PORT})); s.close()" 2>/dev/null; then
+      echo "Postgres is reachable."
+      break
+    fi
+    echo "  ...not ready yet ($i/30)"
     sleep 2
   done
 fi

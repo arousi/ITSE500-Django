@@ -1,0 +1,40 @@
+# Production dependencies for the ITSE500 (Prompeteer) Django app on the SWE-Pioneers VPS.
+# Trimmed from the full dev pip-freeze (requirements.txt, ~230 pkgs) down to only what the
+# WSGI server, migrations, admin, the active APIs (auth_api/user_mang/crypto_api), OpenAPI
+# docs, WhiteNoise static and the landing QR actually import at runtime — plus the Postgres
+# driver and the S3/MinIO storage backend. Derived from an import audit of every app on the
+# boot path; see the deployment plan for the full rationale.
+
+# --- Core framework & WSGI serving ---
+Django==5.1.7
+gunicorn==21.2.0
+whitenoise==6.9.0
+asgiref==3.8.1
+sqlparse==0.5.3
+tzdata==2025.1              # zoneinfo data for USE_TZ on slim images
+
+# --- REST API layer ---
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.5.0
+PyJWT==2.9.0
+django-cors-headers==4.3.1
+drf-spectacular==0.28.0    # OpenAPI schema + /api/docs, /api/redoc
+
+# --- Kept in INSTALLED_APPS (imported at boot even under WSGI) ---
+channels==4.2.0            # daphne NOT needed under gunicorn/WSGI
+
+# --- Boot-critical feature libraries (module-level imports) ---
+Pillow==10.4.0             # chat_api ImageField system check (runs at migrate)
+cryptography==44.0.0       # auth_api Fernet OAuth-token encryption
+requests==2.32.3           # auth_api OAuth HTTP calls + emailer
+pyotp==2.9.0               # auth_api OTP/TOTP
+reportlab==4.2.5           # user_mang PDF export (top-level import)
+segno==1.6.1               # core landing-page QR
+
+# --- Admin theme (optional; find_spec-guarded, admin works without it) ---
+django-jazzmin==3.0.1
+
+# --- Added for VPS production (absent from the dev freeze) ---
+psycopg[binary]>=3.2,<3.3    # PostgreSQL driver (platform-postgres); Django 5.1 supports psycopg3
+django-storages>=1.14,<1.15  # S3/MinIO backend for chat_api FileField/ImageField media
+boto3>=1.35,<1.40            # S3 client used by django-storages (platform-minio)

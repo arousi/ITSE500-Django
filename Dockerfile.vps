@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1
+# Production image for the ITSE500 (Prompeteer) app on the SWE-Pioneers VPS.
+#
+# IMPORTANT: build the frontends FRESH into the build context BEFORE building this
+# image — they are baked in, not mounted at runtime:
+#   scripts/deploy-react.ps1                 -> frontend_build/
+#   scripts/deploy-flutter-web.ps1 -...      -> flutter_build/
+# Dockerfile.vps.dockerignore keeps those two dirs in the context (the default
+# .dockerignore excludes them).
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# Production deps only. psycopg[binary]/cryptography/bcrypt/Pillow ship manylinux
+# wheels, so no compiler or system libraries are needed -> smaller, faster image.
+COPY requirements.prod.txt /app/requirements.prod.txt
+RUN pip install --upgrade pip && pip install -r requirements.prod.txt
+
+# Create the unprivileged user BEFORE copying so ownership is set during COPY.
+# (A post-copy `chown -R /app` would duplicate the whole app tree into a new layer.)
+RUN useradd -m -u 10001 appuser
+
+# App source, including the freshly-built frontend_build/ + flutter_build/.
+COPY --chown=appuser:appuser . /app/
+RUN chmod +x /app/entrypoint.sh \
+ && mkdir -p /app/staticfiles \
+ && chown -R appuser:appuser /app/staticfiles
+USER appuser
+
+EXPOSE 8000
+
+# entrypoint: wait-for-postgres -> migrate -> collectstatic -> optional superuser -> exec
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["gunicorn", "prompeteer_server.wsgi:application", \
+     "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "60", \
+     "--access-logfile", "-", "--error-logfile", "-"]

@@ -120,6 +120,9 @@ _DEFAULT_ALLOWED = [
     'localhost',
     'grad-project-server-tq36w.ondigitalocean.app',
     'flutter.itse500-ok.ly',
+    # SWE-Pioneers VPS (temporary subdomain until itse500-ok.ly DNS is repointed here)
+    'itse500.swe.com.ly',
+    '102.203.201.196',
 ]
 
 # Allow overriding allowed hosts via environment (comma-separated). In
@@ -129,6 +132,16 @@ if _env_allowed:
     ALLOWED_HOSTS = [h.strip() for h in _env_allowed.split(',') if h.strip()]
 else:
     ALLOWED_HOSTS = _DEFAULT_ALLOWED
+
+# Public base URL (used e.g. for the landing-page QR); primary production domain.
+PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', 'https://itse500.swe.com.ly')
+
+# Behind Traefik (TLS terminator) + nginx reverse proxy: trust the forwarded proto
+# and host so Django sees HTTPS, builds correct absolute URLs, and CSRF checks pass.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 
 # Application definition
@@ -398,6 +411,8 @@ _DEFAULT_CORS_ORIGINS = [
     "https://itse500-ok.ly",
     "https://react.itse500-ok.ly",
     "https://flutter.itse500-ok.ly",
+    # SWE-Pioneers VPS temporary subdomain
+    "https://itse500.swe.com.ly",
 ]
 _env_cors_origins = os.getenv('CORS_ALLOWED_ORIGINS')
 if _env_cors_origins:
@@ -481,6 +496,8 @@ _DEFAULT_CSRF_TRUSTED = [
     'https://www.itse500-ok.ly',
     'https://react.itse500-ok.ly',
     'https://flutter.itse500-ok.ly',
+    # SWE-Pioneers VPS temporary subdomain
+    'https://itse500.swe.com.ly',
 ]
 _env_csrf_trusted = os.getenv('CSRF_TRUSTED_ORIGINS')
 if _env_csrf_trusted:
@@ -505,6 +522,13 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Allow adding extra trusted CORS/CSRF origins via env (comma-separated) so new
+# hostnames (e.g. after DNS cutover) don't require a code change.
+_extra_origins = [o.strip() for o in os.getenv('EXTRA_TRUSTED_ORIGINS', '').split(',') if o.strip()]
+if _extra_origins:
+    CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS + _extra_origins
+    CSRF_TRUSTED_ORIGINS = CSRF_TRUSTED_ORIGINS + _extra_origins
 
 
 TEMPLATES = [
@@ -540,22 +564,31 @@ WSGI_APPLICATION = 'prompeteer_server.wsgi.application'
 # the local db.sqlite3 file for local dev when no Postgres env is set, so
 # existing local workflows are unaffected.
 
-_POSTGRES_DB = os.environ.get('POSTGRES_DB')
+# Use PostgreSQL when a DB host/name is configured. The SWE-Pioneers VPS deploy sets DB_*
+# (DB_HOST=platform-postgres); the prod compose sets POSTGRES_*. Fall back to local SQLite
+# for development when neither is set.
+_DB_HOST = os.environ.get('DB_HOST') or os.environ.get('POSTGRES_HOST')
+_DB_NAME = os.environ.get('DB_NAME') or os.environ.get('POSTGRES_DB')
 
-if _POSTGRES_DB:
+if _DB_HOST or _DB_NAME:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': _POSTGRES_DB,
-            'USER': os.environ.get('POSTGRES_USER', 'prompeteer'),
-            'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
-            'HOST': os.environ.get('POSTGRES_HOST', 'db'),
-            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
-            'CONN_MAX_AGE': int(os.environ.get('POSTGRES_CONN_MAX_AGE', '60')),
-            'OPTIONS': (
-                {'sslmode': 'require'} if os.environ.get('POSTGRES_SSLMODE', 'disable') == 'require' else {}
-            ),
-        },
+            'NAME': _DB_NAME or 'itse500_db',
+            'USER': os.environ.get('DB_USER') or os.environ.get('POSTGRES_USER', 'itse500'),
+            'PASSWORD': os.environ.get('DB_PASSWORD') or os.environ.get('POSTGRES_PASSWORD', ''),
+            'HOST': _DB_HOST or 'db',
+            'PORT': os.environ.get('DB_PORT') or os.environ.get('POSTGRES_PORT', '5432'),
+            'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE') or os.environ.get('POSTGRES_CONN_MAX_AGE', '60')),
+            'OPTIONS': {
+                # Internal Docker network traffic is unencrypted; set DB_SSL=True (or
+                # POSTGRES_SSLMODE=require) to require TLS.
+                'sslmode': 'require' if (
+                    os.environ.get('DB_SSL', 'False').lower() in ('1', 'true', 'yes')
+                    or os.environ.get('POSTGRES_SSLMODE', 'disable') == 'require'
+                ) else 'disable',
+            },
+        }
     }
 else:
     DATABASES = {
@@ -617,6 +650,33 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Storage backends (Django 4.2+ STORAGES API):
+#  - default    -> user media / encrypted blobs. On the VPS this is the shared,
+#    S3-compatible MinIO (internal, reached over the `backend` docker network).
+#    Falls back to the local filesystem when MINIO_ENDPOINT is unset (local dev).
+#  - staticfiles -> served in-process by WhiteNoise (compressed, no separate CDN).
+_MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT')
+if _MINIO_ENDPOINT:
+    AWS_S3_ENDPOINT_URL = _MINIO_ENDPOINT
+    AWS_ACCESS_KEY_ID = os.getenv('MINIO_ACCESS_KEY')
+    AWS_SECRET_ACCESS_KEY = os.getenv('MINIO_SECRET_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('MINIO_BUCKET_NAME')
+    AWS_S3_REGION_NAME = os.getenv('MINIO_REGION', 'us-east-1')
+    AWS_S3_ADDRESSING_STYLE = 'path'          # required for MinIO
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_DEFAULT_ACL = None                     # bucket-private; blobs served via authenticated API
+    AWS_QUERYSTRING_AUTH = True
+    AWS_S3_FILE_OVERWRITE = False
+    STORAGES = {
+        'default': {'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+    }
+else:
+    STORAGES = {
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+    }
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -626,3 +686,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Ensure correct MIME for WASM (CanvasKit)
 mimetypes.add_type('application/wasm', '.wasm', True)
+
+# In production keep the container stateless: drop file handlers (they'd write logs
+# into the ephemeral container filesystem) and log to stdout only — Docker's
+# json-file driver captures and rotates it. Loggers already include 'console'.
+if not DEBUG:
+    for _fh in ('file', 'chat_api_file', 'conversation_file', 'auth_api_file'):
+        LOGGING['handlers'].pop(_fh, None)
+    for _logger in LOGGING.get('loggers', {}).values():
+        _logger['handlers'] = ['console']

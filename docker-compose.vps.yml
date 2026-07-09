@@ -1,0 +1,105 @@
+# ITSE500 (Prompeteer) — production stack for the SWE-Pioneers VPS.
+#
+# Plugs into the shared platform per vps/traefik-plug-in-guide.md:
+#   - nginx (public) is the ONLY container on `proxy` and carries the Traefik labels
+#   - app (gunicorn) is on `backend` to reach platform-postgres + platform-minio
+#   - both share the private itse500_internal network; no ports are published
+#
+# Prereqs on the VPS:
+#   1) external networks `proxy` and `backend` exist (platform stack)
+#   2) `provision-platform-app.sh itse500` has written POSTGRES_*/MINIO_* into ./.env
+#   3) ./.env (chmod 600) also holds SECRET_KEY and the other app keys (see .env.vps.example)
+# Bring up:  docker compose -f docker-compose.vps.yml up -d --build
+name: itse500
+
+services:
+  # -- Django app server (gunicorn). backend -> platform-postgres + platform-minio.
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.vps
+    image: itse500-app:latest
+    container_name: itse500-app
+    restart: unless-stopped
+    # Managed by swe-health-reactor: auto-restart if the /healthz healthcheck goes unhealthy,
+    # and quarantine (stop) + Telegram-alert if it flaps. See vps/tools/HEALTH-REACTOR.md.
+    labels:
+      swe.autoheal: "true"
+    env_file: .env
+    environment:
+      DJANGO_DEBUG: "False"
+      # Map the provisioned POSTGRES_* into the DB_* the app reads (settings.py)
+      DB_HOST: platform-postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:?run provision-platform-app.sh itse500 first}
+      DB_USER: ${POSTGRES_USER:?run provision-platform-app.sh itse500 first}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?run provision-platform-app.sh itse500 first}
+      # Shared MinIO (internal, over the backend network)
+      MINIO_ENDPOINT: http://platform-minio:9000
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:?run provision-platform-app.sh itse500 first}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?run provision-platform-app.sh itse500 first}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?run provision-platform-app.sh itse500 first}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status==200 else 1)"]
+      interval: 20s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
+    networks: [backend, itse500_internal]
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  # -- Public reverse proxy (nginx). Only container on `proxy`; carries Traefik labels.
+  nginx:
+    image: nginx:alpine
+    container_name: itse500-nginx
+    restart: unless-stopped
+    depends_on:
+      app: {condition: service_healthy}
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks: [proxy, itse500_internal]
+    labels:
+      swe.autoheal: "true"          # health-reactor: restart if unhealthy, quarantine on flap
+      traefik.enable: "true"
+      traefik.docker.network: "proxy"
+      # Temporary host on the VPS domain — works as soon as its A record is live.
+      traefik.http.routers.itse500.rule: "Host(`itse500.swe.com.ly`)"
+      traefik.http.routers.itse500.entrypoints: "websecure"
+      traefik.http.routers.itse500.tls: "true"
+      traefik.http.routers.itse500.tls.certresolver: "letsencrypt"
+      # Production hosts — cert issues automatically once their DNS points at the VPS.
+      traefik.http.routers.itse500-prod.rule: "Host(`itse500-ok.ly`) || Host(`www.itse500-ok.ly`)"
+      traefik.http.routers.itse500-prod.entrypoints: "websecure"
+      traefik.http.routers.itse500-prod.tls: "true"
+      traefik.http.routers.itse500-prod.tls.certresolver: "letsencrypt"
+      # One backend service shared by both routers (nginx listens on :80).
+      traefik.http.services.itse500.loadbalancer.server.port: "80"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.25"
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+networks:
+  proxy:
+    external: true          # shared Traefik ingress
+  backend:
+    external: true          # shared platform-postgres + platform-minio
+  itse500_internal:
+    name: itse500_internal  # private app network (created here)

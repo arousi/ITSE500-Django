@@ -21,7 +21,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView, RedirectView
 from django.urls import re_path
-from core.views import index, landing, flutter_index
+from core.views import index, landing, flutter_index, healthz
 from django.http import HttpRequest
 
 from django.template.loader import get_template
@@ -42,16 +42,25 @@ def healthz(request):
 
 # Serve SPA at root when using the React or Flutter subdomains; otherwise keep landing
 def root_router(request: HttpRequest):
+    # React SPA is the primary site at '/'. The Flutter web build lives under
+    # '/app/' and the team/landing page under '/team/' and '/landing/'.
     host = request.get_host().split(':')[0].lower()
-    if host == 'react.itse500-ok.ly':
-        return index(request)
-    if host == 'flutter.itse500-ok.ly':
+    if host == 'flutter.itse500-ok.ly':  # legacy dedicated Flutter host
         return flutter_index(request)
-    return landing(request)
+    return index(request)
 
 urlpatterns = [
-    # Root: SPA on react subdomain, landing elsewhere
+    # Root: React SPA (primary site)
     path('', root_router, name='root'),
+    # Liveness probe (no DB/auth) for nginx / Docker / Traefik healthchecks
+    path('healthz', healthz, name='healthz'),
+    # Flutter web build served under /app/
+    path('app/', flutter_index, name='flutter-web'),
+    # Without this, '/app' (no trailing slash) falls through to the React catch-all below
+    # instead of serving Flutter. Redirect it to the canonical '/app/'.
+    path('app', RedirectView.as_view(url='/app/', permanent=False)),
+    # Landing page with QR (moved off root)
+    path('landing/', landing, name='landing'),
     # Team page with inline context (replace links/images as needed)
     path('team/', TemplateView.as_view(
         template_name='team.html',

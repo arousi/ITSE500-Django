@@ -135,3 +135,12 @@ def flutter_index(request):
         content = normalizer + content
 
     return HttpResponse(content, content_type='text/html; charset=utf-8')
+
+
+def healthz(request):
+    """Lightweight liveness probe for nginx / Docker / Traefik healthchecks.
+
+    Returns 200 without touching the database or auth, so it stays fast and cheap
+    and never trips on a transient DB hiccup.
+    """
+    return HttpResponse('ok', content_type='text/plain')

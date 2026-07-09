@@ -1,0 +1,46 @@
+# Build-context ignore for `docker build -f Dockerfile.vps` (BuildKit uses this in
+# place of .dockerignore). Unlike the default .dockerignore, this KEEPS
+# frontend_build/ and flutter_build/ so the freshly-built SPAs are baked into the image.
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.git/
+.gitignore
+
+# Local dev / virtualenvs
+server_venv/
+venv/
+.venv/
+
+# Local state that must NOT be baked (DB -> Postgres, media -> MinIO, static regenerated)
+db.sqlite3
+*.sqlite3
+media/
+staticfiles/
+*.log
+
+# Large demo/landing videos (~135 MB) — never bake into the image. Serve from
+# object storage / a CDN if the landing page needs them.
+prompeteer_server/static/videos/
+
+# Secrets — provided at runtime via env_file, never baked into the image
+.env
+.env.*
+file.vps-secrets
+client_secret_*.json
+
+# Not needed inside the runtime image
+node_modules/
+docs/
+exports/
+scripts/
+.do/
+.pytest_cache/
+pytest.ini
+docker-compose*.yml
+Dockerfile
+itse500-Django.dockerfile
+*.postman_collection.json

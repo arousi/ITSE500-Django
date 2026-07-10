@@ -1,7 +1,27 @@
 # Handoff: Django 6 + django-bolt port
 
-**Branch:** `feat/django6-bolt` (off `Django-Starter` @ `f3ac601`). **You are here to continue Phase 2 (Bolt rewrite) → Phase 3 (serving) → cutover.**
-**Live app is untouched** — `itse500.swe.com.ly` still runs the secure `Django-Starter` (Django 5.1.15). Do not deploy this branch until it's fully tested.
+> **STATUS 2026-07-10: PORT COMPLETE.** All of auth_api (14 endpoints incl. 4-provider
+> OAuth on async httpx), user_mang `/me` (GET/POST/PATCH/DELETE + exports), and
+> crypto_api run on django-bolt; DRF/simplejwt/spectacular/oauth-toolkit/channels are
+> removed; the container serves via `manage.py runbolt`. Validated by
+> `scripts/bolt_poc_test.sh` — 26/26 checks green in the built image.
+>
+> **Corrections to this doc discovered during the port:**
+> - §2's "runbolt ASGI-mounts the entire Django app" is WRONG — runbolt only
+>   auto-mounts Django *admin*. The rest of the URLconf (React `/`, Flutter `/app/`,
+>   `/healthz`, `/team/`) needed an explicit `api.mount_django("/", clear_root_path=True)`
+>   in `prompeteer_server/api.py`.
+> - §3's "mint via `create_jwt_for_user`" is WRONG for this project — it hardcodes
+>   `sub=str(user.id)` and `Custom_User.id` is None (UUID pk is `user_id`). Minting
+>   lives in `auth_api/tokens.py` (`sub=str(user.pk)`, access 30d / refresh 1d).
+> - Bolt's default `trailing_slash="strip"` 308-redirects the DRF-canonical slashed
+>   paths; the APIs use `trailing_slash="keep"` + both slash variants registered.
+> - DRF's ScopedRateThrottle on the 4 auth endpoints did NOT survive the port —
+>   reintroduce rate limiting at nginx or via `django_bolt.middleware.rate_limit`.
+> - Old simplejwt tokens (no `sub`) are invalid after cutover: existing sessions
+>   must re-login once.
+
+**Branch:** `feat/django6-bolt` (off `Django-Starter` @ `f3ac601`).
 
 ---
 

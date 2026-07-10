@@ -7,7 +7,8 @@
 #   scripts/deploy-flutter-web.ps1 -...      -> flutter_build/
 # Dockerfile.vps.dockerignore keeps those two dirs in the context (the default
 # .dockerignore excludes them).
-FROM python:3.11-slim
+# Python 3.12 (django-bolt requires >=3.12; Django 6.0 supports 3.10-3.13).
+FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

@@ -4,23 +4,27 @@
 #
 # Keep this file lean: only add a package here if it is imported by
 # application code or required to run the app in production.
+#
+# NOTE (feat/django6-bolt): upgraded to Django 6.0 (requires Python 3.12+). Versions
+# below are the set pip resolves for Django 6.0.7. DRF is still here as the Phase-1
+# baseline; it is replaced by django-bolt in Phase 2.
 
-# --- Django core ---
-Django==5.1.15
-asgiref==3.8.1
+# --- Django core (Django 6.0; Python 3.12+) ---
+Django==6.0.7
+asgiref==3.11.1
 sqlparse==0.5.5
 
-# --- REST API ---
-djangorestframework==3.15.2
+# --- REST API (baseline; removed in the Bolt phase) ---
+djangorestframework==3.17.1
 djangorestframework_simplejwt==5.5.1
-django-cors-headers==4.3.1
-django-oauth-toolkit==3.0.1
-drf-spectacular==0.28.0
-drf-spectacular-sidecar==2025.9.1
+django-cors-headers==4.9.0
+django-oauth-toolkit==3.3.0
+drf-spectacular==0.30.0
+drf-spectacular-sidecar==2026.7.1
 
 # --- Realtime (channels app is installed; ASGI app defined but no
 # websocket route/channel layer is wired yet - see DEPLOYMENT.md) ---
-channels==4.2.0
+channels==4.3.2
 
 # --- Auth / crypto / OTP ---
 PyJWT==2.13.0
@@ -30,15 +34,15 @@ argon2-cffi==23.1.0
 bcrypt==4.3.0
 
 # --- Static files / WSGI server ---
-whitenoise==6.9.0
+whitenoise==6.12.0
 gunicorn==22.0.0
 uvicorn==0.34.0
 
 # --- Database (Postgres in production; sqlite3 is stdlib for local dev) ---
-psycopg[binary]==3.2.3
+psycopg[binary]==3.3.4
 
 # --- Media / images (required by ImageField in chat_api models) ---
-pillow==12.2.0
+pillow==12.3.0
 
 # --- PDF generation (user_mang/views.py: reportlab canvas/pagesizes) ---
 reportlab==4.2.5
@@ -53,4 +57,4 @@ openai==2.44.0
 litellm==1.84.0
 
 # --- Admin UI ---
-django-jazzmin==3.0.1
+django-jazzmin==3.0.5

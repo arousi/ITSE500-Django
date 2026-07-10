@@ -4,10 +4,11 @@ Phase-2 PoC: the first endpoint pair moved from DRF APIView to django-bolt.
 Auto-discovered by `runbolt` (any app-level `api.py`). Serves the same paths the
 DRF version did — /api/v1/crypto_api/umk — so existing clients are unaffected.
 
-NOTE (validate at runtime against django-bolt 0.9): the exact way to read the
-authenticated user's id from the JWT context (`request.context`) is inferred from
-the docs; confirm the claim key once runbolt is up (the app's simplejwt tokens
-carry a custom `user_id` claim, not the default `sub`).
+VALIDATED end-to-end on django-bolt 0.9 (runbolt + a real token): GET/POST round-trip.
+Requirement confirmed: Bolt's Rust JWT verifier reads the `sub` claim (= user pk) and
+exposes it as request.context["user_id"]. The app's simplejwt tokens must therefore
+carry `sub` — which happens automatically once auth_api's login/register/OAuth minting
+is ported to Bolt's create_jwt_for_user (it sets `sub`).
 """
 from __future__ import annotations
 
@@ -43,11 +44,11 @@ class UMKIn(msgspec.Struct):
 
 
 def _current_user_id(request):
-    """Resolve the caller's user id from the JWT the app issues (custom `user_id` claim).
-    Custom_User.user_id is a UUID PK, so keep it as-is (do NOT int() it)."""
+    """Resolve the caller's user id. Bolt puts the JWT `sub` (= user pk) into
+    request.context["user_id"]; fall back to the raw `user_id` claim. Custom_User.user_id
+    is a UUID PK, so keep it as a string (do NOT int() it)."""
     ctx = getattr(request, "context", None) or {}
-    claims = ctx.get("auth_claims") or {}
-    return claims.get("user_id") or ctx.get("user_id")
+    return ctx.get("user_id") or (ctx.get("auth_claims") or {}).get("user_id")
 
 
 @api.get("/umk", auth=_AUTH, guards=_GUARDS)

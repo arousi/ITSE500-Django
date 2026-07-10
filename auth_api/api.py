@@ -131,7 +131,6 @@ def _resolve_refresh_bridge(request, body: dict) -> tuple[Optional[Custom_User],
 # Simple endpoints
 # --------------------------------------------------------------------------
 
-@api.get("/health/")
 @api.get("/health")
 async def health_check(request):
     return Response({"status": "ok", "message": "Server is up"}, status_code=200)
@@ -166,7 +165,6 @@ def _login_core(identifier: Optional[str], pwd: Optional[str]) -> tuple[int, dic
     }
 
 
-@api.post("/login/")
 @api.post("/login")
 async def login(request):
     body = _body(request)
@@ -267,7 +265,6 @@ def _register_core(body: dict) -> tuple[int, dict]:
     }
 
 
-@api.post("/register/")
 @api.post("/register")
 async def register(request):
     body = _body(request)
@@ -300,7 +297,6 @@ def _verify_pin_core(auth_uid: Optional[str], email: str, pin: str) -> tuple[int
     return 200, {"message": "Email verified. You may now set your password."}
 
 
-@api.post("/verify-email-pin/", auth=_AUTH, guards=_OPEN)
 @api.post("/verify-email-pin", auth=_AUTH, guards=_OPEN)
 async def verify_email_pin(request):
     body = _body(request)
@@ -340,7 +336,6 @@ def _set_password_core(auth_uid: Optional[str], email: str, front_hash: str) -> 
     return 200, {"message": "Password set successfully. You may now log in."}
 
 
-@api.post("/set-password-after-email-verify/", auth=_AUTH, guards=_OPEN)
 @api.post("/set-password-after-email-verify", auth=_AUTH, guards=_OPEN)
 async def set_password_after_email_verify(request):
     body = _body(request)
@@ -364,7 +359,6 @@ async def set_password_after_email_verify(request):
     return Response(payload, status_code=status, headers=headers)
 
 
-@api.post("/logout/", auth=_AUTH, guards=_REQUIRED)
 @api.post("/logout", auth=_AUTH, guards=_REQUIRED)
 async def logout(request):
     # No server-side token deletion/blacklisting (parity with the DRF view):
@@ -373,7 +367,6 @@ async def logout(request):
     return Response({"detail": "Logged out successfully. Please discard tokens client-side."}, status_code=200)
 
 
-@api.post("/token/refresh/")
 @api.post("/token/refresh")
 async def token_refresh(request):
     body = _body(request)
@@ -389,7 +382,6 @@ async def token_refresh(request):
     return Response({"access": mint_access(user)}, status_code=200)
 
 
-@api.post("/otp-login/")
 @api.post("/otp-login")
 async def otp_login(request):
     return Response({"detail": "OTP endpoints are deprecated in this release."}, status_code=410)
@@ -1032,13 +1024,11 @@ async def _google_callback(request):
     return _callback_response(request, params, oauth_state, payload)
 
 
-@api.get("/google/callback/")
 @api.get("/google/callback")
 async def google_callback(request):
     return await _google_callback(request)
 
 
-@api.post("/google/callback/")
 @api.post("/google/callback")
 async def google_callback_post(request):
     return await _google_callback(request)
@@ -1067,19 +1057,16 @@ async def _openrouter_callback(request):
     return _callback_response(request, params, oauth_state, payload)
 
 
-@api.get("/openrouter/callback/")
 @api.get("/openrouter/callback")
 async def openrouter_callback(request):
     return await _openrouter_callback(request)
 
 
-@api.post("/openrouter/callback/")
 @api.post("/openrouter/callback")
 async def openrouter_callback_post(request):
     return await _openrouter_callback(request)
 
 
-@api.get("/github/callback/")
 @api.get("/github/callback")
 async def github_callback(request):
     params = _callback_params(request)
@@ -1132,7 +1119,6 @@ async def github_callback(request):
     return Response(payload)
 
 
-@api.get("/microsoft/callback/")
 @api.get("/microsoft/callback")
 async def microsoft_callback(request):
     params = _callback_params(request)
@@ -1196,7 +1182,6 @@ def _fetch_result(state_value: str) -> tuple[int, dict]:
     return 200, data
 
 
-@api.get("/oauth/result/{state_value}/")
 @api.get("/oauth/result/{state_value}")
 async def oauth_result(request, state_value: str):
     status, payload = await sync_to_async(_fetch_result)(state_value)

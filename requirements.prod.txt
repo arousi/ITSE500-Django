@@ -1,31 +1,29 @@
 # Production dependencies for the ITSE500 (Prompeteer) Django app on the SWE-Pioneers VPS.
 #
-# Mirrors requirements/base.txt (the maintained, security-patched runtime set) with two
-# deliberate deltas:
-#   - EXCLUDES openai + litellm: not imported by ANY app module (only the dev-only crawl4ai /
-#     langchain packages in the venv import them), and chat_api's model-calling routes are
-#     disabled — including them would add ~300MB to the image for nothing. Re-add here if the
-#     chat_api LLM features are ever enabled.
-#   - ADDS django-storages + boto3 + tzdata: S3/MinIO media backend (platform-minio) and the
-#     zoneinfo data USE_TZ needs on the slim base image — VPS-specific, absent from base.txt.
-# When bumping a version in requirements/base.txt, mirror it here (a CI check should enforce this).
+# Mirrors requirements/base.txt (Django 6.0 / Python 3.12) with two deliberate deltas:
+#   - EXCLUDES openai + litellm: not imported by ANY app module (only dev-only crawl4ai/langchain
+#     in the venv import them). Keeps the image ~300MB slimmer. Re-add if chat_api LLM is enabled.
+#   - ADDS django-storages + boto3 + tzdata: S3/MinIO media backend (platform-minio) + zoneinfo
+#     data USE_TZ needs on the slim base image — VPS-specific, absent from base.txt.
+# NOTE (feat/django6-bolt): Django 6.0 requires Python 3.12+ (Dockerfile.vps uses python:3.12-slim).
+# When bumping a version in requirements/base.txt, mirror it here.
 
-# --- Django core ---
-Django==5.1.15
-asgiref==3.8.1
+# --- Django core (Django 6.0; Python 3.12+) ---
+Django==6.0.7
+asgiref==3.11.1
 sqlparse==0.5.5
 tzdata==2025.1              # zoneinfo data for USE_TZ on the slim image (not in base.txt)
 
-# --- REST API ---
-djangorestframework==3.15.2
+# --- REST API (baseline; removed in the Bolt phase) ---
+djangorestframework==3.17.1
 djangorestframework_simplejwt==5.5.1
-django-cors-headers==4.3.1
-django-oauth-toolkit==3.0.1
-drf-spectacular==0.28.0
-drf-spectacular-sidecar==2025.9.1
+django-cors-headers==4.9.0
+django-oauth-toolkit==3.3.0
+drf-spectacular==0.30.0
+drf-spectacular-sidecar==2026.7.1
 
 # --- Realtime (channels app is in INSTALLED_APPS) ---
-channels==4.2.0
+channels==4.3.2
 
 # --- Auth / crypto / OTP ---
 PyJWT==2.13.0
@@ -35,15 +33,15 @@ argon2-cffi==23.1.0
 bcrypt==4.3.0
 
 # --- Static files / servers ---
-whitenoise==6.9.0
+whitenoise==6.12.0
 gunicorn==22.0.0
 uvicorn==0.34.0
 
 # --- Database (Postgres = platform-postgres on the VPS) ---
-psycopg[binary]==3.2.3
+psycopg[binary]==3.3.4
 
 # --- Media / images (chat_api ImageField system check runs at migrate) ---
-pillow==12.2.0
+pillow==12.3.0
 
 # --- PDF generation (user_mang/views.py) ---
 reportlab==4.2.5
@@ -54,8 +52,8 @@ requests==2.33.0
 segno==1.6.1
 
 # --- Admin UI (optional; find_spec-guarded) ---
-django-jazzmin==3.0.1
+django-jazzmin==3.0.5
 
 # --- VPS-only: S3/MinIO media storage backend (platform-minio) ---
-django-storages>=1.14,<1.15
+django-storages==1.14.6
 boto3>=1.35,<1.40

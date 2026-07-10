@@ -39,6 +39,7 @@ class UserKeyMaterialAdmin(admin.ModelAdmin):
 	search_fields = ('user_id__username', 'user_id__email', 'user_id__user_id')
 	search_help_text = 'Search by username, email, or user id.'
 	autocomplete_fields = ('user_id',)
+	list_select_related = ('user_id',)
 	ordering = ('-updated_at',)
 	date_hierarchy = 'created_at'
 	list_per_page = 50

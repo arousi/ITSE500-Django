@@ -82,6 +82,10 @@ class OAuthStateAdmin(admin.ModelAdmin):
 	search_help_text = 'Search by state, id, username, or email.'
 	readonly_fields = ('oauth_state_id', 'created_at', 'code_verifier', 'result_payload')
 	ordering = ('-created_at',)
+	date_hierarchy = 'created_at'
+	list_select_related = ('user_id',)
+	autocomplete_fields = ('user_id',)
+	save_on_top = True
 	actions = (mark_selected_states_used, expire_selected_states)
 	fieldsets = (
 		('State', {'fields': ('oauth_state_id', 'user_id', 'provider', 'state', 'code_challenge', 'code_verifier')}),
@@ -104,6 +108,10 @@ class ProviderOAuthTokenAdmin(admin.ModelAdmin):
 	search_help_text = 'Search by token id, username, email, or provider account id.'
 	readonly_fields = ('provider_oauth_token_id', 'created_at', 'updated_at')
 	ordering = ('-created_at',)
+	date_hierarchy = 'created_at'
+	list_select_related = ('user_id',)
+	autocomplete_fields = ('user_id',)
+	save_on_top = True
 	actions = (revoke_selected_tokens,)
 	fieldsets = (
 		('Token', {'fields': ('provider_oauth_token_id', 'user_id', 'provider', 'provider_account_id')}),

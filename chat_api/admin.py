@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from .models.conversation import Conversation
 from .models.message import Message
 from .models.attachment import Attachment
@@ -120,7 +120,9 @@ class ConversationAdmin(admin.ModelAdmin):
 	ordering = ('-updated_at',)
 	date_hierarchy = 'created_at'
 	autocomplete_fields = ('user_id',)
+	list_select_related = ('user_id',)
 	list_per_page = 50
+	save_on_top = True
 	inlines = (MessageInline,)
 	readonly_fields = ('conversation_id', 'created_at', 'updated_at')
 	fieldsets = (
@@ -128,9 +130,13 @@ class ConversationAdmin(admin.ModelAdmin):
 		('Metadata', {'fields': ('created_at', 'updated_at')}),
 	)
 
+	def get_queryset(self, request):
+		# Annotate the message count once in SQL instead of a COUNT query per row.
+		return super().get_queryset(request).annotate(_message_count=Count('messages'))
+
+	@admin.display(description='Messages', ordering='_message_count')
 	def message_count(self, obj):
-		return obj.messages.count()
-	message_count.short_description = 'Messages'
+		return getattr(obj, '_message_count', obj.messages.count())
 
 
 @admin.register(Message)
@@ -140,8 +146,11 @@ class MessageAdmin(admin.ModelAdmin):
 	search_fields = ('message_id', 'conversation_id__conversation_id', 'conversation_id__title', 'user_id__username', 'user_id__email')
 	search_help_text = 'Search by message id, conversation, username, or email.'
 	ordering = ('-timestamp',)
+	date_hierarchy = 'timestamp'
 	autocomplete_fields = ('conversation_id', 'user_id', 'request_id', 'response_id', 'output_id')
+	list_select_related = ('conversation_id', 'user_id', 'request_id', 'response_id', 'output_id')
 	list_per_page = 50
+	save_on_top = True
 	inlines = (AttachmentInline,)
 	readonly_fields = ('message_id', 'timestamp')
 	fieldsets = (
@@ -159,7 +168,10 @@ class AttachmentAdmin(admin.ModelAdmin):
 	search_fields = ('attachment_id', 'message_id__message_id', 'message_id__conversation_id__conversation_id')
 	search_help_text = 'Search by attachment id, message id, or conversation id.'
 	ordering = ('-created_at',)
+	date_hierarchy = 'created_at'
 	autocomplete_fields = ('message_id',)
+	list_select_related = ('message_id',)
+	save_on_top = True
 	readonly_fields = ('attachment_id', 'created_at')
 	fieldsets = (
 		('Attachment', {'fields': ('attachment_id', 'message_id', 'type', 'mime_type', 'file_path', 'encrypted_blob', 'size_bytes')}),

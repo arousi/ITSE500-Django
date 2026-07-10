@@ -94,7 +94,10 @@ class CustomUserAdmin(admin.ModelAdmin):
 	search_fields = ('username', 'email', 'user_id', 'temp_id')
 	readonly_fields = ('user_id', 'last_login', 'date_joined', 'last_modified')
 	ordering = ('-date_joined',)
+	date_hierarchy = 'date_joined'
 	list_per_page = 50
+	save_on_top = True
+	filter_horizontal = ('groups', 'user_permissions')
 	actions = (make_active, make_inactive, make_staff, remove_staff)
 	inlines = (OAuthStateInline, ProviderOAuthTokenInline)
 	fieldsets = (

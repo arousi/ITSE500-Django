@@ -426,9 +426,101 @@ if DEBUG:
     WHITENOISE_USE_FINDERS = True
 
 JAZZMIN_SETTINGS = {
+    # --- Branding ---
     "site_title": "ITSE500 Admin",
-    "site_header": "ITSE500 Admin",
-    "welcome_sign": "Welcome to ITSE500 Admin",
+    "site_header": "ITSE500 / Prompeteer",
+    "site_brand": "ITSE500 Admin",
+    "welcome_sign": "Welcome to the ITSE500 / Prompeteer administration",
+    "copyright": "SWE-Pioneers",
+    # Search bar targets the highest-traffic lookups.
+    "search_model": ["user_mang.Custom_User", "chat_api.Conversation"],
+
+    # --- Top menu ---
+    "topmenu_links": [
+        {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Live site", "url": "/", "new_window": True},
+        {"name": "API docs", "url": "/docs", "new_window": True},
+        {"name": "Users", "model": "user_mang.Custom_User"},
+    ],
+
+    # --- User menu (top-right) ---
+    "usermenu_links": [
+        {"name": "API docs", "url": "/docs", "new_window": True},
+    ],
+
+    # --- Side menu: app + model ordering ---
+    "order_with_respect_to": [
+        "user_mang",
+        "auth_api",
+        "chat_api",
+        "crypto_api",
+        "auth",
+    ],
+    "hide_apps": [],
+    "hide_models": [],
+
+    # --- Icons (FontAwesome 5 free) per app and model ---
+    "icons": {
+        "auth": "fas fa-shield-alt",
+        "auth.Group": "fas fa-users-cog",
+        "user_mang": "fas fa-user-friends",
+        "user_mang.Custom_User": "fas fa-user",
+        "auth_api": "fas fa-key",
+        "auth_api.OAuthState": "fas fa-exchange-alt",
+        "auth_api.ProviderOAuthToken": "fas fa-fingerprint",
+        "chat_api": "fas fa-comments",
+        "chat_api.Conversation": "fas fa-comment-dots",
+        "chat_api.Message": "fas fa-comment",
+        "chat_api.Attachment": "fas fa-paperclip",
+        "chat_api.MessageRequest": "fas fa-arrow-up",
+        "chat_api.MessageResponse": "fas fa-arrow-down",
+        "chat_api.MessageOutput": "fas fa-align-left",
+        "crypto_api": "fas fa-lock",
+        "crypto_api.UserKeyMaterial": "fas fa-key",
+    },
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "default_icon_children": "fas fa-circle",
+
+    # --- UX ---
+    "related_modal_active": True,        # edit related objects in a modal
+    "changeform_format": "horizontal_tabs",
+    "changeform_format_overrides": {
+        "user_mang.custom_user": "collapsible",
+        "auth.group": "vertical_tabs",
+    },
+    "show_ui_builder": False,
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-dark",
+    "accent": "accent-primary",
+    "navbar": "navbar-dark",
+    "no_navbar_border": False,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-primary",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": True,
+    "sidebar_nav_compact_style": False,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "flatly",
+    "dark_mode_theme": "darkly",
+    "button_classes": {
+        "primary": "btn-primary",
+        "secondary": "btn-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success",
+    },
 }
 
 # If using cookie auth or CSRF-protected endpoints from the SPA, trust these

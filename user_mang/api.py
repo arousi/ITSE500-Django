@@ -25,7 +25,7 @@ from user_mang.models.custom_user import Custom_User
 
 logger = logging.getLogger("user_mang")
 
-api = BoltAPI(prefix="/api/v1/user_mang")
+api = BoltAPI(prefix="/api/v1/user_mang", trailing_slash="keep")
 
 _AUTH = [JWTAuthentication()]
 _OPEN = [AllowAny()]
@@ -73,6 +73,7 @@ def _base_url(request) -> str:
     return f"{proto}://{host}" if host else ""
 
 
+@api.get("/me/", auth=_AUTH, guards=_OPEN)
 @api.get("/me", auth=_AUTH, guards=_OPEN)
 async def me_get(request):
     body = _body(request)
@@ -110,6 +111,7 @@ async def me_get(request):
     return Response(response_data, status_code=200)
 
 
+@api.post("/me/", auth=_AUTH, guards=_OPEN)
 @api.post("/me", auth=_AUTH, guards=_OPEN)
 async def me_post(request):
     body = _body(request)
@@ -163,6 +165,7 @@ async def me_post(request):
     return Response(response_payload, status_code=200)
 
 
+@api.patch("/me/", auth=_AUTH, guards=_OPEN)
 @api.patch("/me", auth=_AUTH, guards=_OPEN)
 async def me_patch(request):
     body = _body(request)
@@ -183,6 +186,7 @@ async def me_patch(request):
     return Response({"profile": payload}, status_code=200)
 
 
+@api.delete("/me/", auth=_AUTH, guards=_OPEN)
 @api.delete("/me", auth=_AUTH, guards=_OPEN)
 async def me_delete(request):
     body = _body(request)

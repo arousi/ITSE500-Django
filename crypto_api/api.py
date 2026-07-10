@@ -24,7 +24,7 @@ from django_bolt.responses import Response
 
 from .models import UserKeyMaterial
 
-api = BoltAPI(prefix="/api/v1/crypto_api")
+api = BoltAPI(prefix="/api/v1/crypto_api", trailing_slash="keep")
 
 _AUTH = [JWTAuthentication()]
 _GUARDS = [IsAuthenticated()]
@@ -51,6 +51,7 @@ def _current_user_id(request):
     return ctx.get("user_id") or (ctx.get("auth_claims") or {}).get("user_id")
 
 
+@api.get("/umk/", auth=_AUTH, guards=_GUARDS)
 @api.get("/umk", auth=_AUTH, guards=_GUARDS)
 async def get_umk(request) -> UMKOut:
     """Return the caller's UMK metadata + base64, or {exists: false}."""
@@ -68,6 +69,7 @@ async def get_umk(request) -> UMKOut:
     )
 
 
+@api.post("/umk/", auth=_AUTH, guards=_GUARDS)
 @api.post("/umk", auth=_AUTH, guards=_GUARDS)
 async def post_umk(request, body: UMKIn, rotate: Annotated[Optional[str], Query()] = None):
     """Provision the UMK once (409 if it exists; rotate=true -> 400, not implemented)."""

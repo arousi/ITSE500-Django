@@ -145,44 +145,11 @@ CSRF_COOKIE_SECURE = not DEBUG
 
 
 # Application definition
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    # Per-endpoint abuse throttles for unauthenticated auth flows
-    # (brute-force credential guessing / PIN guessing defense). Each view
-    # opts in via `throttle_scope`; endpoints without a scope are
-    # unaffected. Rates are intentionally generous enough not to disrupt
-    # legitimate retry flows (e.g. re-entering a mistyped PIN) while still
-    # bounding automated brute-force attempts. Overridable via env vars so
-    # ops can tighten/loosen without a code change.
-    'DEFAULT_THROTTLE_CLASSES': (
-        'rest_framework.throttling.ScopedRateThrottle',
-    ),
-    'DEFAULT_THROTTLE_RATES': {
-        'auth-register': os.environ.get('THROTTLE_RATE_REGISTER', '10/hour'),
-        'auth-login': os.environ.get('THROTTLE_RATE_LOGIN', '10/min'),
-        'auth-verify-email-pin': os.environ.get('THROTTLE_RATE_VERIFY_EMAIL_PIN', '10/min'),
-        'auth-otp-login': os.environ.get('THROTTLE_RATE_OTP_LOGIN', '10/min'),
-    },
-    # Behind Traefik (or any reverse proxy) REMOTE_ADDR is the proxy's IP, which
-    # would collapse every client into one throttle bucket (defeating the
-    # brute-force protection above). NUM_PROXIES tells DRF to derive the real
-    # client IP from X-Forwarded-For. Set to the number of trusted proxies in
-    # front of the app (Traefik = 1); default 0 for local/dev (uses REMOTE_ADDR).
-    'NUM_PROXIES': int(os.environ.get('NUM_PROXIES', '0')),
-}
-
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'USER_ID_FIELD': 'user_id',
-    'USER_ID_CLAIM': 'user_id',
-}
+# (REST_FRAMEWORK / SIMPLE_JWT removed with the django-bolt cutover. Bolt JWTs are
+# minted in auth_api/tokens.py — HS256 over SECRET_KEY, sub = user pk — with the
+# same lifetimes the SIMPLE_JWT block declared: access 30 days, refresh 1 day.
+# NOTE: DRF's ScopedRateThrottle on the 4 auth endpoints did NOT survive the port;
+# reintroduce rate limiting at nginx or via django_bolt.middleware.rate_limit.)
 
 AUTH_USER_MODEL = 'user_mang.Custom_User'
 
@@ -190,7 +157,6 @@ AUTH_USER_MODEL = 'user_mang.Custom_User'
 _HAS_JAZZMIN = _imp.find_spec('jazzmin') is not None
 _HAS_SILK = _imp.find_spec('silk') is not None
 _HAS_DEBUG_TOOLBAR = _imp.find_spec('debug_toolbar') is not None
-_HAS_SPECTACULAR = _imp.find_spec('drf_spectacular') is not None
 
 INSTALLED_APPS = [
     *(['jazzmin'] if _HAS_JAZZMIN else []),
@@ -203,14 +169,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'auth_api',
-    'channels', # for real-time mssgs
     "user_mang",
     "chat_api",
     "crypto_api",
-    "django_bolt",   # Phase 2: Bolt API framework (autodiscovers each app's api.py)
-    "rest_framework",
-    *(['drf_spectacular'] if _HAS_SPECTACULAR else []),
-    
+    "django_bolt",   # Bolt API framework (autodiscovers each app's api.py; runbolt serves everything)
 ]
 
 """ CHANNEL_LAYERS = {
@@ -453,27 +415,8 @@ CORS_PREFLIGHT_MAX_AGE = 86400
 
 ROOT_URLCONF = 'prompeteer_server.urls'
 
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'ITSE500 APIs Documentation',
-    'DESCRIPTION': 'Authentication, Chat, and User Management API',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_REQUEST': True,
-    'COMPONENT_SECURITY_SCHEMES': {
-        'BearerAuth': {
-            'type': 'http',
-            'scheme': 'bearer',
-            'bearerFormat': 'JWT',
-        }
-    },
-    'SECURITY': [
-        {'BearerAuth': []}
-    ],
-    'SWAGGER_UI_SETTINGS': {
-        'persistAuthorization': True,
-        'displayOperationId': True,
-    },
-}
+# (SPECTACULAR_SETTINGS removed — API docs are served by django-bolt's built-in
+# OpenAPI routes under runbolt instead of drf-spectacular.)
 
 if DEBUG:
     INTERNAL_IPS = [

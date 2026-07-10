@@ -14,23 +14,17 @@ Django==6.0.7
 asgiref==3.11.1
 sqlparse==0.5.5
 
-# --- Bolt API framework (Phase 2 — progressively replaces DRF; needs Python 3.12+) ---
+# --- Bolt API framework (replaced DRF: serves /api/v1/* via each app's api.py,
+# and runbolt ASGI-mounts the whole Django app). Pulls in httpx + pyjwt + msgspec. ---
 django-bolt==0.9.0
+httpx>=0.28.1              # async OAuth provider calls in auth_api/api.py (also a bolt dep)
 
-# --- REST API (baseline; removed in the Bolt phase) ---
-djangorestframework==3.17.1
-djangorestframework_simplejwt==5.5.1
+# --- CORS (django-bolt reads the same CORS_ALLOWED_ORIGINS/CORS_ALLOW_* settings;
+# corsheaders still covers Django-served routes under the ASGI mount) ---
 django-cors-headers==4.9.0
-django-oauth-toolkit==3.3.0
-drf-spectacular==0.30.0
-drf-spectacular-sidecar==2026.7.1
-
-# --- Realtime (channels app is installed; ASGI app defined but no
-# websocket route/channel layer is wired yet - see DEPLOYMENT.md) ---
-channels==4.3.2
 
 # --- Auth / crypto / OTP ---
-PyJWT==2.13.0
+PyJWT==2.13.0              # app JWT minting in auth_api/tokens.py
 pyotp==2.9.0
 cryptography==46.0.7
 argon2-cffi==23.1.0
@@ -47,7 +41,7 @@ psycopg[binary]==3.3.4
 # --- Media / images (required by ImageField in chat_api models) ---
 pillow==12.3.0
 
-# --- PDF generation (user_mang/views.py: reportlab canvas/pagesizes) ---
+# --- PDF generation (user_mang/services.py: reportlab canvas/pagesizes) ---
 reportlab==4.2.5
 
 # --- Misc app dependencies ---

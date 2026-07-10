@@ -36,7 +36,7 @@ USER appuser
 EXPOSE 8000
 
 # entrypoint: wait-for-postgres -> migrate -> collectstatic -> optional superuser -> exec
+# runbolt serves the Bolt API (Rust/actix) AND ASGI-mounts the whole Django app
+# (admin, static/whitenoise, React '/', Flutter '/app') on the same port.
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["gunicorn", "prompeteer_server.wsgi:application", \
-     "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "60", \
-     "--access-logfile", "-", "--error-logfile", "-"]
+CMD ["python", "manage.py", "runbolt", "--host", "0.0.0.0", "--port", "8000", "--processes", "2"]

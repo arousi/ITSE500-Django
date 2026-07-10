@@ -104,23 +104,9 @@ urlpatterns = [
     path('healthz', healthz, name='healthz'),
     path('healthz/', healthz),
 
-    path('api/v1/auth_api/', include('auth_api.urls')),
-    path('api/v1/user_mang/', include('user_mang.urls')),
-    #path('api/v1/chat_api/', include('chat_api.urls')),
-    path('api/v1/crypto_api/', include('crypto_api.urls')),
-    # API schema and docs (served when package is available)
+    # /api/v1/* is served by django-bolt (each app's api.py, autodiscovered by
+    # runbolt) — the DRF includes and drf-spectacular docs routes are gone.
 ]
-
-# Optional Spectacular schema & UIs
-if _imp.find_spec('drf_spectacular') is not None:
-    SpectacularAPIView = importlib.import_module('drf_spectacular.views').SpectacularAPIView
-    SpectacularSwaggerView = importlib.import_module('drf_spectacular.views').SpectacularSwaggerView
-    SpectacularRedocView = importlib.import_module('drf_spectacular.views').SpectacularRedocView
-    urlpatterns += [
-        path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-        path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-        path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    ]
 
 # Catch-all: serve SPA or landing for any non-API path excluding static/media (must be last)
 urlpatterns += [

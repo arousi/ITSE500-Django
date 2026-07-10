@@ -14,6 +14,9 @@ Django==6.0.7
 asgiref==3.11.1
 sqlparse==0.5.5
 
+# --- Bolt API framework (Phase 2 — progressively replaces DRF; needs Python 3.12+) ---
+django-bolt==0.9.0
+
 # --- REST API (baseline; removed in the Bolt phase) ---
 djangorestframework==3.17.1
 djangorestframework_simplejwt==5.5.1

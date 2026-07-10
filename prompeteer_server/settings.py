@@ -207,6 +207,7 @@ INSTALLED_APPS = [
     "user_mang",
     "chat_api",
     "crypto_api",
+    "django_bolt",   # Phase 2: Bolt API framework (autodiscovers each app's api.py)
     "rest_framework",
     *(['drf_spectacular'] if _HAS_SPECTACULAR else []),
     

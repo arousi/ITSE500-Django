@@ -54,11 +54,16 @@ urlpatterns = [
     path('', root_router, name='root'),
     # Liveness probe (no DB/auth) for nginx / Docker / Traefik healthchecks
     path('healthz', healthz, name='healthz'),
-    # Flutter web build served under /app/
+    # Flutter web build served under /app/.
     path('app/', flutter_index, name='flutter-web'),
     # Without this, '/app' (no trailing slash) falls through to the React catch-all below
     # instead of serving Flutter. Redirect it to the canonical '/app/'.
     path('app', RedirectView.as_view(url='/app/', permanent=False)),
+    # Flutter owns its ENTIRE subtree: any deep path under /app/ (client-side
+    # routes, refreshes, deep links) must serve the Flutter shell, NOT fall
+    # through to the React catch-all at the bottom of this list. (Flutter's own
+    # assets live under /static/flutter-web/, so this never shadows them.)
+    re_path(r'^app/.+$', flutter_index, name='flutter-web-deep'),
     # Landing page with QR (moved off root)
     path('landing/', landing, name='landing'),
     # Team page with inline context (replace links/images as needed)

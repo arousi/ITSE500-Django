@@ -95,44 +95,14 @@ def flutter_index(request):
     content = content.replace('href="manifest.json"', 'href="/static/flutter-web/manifest.json"')
     content = content.replace('href="favicon.png"', 'href="/static/flutter-web/favicon.png"')
 
-    # Inject a tiny normalizer to convert hash URLs (#/path) to clean paths before Flutter initializes
-    # This addresses clients with cached older builds that still use hash strategy.
-    normalizer = (
-        "<script>\n"
-        "(function(){\n"
-        "  try {\n"
-        "    var h = window.location.hash || '';\n"
-        "    var needsNormalize = h && h.indexOf('#/') === 0;\n"
-    "    if (needsNormalize) {\n"
-    "      var newUrl = h.substring(1) + window.location.search;\n"
-        "      // Unregister any existing service workers so we fetch fresh assets\n"
-        "      var doReload = function(){\n"
-        "        try { window.history.replaceState(null, '', newUrl); } catch (e) {}\n"
-        "        // Avoid loops: only reload once per session when normalizing\n"
-        "        if (!sessionStorage.getItem('swNormalized')) {\n"
-        "          sessionStorage.setItem('swNormalized', '1');\n"
-        "          window.location.reload();\n"
-        "        }\n"
-        "      };\n"
-        "      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {\n"
-        "        navigator.serviceWorker.getRegistrations().then(function(regs){\n"
-        "          regs.forEach(function(r){ r.unregister().catch(function(){}); });\n"
-        "          doReload();\n"
-        "        }).catch(function(){ doReload(); });\n"
-        "      } else {\n"
-        "        doReload();\n"
-        "      }\n"
-        "    }\n"
-        "  } catch (e) { /* ignore */ }\n"
-        "})();\n"
-        "</script>\n"
-    )
-    # Place the script early in <body> so it runs before flutter_bootstrap.js
-    if '<body>' in content:
-        content = content.replace('<body>', '<body>\n' + normalizer, 1)
-    else:
-        # Fallback: prepend to content
-        content = normalizer + content
+    # NOTE: a previous "hash-to-clean-path normalizer" was injected here. It was
+    # broken for this /app/ mount: it rewrote `#/route` to the ROOT-absolute
+    # `/route` (dropping the `/app` prefix) and reloaded, so any in-app navigation
+    # bounced the browser to `/route` -> the React catch-all -> a broken page.
+    # The app is mounted at /app/ with base href /static/flutter-web/ and uses
+    # hash routing (`/app/#/route`), which needs no normalization: the `#` stays
+    # client-side, and refreshes/deep links resolve to `/app/...` which now serves
+    # the Flutter shell (see the `flutter-web-deep` route in urls.py). Removed.
 
     return HttpResponse(content, content_type='text/html; charset=utf-8')
 

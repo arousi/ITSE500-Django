@@ -30,7 +30,10 @@ var/
 *.db
 *.sqlite3
 db.sqlite3
-media/
+# Django MEDIA_ROOT (user uploads) — anchored to repo root so it does NOT also
+# ignore CRA's frontend_build/static/media/ (React's bundled fonts/images, which
+# MUST be committed and baked into the image or they 404 in production).
+/media/
 
 local_settings.py
 .env

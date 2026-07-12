@@ -1,11 +1,11 @@
 {
-    "name": "flutter_app_itse500",
-    "short_name": "flutter_app_itse500",
+    "name": "ITSE500",
+    "short_name": "ITSE500",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1C1B1F",
+    "theme_color": "#1C1B1F",
+    "description": "ITSE500 — chat with your preferred AI providers and models in one app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

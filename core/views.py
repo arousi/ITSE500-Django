@@ -99,10 +99,13 @@ def flutter_index(request):
     # broken for this /app/ mount: it rewrote `#/route` to the ROOT-absolute
     # `/route` (dropping the `/app` prefix) and reloaded, so any in-app navigation
     # bounced the browser to `/route` -> the React catch-all -> a broken page.
-    # The app is mounted at /app/ with base href /static/flutter-web/ and uses
-    # hash routing (`/app/#/route`), which needs no normalization: the `#` stays
-    # client-side, and refreshes/deep links resolve to `/app/...` which now serves
-    # the Flutter shell (see the `flutter-web-deep` route in urls.py). Removed.
+    # Removed. The Flutter app uses PATH url strategy (setPathUrlStrategy) and is
+    # mounted at /app/ with assets at /static/flutter-web/. Deep links / refreshes
+    # under /app/... are served this same shell by the `flutter-web-deep` route in
+    # urls.py, and Flutter's client router resolves the in-app route from the path.
+    # (Known caveat: base href is /static/flutter-web/ while the app is navigated at
+    # /app/ — verify in-browser navigation; if history URLs misbehave, revisit the
+    # base-href/mount reconciliation. RTL/theme/responsive work does not depend on it.)
 
     return HttpResponse(content, content_type='text/html; charset=utf-8')
 

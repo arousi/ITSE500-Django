@@ -38,5 +38,10 @@ EXPOSE 8000
 # entrypoint: wait-for-postgres -> migrate -> collectstatic -> optional superuser -> exec
 # runbolt serves the Bolt API (Rust/actix) AND ASGI-mounts the whole Django app
 # (admin, static/whitenoise, React '/', Flutter '/app') on the same port.
+#
+# --processes 1: one Python+Django worker (~300MiB) instead of two. runbolt's Rust
+# actix core handles HTTP concurrency; a single Python worker is ample for this
+# app's traffic and roughly HALVES the container's memory footprint. Bump back to
+# 2 (and raise the compose memory limit) only if sustained concurrency demands it.
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["python", "manage.py", "runbolt", "--host", "0.0.0.0", "--port", "8000", "--processes", "2"]
+CMD ["python", "manage.py", "runbolt", "--host", "0.0.0.0", "--port", "8000", "--processes", "1"]

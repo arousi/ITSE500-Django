@@ -28,6 +28,10 @@ services:
     env_file: .env
     environment:
       DJANGO_DEBUG: "False"
+      # Cap glibc malloc arenas so the Python worker's RSS doesn't creep/fragment
+      # under steady request churn (healthcheck + light traffic). Standard fix for
+      # Python-in-container memory bloat; keeps idle RSS low and stable.
+      MALLOC_ARENA_MAX: "2"
       # Map the provisioned POSTGRES_* into the DB_* the app reads (settings.py)
       DB_HOST: platform-postgres
       DB_PORT: "5432"
@@ -49,7 +53,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768m
+          # 1g gives comfortable headroom over the ~300MiB single-worker baseline
+          # (host has 15GB). With --processes 1 + MALLOC_ARENA_MAX the container
+          # should sit ~30-40% idle instead of brushing the old 768m ceiling.
+          memory: 1g
           cpus: "1.0"
     logging:
       driver: json-file

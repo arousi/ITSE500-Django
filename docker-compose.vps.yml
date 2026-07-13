@@ -19,7 +19,7 @@ services:
       context: .
       dockerfile: Dockerfile.vps
     image: itse500-app:latest
-    container_name: itse500-app
+    container_name: django-itse500-app
     restart: unless-stopped
     # Managed by swe-health-reactor: auto-restart if the /healthz healthcheck goes unhealthy,
     # and quarantine (stop) + Telegram-alert if it flaps. See vps/tools/HEALTH-REACTOR.md.
@@ -65,7 +65,7 @@ services:
   # -- Public reverse proxy (nginx). Only container on `proxy`; carries Traefik labels.
   nginx:
     image: nginx:alpine
-    container_name: itse500-nginx
+    container_name: django-itse500-nginx
     restart: unless-stopped
     depends_on:
       app: {condition: service_healthy}

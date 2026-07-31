@@ -42,8 +42,6 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       # Fire-and-check the per-app redeploy hook (deploy.swe.com.ly). Guarded by a repo
       # variable so a fork / a repo without the box token doesn't fail CI on a 401.

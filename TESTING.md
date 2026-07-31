@@ -1,5 +1,8 @@
 # Testing & Contract Guide (prompeteer_server / Django)
 
+
+*pushing to test deploy bot!*
+
 This repo is the **contract source of truth** for the ITSE500 project. The Flutter
 desktop client and the React web client both consume the OpenAPI schema this
 repo publishes at `contract/openapi.yaml`. See the sibling repos'

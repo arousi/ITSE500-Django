@@ -50,8 +50,14 @@ jobs:
         env:
           URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
           TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          # The image is PRIVATE. This job's GITHUB_TOKEN can read this repo's own GHCR package, so
+          # hand it to the box as X-GHCR-Token: the receiver's `docker compose pull` authenticates
+          # with it (no PAT stored on the box, no public package). Valid for this job's lifetime —
+          # the receiver pulls immediately.
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           code=$(curl -sS -o /tmp/body -w '%{http_code}' -X POST \
-            -H "Authorization: Bearer ${TOKEN}" "${URL}") || true
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "X-GHCR-Token: ${GHCR_TOKEN}" "${URL}") || true
           echo "receiver -> ${code}"; cat /tmp/body || true
           [ "$code" = "200" ] || { echo "::error::redeploy failed (${code})"; exit 1; }
